@@ -15,6 +15,7 @@ from backend_ai.commands import (
     CommandResult,
     register_builtin_commands,
 )
+from backend_ai.core import ProjectContext
 from backend_ai.terminal.input import InputProvider
 
 
@@ -38,6 +39,7 @@ class InteractiveSession:
         self._active = False
         self.received_inputs: list[str] = []
         self.dispatch_results: list[CommandResult] = []
+        self.project_context: ProjectContext | None = None
 
     @property
     def is_active(self) -> bool:

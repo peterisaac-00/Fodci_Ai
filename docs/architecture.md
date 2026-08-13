@@ -2,7 +2,7 @@
 
 ## Application startup boundary
 
-Phase 1.2 through 1.6 add a thin application boundary between the console entry point and future agent orchestration:
+Phase 1.2 through 1.7 add a thin application boundary between the console entry point and future agent orchestration:
 
 ```text
 backend-ai
@@ -12,6 +12,8 @@ CLI entry point
 Application.start()
     ↓
 existing configuration + logging bootstrap
+    ↓
+ProjectContext(root)
     ↓
 InteractiveSession
     ↓
@@ -25,7 +27,7 @@ CommandDispatcher
     └── normal input passthrough
 ```
 
-`backend_ai.cli.main` is responsible only for process-facing output and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`, then delegates session persistence and input reception to `InteractiveSession`. `InputProvider` is injectable for deterministic tests and defaults to stdin in production. `CommandParser` recognizes only a leading `/`; `CommandDispatcher` routes registered names and reports unknown commands without executing them. Phase 1.6 registers `/help` and `/exit` through this same registry. `/help` derives its output from registered metadata, while `/exit` returns a structured stop request that the session handles. No agent, provider, tool, memory, or execution component is initialized.
+`backend_ai.cli.main` is responsible only for process-facing output and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`, resolves a minimal `ProjectContext`, and then delegates session persistence and input reception to `InteractiveSession`. `ProjectContext` contains only an absolute, normalized, validated root path; resolution checks existence and directory type but never scans the root. `InputProvider` is injectable for deterministic tests and defaults to stdin in production. `CommandParser` recognizes only a leading `/`; `CommandDispatcher` routes registered names and reports unknown commands without executing them. Phase 1.6 registers `/help` and `/exit` through this same registry. `/help` derives its output from registered metadata, while `/exit` returns a structured stop request that the session handles. No agent, provider, tool, memory, or execution component is initialized.
 
 ## Phase 0 boundary model
 
@@ -50,7 +52,7 @@ The repository implements only these foundation pieces:
 
 | Area | Phase 0 responsibility | Intentionally absent |
 | --- | --- | --- |
-| Configuration | Resolve a project root and validate a log level | Agent-specific settings, secret loading, provider configuration |
+| Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
 | Core contracts | Define typed, runtime-checkable boundaries | Concrete agents, models, tools, stores, or evaluators |
 | Package layout | Reserve cohesive packages for later work | Empty placeholder implementations |
@@ -60,5 +62,6 @@ The repository implements only these foundation pieces:
 | Command parser | Recognize leading-slash syntax, normalize names, preserve arguments | Command behavior, execution, Agent or LLM calls |
 | Command dispatcher | Route registered handlers and report unknown commands | `/status` or future command behavior |
 | Built-in commands | Provide deterministic local `/help` and `/exit` handlers | LLM, Agent, external API, or process-level `sys.exit()` behavior |
+| Project context | Hold one validated absolute project root | File lists, framework detection, Git or model metadata, project scanning |
 
 No package imports another component's future concrete implementation. Any future dependency that would create a cycle should be inverted through a contract in `core` or a deliberately owned boundary module.

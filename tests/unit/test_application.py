@@ -20,6 +20,9 @@ def test_application_start_uses_existing_configuration_and_logging(
 
     assert result is settings
     assert application.settings is settings
+    assert application.project_context is not None
+    assert application.project_context.root == tmp_path.resolve()
+    assert application.session.project_context is application.project_context
     assert logging.getLogger("backend_ai").handlers
     assert logging.getLogger("backend_ai").level == logging.INFO
 

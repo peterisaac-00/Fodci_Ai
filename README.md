@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 1.6 — Exit / Help Commands.**
+> **Current status: Phase 1.7 — Project Path.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, the Phase 1.2 application startup flow, the Phase 1.3 interactive-session lifecycle, the Phase 1.4 normal text-input layer, the Phase 1.5 command-handling infrastructure, and the Phase 1.6 local `/help` and `/exit` commands. Installing the package provides `backend-ai`, which initializes the existing boundaries, receives ordinary text from stdin, recognizes command syntax, and routes commands locally without any LLM or Agent initialization. Phase 1.6 does **not** implement `/status`, LLM inference, tool calling, filesystem access, terminal execution, planning, memory, evaluation behavior, or autonomous behavior.
+This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, the Phase 1.2 application startup flow, the Phase 1.3 interactive-session lifecycle, the Phase 1.4 normal text-input layer, the Phase 1.5 command-handling infrastructure, the Phase 1.6 local `/help` and `/exit` commands, and the Phase 1.7 validated project-root context. At startup, `backend-ai` resolves `PROJECT_ROOT` or defaults to the current working directory, normalizes it to an absolute path, and validates only that the path exists and is a directory. It does not scan or modify project contents.
 
 ## Purpose and Long-Term Vision
 
@@ -44,7 +44,7 @@ Evaluation
 Memory
 ```
 
-The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The `backend-ai` console script delegates to `backend_ai.cli.main:main`, which delegates startup and session control to `backend_ai.application`. The application reuses the Phase 0 configuration and logging infrastructure, then hands control to `InteractiveSession` through the `InputProvider` boundary. `CommandParser` recognizes only input whose first character is `/`, and `CommandDispatcher` routes recognized names to registered handlers. Phase 1.6 registers `/help` and `/exit` locally: help is generated from the command registry, while exit returns a structured stop request. Normal text remains separate; no Agent or LLM is initialized. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
+The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The `backend-ai` console script delegates to `backend_ai.cli.main:main`, which delegates startup and session control to `backend_ai.application`. The application reuses the Phase 0 configuration and logging infrastructure, resolves a minimal `ProjectContext`, then hands control to `InteractiveSession` through the `InputProvider` boundary. `CommandParser` recognizes only input whose first character is `/`, and `CommandDispatcher` routes recognized names to registered handlers. Phase 1.6 registers `/help` and `/exit` locally. The project context contains only the validated absolute root; it contains no file list, framework metadata, Git information, or model information. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
 
 ## Repository Layout
 
@@ -55,7 +55,7 @@ The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Too
 │   ├── application.py  # Application startup and session composition
 │   ├── cli/            # Minimal console-entry boundary
 │   ├── config/         # Small environment-backed settings abstraction
-│   ├── core/           # Shared protocols and startup utilities
+│   ├── core/           # Shared protocols, startup, and project context
 │   ├── evaluation/     # Future evaluator boundary
 │   ├── llm/            # Provider contract, no model integration
 │   ├── memory/         # Future memory boundary
@@ -95,7 +95,7 @@ Verify the Phase 1.1 console entry point after installation with:
 backend-ai
 ```
 
-The command initializes the existing application configuration and logger, enters the persistent session lifecycle, and reads normal text from stdin:
+The command initializes the existing application configuration and logger, resolves the project root, enters the persistent session lifecycle, and reads normal text from stdin:
 
 ```text
 You > hello
@@ -125,7 +125,7 @@ python -m pip install -e .
 
 ## Configuration and Logging
 
-Copy `.env.example` to `.env` only for local development. `.env` is ignored by Git. The Phase 0 settings abstraction currently recognizes `LOG_LEVEL` and `PROJECT_ROOT`, uses safe defaults, and validates the log level. The example also documents reserved names for later stages without reading them yet.
+Copy `.env.example` to `.env` only for local development. `.env` is ignored by Git. The settings abstraction recognizes `LOG_LEVEL` and `PROJECT_ROOT`, uses the current working directory when `PROJECT_ROOT` is omitted, and validates the log level. During application startup, the resolved project root must exist and be a directory; an explicitly invalid path fails clearly without falling back to the current working directory. Phase 1.7 does not inspect files inside the root. The example also documents reserved names for later stages without reading them yet.
 
 Centralized logging is available through `backend_ai.config.configure_logging`. It applies a compact timestamped format, accepts a level, avoids global mutable application state, and does not log configuration values or secrets.
 
@@ -153,7 +153,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 1.6 adds only the deterministic local behavior of `/help` and `/exit`. It does not implement `/status` or other commands, and it does not add project-path handling, model loading, hosted LLM SDK, chat interface, tool implementation, file-editing feature, terminal runner, git integration, planner, database, vector store, RAG system, training pipeline, multi-agent system, web interface, authentication, or deployment service.
+Phase 1.7 adds only project-root resolution, normalization, validation, and a minimal `ProjectContext`. It does not scan or index files, detect frameworks, inspect Git, read or modify source files, execute project commands, load a model, initialize an Agent, implement tools, or add project analysis, file editing, terminal execution, memory, evaluation, or autonomous behavior.
 
 ## License
 

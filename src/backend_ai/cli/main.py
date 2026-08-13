@@ -5,13 +5,18 @@ from __future__ import annotations
 import sys
 
 from backend_ai.application import run_application
+from backend_ai.core import InvalidProjectRootError
 
 
 def main() -> int:
     """Start the application and enter its interactive session."""
 
     print("Backend Engineering Agent")
-    run_application(output=sys.stdout)
+    try:
+        run_application(output=sys.stdout)
+    except InvalidProjectRootError as error:
+        print(str(error), file=sys.stderr)
+        return 1
     return 0
 
 

@@ -6,7 +6,7 @@ import sys
 from typing import TextIO
 
 from backend_ai.config import Settings
-from backend_ai.core import bootstrap
+from backend_ai.core import ProjectContext, bootstrap, resolve_project_context
 from backend_ai.terminal import InteractiveSession, StdinInputProvider
 
 
@@ -26,11 +26,14 @@ class Application:
         self._settings = settings
         self.session = session or InteractiveSession(input_provider=StdinInputProvider())
         self.settings: Settings | None = None
+        self.project_context: ProjectContext | None = None
 
     def start(self) -> Settings:
         """Initialize configuration and logging, then return ready settings."""
 
         self.settings = bootstrap(self._settings)
+        self.project_context = resolve_project_context(self.settings)
+        self.session.project_context = self.project_context
         return self.settings
 
     def run(self) -> None:
