@@ -9,6 +9,7 @@ from __future__ import annotations
 from threading import Event
 from typing import TextIO
 
+from backend_ai.commands import CommandDispatcher, CommandParser, CommandResult
 from backend_ai.terminal.input import InputProvider
 
 
@@ -20,12 +21,17 @@ class InteractiveSession:
         *,
         output: TextIO | None = None,
         input_provider: InputProvider | None = None,
+        command_parser: CommandParser | None = None,
+        command_dispatcher: CommandDispatcher | None = None,
     ) -> None:
         self._output = output
         self._input_provider = input_provider
+        self.command_parser = command_parser or CommandParser()
+        self.command_dispatcher = command_dispatcher or CommandDispatcher()
         self._stop_event = Event()
         self._active = False
         self.received_inputs: list[str] = []
+        self.dispatch_results: list[CommandResult] = []
 
     @property
     def is_active(self) -> bool:
@@ -64,8 +70,14 @@ class InteractiveSession:
 
                 value = _without_line_ending(value)
                 self.received_inputs.append(value)
+                result = self.command_dispatcher.dispatch(
+                    self.command_parser.parse(value),
+                )
+                self.dispatch_results.append(result)
                 if value and self._output is not None:
-                    print(f"Received: {value}", file=self._output, flush=True)
+                    message = _display_message(result, value)
+                    if message:
+                        print(message, file=self._output, flush=True)
         except KeyboardInterrupt:
             self.stop()
         finally:
@@ -75,6 +87,14 @@ class InteractiveSession:
         """Request that a running session stop and return from ``run``."""
 
         self._stop_event.set()
+
+
+def _display_message(result: CommandResult, value: str) -> str | None:
+    """Render a minimal Phase 1.5 acknowledgment without command behavior."""
+
+    if result.kind == "normal_input":
+        return f"Received: {value}"
+    return result.response
 
 
 def _without_line_ending(value: str) -> str:

@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 1.4 — User Input.**
+> **Current status: Phase 1.5 — Command Handling.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, the Phase 1.2 application startup flow, the Phase 1.3 interactive-session lifecycle, and the Phase 1.4 normal text-input layer. Installing the package provides `backend-ai`, which initializes the existing configuration and logging boundaries, enters a persistent session, and receives ordinary text from stdin. Phase 1.4 does **not** yet implement command parsing, `/help`, `/exit`, LLM inference, tool calling, filesystem access, terminal execution, planning, memory, evaluation behavior, or autonomous behavior.
+This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, the Phase 1.2 application startup flow, the Phase 1.3 interactive-session lifecycle, the Phase 1.4 normal text-input layer, and the Phase 1.5 command-handling infrastructure. Installing the package provides `backend-ai`, which initializes the existing boundaries, receives ordinary text from stdin, recognizes command syntax, and routes recognized commands to registered handlers. Phase 1.5 does **not** implement the behavior of `/help`, `/exit`, or `/status`, and it does not add LLM inference, tool calling, filesystem access, terminal execution, planning, memory, evaluation behavior, or autonomous behavior.
 
 ## Purpose and Long-Term Vision
 
@@ -44,7 +44,7 @@ Evaluation
 Memory
 ```
 
-The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The `backend-ai` console script delegates to `backend_ai.cli.main:main`, which delegates startup and session control to `backend_ai.application`. The application reuses the Phase 0 configuration and logging infrastructure, then hands control to `InteractiveSession` through the `InputProvider` boundary. The default provider reads stdin; input is recorded and acknowledged but not interpreted as commands. No agent or provider is initialized. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
+The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The `backend-ai` console script delegates to `backend_ai.cli.main:main`, which delegates startup and session control to `backend_ai.application`. The application reuses the Phase 0 configuration and logging infrastructure, then hands control to `InteractiveSession` through the `InputProvider` boundary. `CommandParser` recognizes only input whose first character is `/`, and `CommandDispatcher` routes recognized names to explicitly registered handlers. Normal text is passed through unchanged; no Agent or LLM is initialized. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
 
 ## Repository Layout
 
@@ -59,6 +59,7 @@ The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Too
 │   ├── evaluation/     # Future evaluator boundary
 │   ├── llm/            # Provider contract, no model integration
 │   ├── memory/         # Future memory boundary
+│   ├── commands/       # Command parsing and dispatch boundaries
 │   ├── terminal/       # Session lifecycle and normal text-input boundary
 │   └── tools/          # Future tool boundary
 ├── tests/
@@ -101,7 +102,7 @@ You > hello
 Received: hello
 ```
 
-Input is preserved except for the line ending added by stdin. Empty input is retained and does not terminate the session. EOF and Ctrl+C terminate the session cleanly. No input is parsed as a command in the current phase.
+Input is preserved except for the line ending added by stdin. Empty input is retained and does not terminate the session. A command is recognized only when `/` is the first character; command names are case-insensitive, while arguments remain available as text. For example, an unregistered `/status` is reported as unknown without crashing. Normal text such as `Build /api/users` is passed through unchanged. EOF and Ctrl+C terminate the session cleanly.
 
 Check that every package module compiles with:
 
@@ -145,7 +146,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 1.4 adds only normal text input through `InputProvider` and stdin. It does not add command handling, `/help`, `/exit`, special commands, project-path handling, model loading, hosted LLM SDK, chat interface, tool implementation, file-editing feature, terminal runner, git integration, planner, database, vector store, RAG system, training pipeline, multi-agent system, web interface, authentication, or deployment service.
+Phase 1.5 adds command recognition, parsing, and dispatch infrastructure only. It does not implement the behavior of `/help`, `/exit`, `/status`, or any other command. It also does not add project-path handling, model loading, hosted LLM SDK, chat interface, tool implementation, file-editing feature, terminal runner, git integration, planner, database, vector store, RAG system, training pipeline, multi-agent system, web interface, authentication, or deployment service.
 
 ## License
 

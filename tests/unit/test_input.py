@@ -30,7 +30,7 @@ def test_stdin_provider_preserves_text_and_handles_eof() -> None:
     assert provider.read() is None
 
 
-def test_session_receives_multiple_inputs_and_does_not_interpret_commands() -> None:
+def test_session_receives_multiple_inputs_and_routes_commands() -> None:
     output = StringIO()
     session = InteractiveSession(
         output=output,
@@ -41,7 +41,8 @@ def test_session_receives_multiple_inputs_and_does_not_interpret_commands() -> N
 
     assert session.received_inputs == ["hello", "/exit"]
     assert "Received: hello" in output.getvalue()
-    assert "Received: /exit" in output.getvalue()
+    assert "Unknown command: /exit" in output.getvalue()
+    assert session.dispatch_results[1].kind == "unknown_command"
     assert not session.is_active
 
 
