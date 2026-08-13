@@ -1,1 +1,5 @@
-"""Reserved command-line boundary; no CLI entry point exists in Phase 0."""
+"""Command-line boundary for the Backend Engineering Agent."""
+
+from backend_ai.cli.main import main
+
+__all__ = ["main"]

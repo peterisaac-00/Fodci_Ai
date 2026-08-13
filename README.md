@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 0 — Project Foundation.**
+> **Current status: Phase 1.1 — CLI Entry Point.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository deliberately contains only the Phase 0 foundation. It does **not** yet implement a CLI interaction loop, LLM inference, tool calling, filesystem access, terminal execution, planning, memory, evaluation behavior, or autonomous behavior.
+This repository includes the Phase 0 foundation and a minimal Phase 1.1 executable entry point. Installing the package provides `backend-ai`, which prints a confirmation and exits successfully. It does **not** yet implement a CLI interaction loop, user input, LLM inference, tool calling, filesystem access, terminal execution, planning, memory, evaluation behavior, or autonomous behavior.
 
 ## Purpose and Long-Term Vision
 
@@ -44,7 +44,7 @@ Evaluation
 Memory
 ```
 
-The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
+The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The `backend-ai` console script delegates only to `backend_ai.cli.main:main` and does not initialize an agent or provider. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
 
 ## Repository Layout
 
@@ -52,7 +52,7 @@ The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Too
 .
 ├── src/backend_ai/
 │   ├── agent/          # Future agent orchestration boundary
-│   ├── cli/            # Reserved future command-line boundary
+│   ├── cli/            # Minimal console-entry boundary
 │   ├── config/         # Small environment-backed settings abstraction
 │   ├── core/           # Shared protocols and startup utilities
 │   ├── evaluation/     # Future evaluator boundary
@@ -60,7 +60,7 @@ The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Too
 │   ├── memory/         # Future memory boundary
 │   └── tools/          # Future tool boundary
 ├── tests/
-│   ├── unit/           # Meaningful Phase 0 unit tests
+│   ├── unit/           # Meaningful Phase 0 and 1.1 unit tests
 │   └── integration/    # Reserved for cross-component tests
 ├── docs/               # Architecture and security foundation
 ├── scripts/            # Reserved for reviewed project-maintenance scripts
@@ -85,6 +85,14 @@ Run the test suite with:
 ```bash
 pytest
 ```
+
+Verify the Phase 1.1 console entry point after installation with:
+
+```bash
+backend-ai
+```
+
+The command currently prints a short initialization confirmation and exits with status `0`; it does not begin an interactive session.
 
 Check that every package module compiles with:
 
@@ -126,9 +134,9 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 | 11 | Model Improvement |
 | 12 | Advanced Agent |
 
-## Non-Goals for Phase 0
+## Non-Goals for the Current Phase
 
-There is no model loading, hosted LLM SDK, chat interface, tool implementation, file-editing feature, terminal runner, git integration, planner, database, vector store, RAG system, training pipeline, multi-agent system, web interface, authentication, or deployment service in this phase.
+Phase 1.1 does not add an interactive terminal, user input, command handling, project-path handling, model loading, hosted LLM SDK, chat interface, tool implementation, file-editing feature, terminal runner, git integration, planner, database, vector store, RAG system, training pipeline, multi-agent system, web interface, authentication, or deployment service.
 
 ## License
 
