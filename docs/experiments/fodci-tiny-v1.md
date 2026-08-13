@@ -46,7 +46,7 @@ Validation files: `data/fodci_tiny_v1/validation/api_validation.py, data/fodci_t
 | Gradient clipping | `1.0` |
 | Seed | `2026` |
 | Tokenizer version | `1` |
-| Elapsed seconds | `5.356` |
+| Elapsed seconds | `5.443` |
 
 ## Results
 

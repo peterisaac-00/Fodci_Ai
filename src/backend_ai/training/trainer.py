@@ -13,8 +13,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from backend_ai.checkpoint import CheckpointManager, LoadedCheckpoint
 from backend_ai.dataset.samples import TrainingExample
-from backend_ai.training.checkpoint import CheckpointState, load_checkpoint, save_checkpoint
 from backend_ai.training.config import TrainingConfig
 from backend_ai.training.metrics import EpochMetrics, TrainingResult, perplexity
 
@@ -31,12 +31,17 @@ class FodciTrainer:
         train_dataset: ExampleSource,
         validation_dataset: ExampleSource | None = None,
         config: TrainingConfig | None = None,
+        model_version: str = "fodci-tiny-v1",
     ) -> None:
         self.config = config or TrainingConfig()
         self.device = self.config.resolve_device()
         seed_everything(self.config.seed)
         self.model = model.to(self.device)
         self._validate_model_contract()
+        self.checkpoint_manager = CheckpointManager(
+            self.config.output_dir,
+            model_version=model_version,
+        )
         self.train_dataset = train_dataset
         self.validation_dataset = validation_dataset
         self.optimizer = torch.optim.AdamW(
@@ -103,10 +108,15 @@ class FodciTrainer:
             elapsed_seconds=time.perf_counter() - experiment_start,
         )
 
-    def resume(self, checkpoint_path: Path | str) -> CheckpointState:
+    def resume(self, checkpoint_path: Path | str) -> LoadedCheckpoint:
         """Restore model/optimizer state and continue at the following epoch."""
 
-        state = load_checkpoint(checkpoint_path, self.model, self.optimizer, self.device)
+        state = self.checkpoint_manager.load(
+            checkpoint_path,
+            self.model,
+            self.optimizer,
+            device=self.device,
+        )
         self.global_step = state.global_step
         self._next_epoch = state.epoch + 1
         self._last_checkpoint = Path(checkpoint_path)
@@ -118,14 +128,14 @@ class FodciTrainer:
         checkpoint_path = Path(path) if path is not None else self.config.output_dir / "latest.pt"
         latest_metrics = self._history[-1].to_dict() if self._history else {}
         epoch = self._next_epoch - 1
-        return save_checkpoint(
-            checkpoint_path,
+        return self.checkpoint_manager.save(
             self.model,
             self.optimizer,
+            self.config,
             epoch=epoch,
             global_step=self.global_step,
-            config=self.config,
             metrics=latest_metrics,
+            path=checkpoint_path,
         )
 
     def _train_epoch(self, epoch: int) -> tuple[float, int, int]:

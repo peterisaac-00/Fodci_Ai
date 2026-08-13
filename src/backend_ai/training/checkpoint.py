@@ -1,4 +1,4 @@
-"""Minimal PyTorch checkpoint persistence for Phase 2.5."""
+"""Backward-compatible facade over the Phase 2.7 CheckpointManager."""
 
 from __future__ import annotations
 
@@ -9,14 +9,15 @@ from typing import Any
 import torch
 from torch import nn
 
+from backend_ai.checkpoint import CheckpointManager, LoadedCheckpoint
 from backend_ai.training.config import TrainingConfig
 
-CHECKPOINT_FORMAT_VERSION = 1
+CHECKPOINT_FORMAT_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
 class CheckpointState:
-    """State restored from a trainer checkpoint."""
+    """Legacy-shaped resume state backed by the new metadata-aware manager."""
 
     epoch: int
     global_step: int
@@ -33,21 +34,18 @@ def save_checkpoint(
     config: TrainingConfig,
     metrics: dict[str, Any] | None = None,
 ) -> Path:
-    """Save the minimum state required to resume training."""
+    """Save through CheckpointManager for callers of the old helper API."""
 
-    checkpoint_path = Path(path)
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "format_version": CHECKPOINT_FORMAT_VERSION,
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "epoch": epoch,
-        "global_step": global_step,
-        "training_config": config.to_dict(),
-        "metrics": metrics or {},
-    }
-    torch.save(payload, checkpoint_path)
-    return checkpoint_path
+    manager = CheckpointManager(Path(path).parent)
+    return manager.save(
+        model,
+        optimizer,
+        config,
+        epoch=epoch,
+        global_step=global_step,
+        metrics=metrics,
+        path=path,
+    )
 
 
 def load_checkpoint(
@@ -56,35 +54,18 @@ def load_checkpoint(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
 ) -> CheckpointState:
-    """Restore model and optimizer state and return resume metadata."""
+    """Load through CheckpointManager and return the legacy-shaped state."""
 
-    checkpoint_path = Path(path)
-    if not checkpoint_path.is_file():
-        raise FileNotFoundError(f"Checkpoint does not exist: {checkpoint_path}")
-    try:
-        payload = torch.load(checkpoint_path, map_location=device)
-    except (OSError, RuntimeError, ValueError, EOFError) as exc:
-        raise ValueError(f"Unable to load checkpoint: {checkpoint_path}") from exc
-    if not isinstance(payload, dict) or payload.get("format_version") != CHECKPOINT_FORMAT_VERSION:
-        raise ValueError("Unsupported or corrupt Fodci checkpoint format.")
-    required = {"model_state_dict", "optimizer_state_dict", "epoch", "global_step"}
-    if not required.issubset(payload):
-        missing = ", ".join(sorted(required - payload.keys()))
-        raise ValueError(f"Checkpoint is missing required fields: {missing}")
-    try:
-        model.load_state_dict(payload["model_state_dict"])
-        optimizer.load_state_dict(payload["optimizer_state_dict"])
-    except (RuntimeError, TypeError, ValueError) as exc:
-        raise ValueError("Checkpoint state is incompatible with the model or optimizer.") from exc
-    return CheckpointState(
-        epoch=_validated_nonnegative_int(payload["epoch"], "epoch"),
-        global_step=_validated_nonnegative_int(payload["global_step"], "global_step"),
-        metrics=dict(payload.get("metrics", {})),
-        config=dict(payload.get("training_config", {})),
+    manager = CheckpointManager(Path(path).parent)
+    loaded: LoadedCheckpoint = manager.load(
+        path,
+        model,
+        optimizer,
+        device=device,
     )
-
-
-def _validated_nonnegative_int(value: object, name: str) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise ValueError(f"Checkpoint field '{name}' must be a non-negative integer.")
-    return value
+    return CheckpointState(
+        epoch=loaded.epoch,
+        global_step=loaded.global_step,
+        metrics=loaded.metrics,
+        config=loaded.config,
+    )

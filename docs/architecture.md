@@ -182,6 +182,28 @@ The train and validation directories are separate and are never merged by the ex
 
 The model configuration remains the original 10,000-token vocabulary, 256-token context, 320 hidden dimensions, five attention heads, four blocks, and 1,280-unit feed-forward layer, totaling 11,424,400 parameters. The experiment writes a machine-readable JSON report and a tracked human-readable Markdown report; the checkpoint and JSON artifact are ignored by Git. This is a from-scratch engineering experiment, not a generation or capability evaluation.
 
+## Phase 2.7 checkpoint management
+
+Phase 2.7 places a dedicated `CheckpointManager` around the existing training state without creating duplicate model instances:
+
+```text
+model + optimizer + training metadata
+                ↓
+CheckpointMetadata identity/schema validation
+                ↓
+temporary .tmp file → fsync → atomic os.replace()
+                ↓
+ignored .pt checkpoint
+
+inspect() → metadata only
+load() → compatibility validation → state restoration
+list() → latest()/best() from metadata progress/loss
+```
+
+The checkpoint envelope contains `format`, `format_version`, `model_version`, the full model configuration, tokenizer version, vocabulary size, context length, epoch, global step, serialized training configuration, metrics, seed, and UTC creation time, alongside model and optimizer state dictionaries. `inspect()` parses the metadata and required fields without constructing a model. `load()` maps tensors to the requested device and validates model version, tokenizer version, vocabulary, context length, hidden size, layer count, attention heads, feed-forward size, and activation before loading state into the supplied objects.
+
+Saving never writes directly to the final path: it writes a unique temporary file, flushes it, and atomically replaces the destination. `list()` ignores malformed or incompatible files rather than presenting them as usable checkpoints, `latest()` orders valid entries by metadata global step/epoch/time, and `best()` chooses the lowest recorded `validation_loss` with a latest-step tie-break. All generated weights remain under ignored artifact directories and are excluded from Git.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -194,6 +216,7 @@ The repository implements only these foundation pieces:
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
+| Checkpoint management | Atomically save/load metadata-aware Fodci state, validate compatibility, inspect/list, and select latest/best checkpoints | Committing weights, distributed checkpointing, generation, inference, CLI or Agent integration |
 | Tokenizer | Implement reversible byte fallback, deterministic small-corpus merges, and versioned save/load | Dataset collection, scraping, LLM training, generation, inference |
 | Dataset pipeline | Load local text, validate, exact-deduplicate, tokenize, append EOS boundaries, and stream fixed next-token chunks | Internet downloads, scraping, training loop, optimizer, checkpoints, model weights, inference |
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |

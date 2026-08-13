@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.6 — Fodci Tiny Model Training.**
+> **Current status: Phase 2.7 — Fodci Checkpoint Management.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, and Phase 2.6's first real Fodci Tiny v1 training experiment. The model remains intentionally tiny at 11,424,400 parameters; training is independently callable from Python and is not integrated into the CLI.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, and Phase 2.7's metadata-aware checkpoint manager. The model remains intentionally tiny at 11,424,400 parameters; training and checkpoint operations are independently callable from Python and are not integrated into the CLI.
 
 ## Purpose and Long-Term Vision
 
@@ -62,6 +62,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
 │   ├── dataset/        # Local validation, exact deduplication, and streaming chunks
 │   ├── training/       # CPU training loop, metrics, and resumable checkpoints
+│   ├── checkpoint/     # Atomic metadata-aware checkpoint management
 │   ├── data/           # Small local backend-focused train/validation corpus
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
@@ -136,6 +137,12 @@ Phase 2.6 runs `scripts/run_fodci_tiny_v1.py` as a Python workflow, not as a new
 
 The human-readable experiment record is [Fodci Tiny v1](docs/experiments/fodci-tiny-v1.md). Generated JSON reports and model checkpoints live under ignored `artifacts/` directories and are never committed. The experiment demonstrates an actual from-scratch parameter update on backend-focused local examples; it does not implement generation, inference, an agent, or a training CLI.
 
+## Checkpoint management
+
+`CheckpointManager` wraps the existing training engine with an atomic, metadata-aware storage boundary. Each checkpoint records model version, model configuration, tokenizer version, vocabulary size, context length, epoch, global step, training configuration, metrics, seed, format identifier, format version, and UTC creation time. `inspect()` reads this metadata without constructing another model; `load()` maps tensors to the requested device and validates identity and structural compatibility before mutating the model or optimizer.
+
+The manager supports `save()`, `load()`, `inspect()`, `exists()`, `list()`, `latest()`, and `best()`. Saving writes a temporary file, flushes it, and atomically replaces the destination, preventing an interrupted write from exposing a partial final checkpoint. `latest()` uses metadata progress rather than filenames, while `best()` selects the lowest recorded validation loss. Generated weights remain under ignored `artifacts/` or `checkpoints/` paths and are never committed to Git.
+
 Check that every package module compiles with:
 
 ```bash
@@ -178,7 +185,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.6 adds only the first real local training experiment over the existing model, tokenizer, dataset pipeline, and training engine. It adds a small backend-focused train/validation corpus, deterministic dataset statistics, a bounded Python experiment workflow, baseline evaluation, a from-scratch Tiny v1 checkpoint, and a human-readable report. It does not add downloads, scraping, pretrained components, generation, inference servers, CLI commands, agent integration, tools, memory, autonomous behavior, reinforcement learning, RLHF, external APIs, or large datasets.
+Phase 2.7 adds only the checkpoint-management boundary around the existing training engine: atomic saves, inspectable metadata, compatibility validation, CPU-safe loading, listing, latest/best selection, and resume verification. It does not redesign the model, tokenizer, dataset, or training loop; add generation, inference, CLI commands, agent integration, tools, memory, autonomous behavior, external APIs, pretrained components, or distributed checkpointing.
 
 ## License
 
