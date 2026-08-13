@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.4 — Fodci Dataset Pipeline.**
+> **Current status: Phase 2.5 — Fodci Training Engine.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, and Phase 2.4's local streaming dataset pipeline. The model remains randomly initialized and untrained; the tokenizer and dataset pipeline are isolated from the CLI and from any training runtime.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, and Phase 2.5's first CPU-friendly training engine. The model remains intentionally tiny at approximately 11.42M parameters; training is independently callable from Python and is not integrated into the CLI.
 
 ## Purpose and Long-Term Vision
 
@@ -61,6 +61,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── model/          # From-scratch Transformer architecture, no training
 │   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
 │   ├── dataset/        # Local validation, exact deduplication, and streaming chunks
+│   ├── training/       # CPU training loop, metrics, and resumable checkpoints
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
 │   ├── terminal/       # Session lifecycle and normal text-input boundary
@@ -77,7 +78,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 
 ## Development
 
-Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch only for the isolated architecture layer. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
+Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch for the isolated model architecture and Phase 2.5 training engine. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
 
 ```bash
 python -m venv .venv
@@ -119,6 +120,14 @@ Input is preserved except for the line ending added by stdin. Empty input is ret
 `FodciTokenizer` uses UTF-8 bytes as a permanent lossless fallback, with optional deterministic byte-pair merges learned only from a caller-provided small corpus. Its default vocabulary is exactly 10,000 IDs, compatible with `ModelConfig.vocab_size`. Special IDs are stable: `<PAD>=0`, `<UNK>=1`, `<BOS>=2`, and `<EOS>=3`; byte tokens start at ID 4. Encoding does not normalize, truncate, lowercase, or alter whitespace. `decode(encode(text))` reconstructs supported text exactly, including source code, indentation, URLs, JSON, and Unicode.
 
 Tokenizer training is separate from LLM training. It accepts in-memory text only, performs no scraping or dataset collection, and produces a small versioned JSON definition through `save()` and `load()`. The Phase 2.4 dataset pipeline reads only caller-provided local files; it does not download, scrape, or silently normalize source text.
+
+## Training engine
+
+`FodciTrainer` is the first phase that permits the randomly initialized model to learn. It receives an existing Fodci model and re-iterable or callable train/validation sources of `TrainingExample` objects. It batches bounded streams, validates sequence lengths and vocabulary IDs, computes standard next-token categorical cross-entropy, performs backpropagation, applies optional gradient clipping, and updates parameters with AdamW. The default device is CPU; `auto` selects CUDA only when available, while an explicit unavailable CUDA request fails clearly.
+
+Each epoch reports training and validation loss, step counts, learning rate, and guarded perplexity. Checkpoints contain only the model state, optimizer state, epoch, global step, training configuration, and relevant metrics. `resume()` restores those values and continues from the following epoch. Generated checkpoints are written under ignored artifact directories and are never part of the source repository.
+
+The required tiny smoke run is an engineering validation of forward/backward execution, parameter updates, validation, checkpoint creation, checkpoint loading, and resume behavior. It is not evidence that Fodci has acquired useful language capability.
 
 Check that every package module compiles with:
 
@@ -162,7 +171,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.4 adds only a local, deterministic, streaming dataset pipeline: supported-file discovery, UTF-8 and size validation, exact SHA-256 deduplication, tokenizer application, EOS document boundaries, and next-token chunks. It does not add internet downloads, scraping, code collection, a training loop, optimizer, loss, backpropagation, checkpointing, model weights, generation, inference runtime, agent integration, tools, memory, evaluation, external APIs, or self-learning.
+Phase 2.5 adds only the first lightweight training engine over the existing model and dataset boundaries: CPU batching, next-token cross-entropy, backpropagation, optional gradient clipping, AdamW, validation, metrics, deterministic seeding, and resumable checkpoints. It does not redesign the model, tokenizer, or dataset; add downloads, scraping, pretrained weights, generation, inference servers, CLI commands, agent integration, tools, memory, autonomous behavior, reinforcement learning, RLHF, external APIs, or experiment-tracking frameworks.
 
 ## License
 

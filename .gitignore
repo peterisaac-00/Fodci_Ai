@@ -31,3 +31,7 @@ build/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Generated training checkpoints and experiment artefacts
+artifacts/
+checkpoints/

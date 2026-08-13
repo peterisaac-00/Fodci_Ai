@@ -132,6 +132,32 @@ TrainingExample(input_ids, target_ids)
 
 `ExactDeduplicator` hashes decoded UTF-8 content with SHA-256 and retains the first occurrence in deterministic order. `TokenSequenceBuilder` tokenizes each document, optionally appends `<EOS>`, and emits fixed-size next-token examples without crossing document boundaries. `FodciDatasetPipeline.iter_samples()` composes these stages lazily; the batch `load_documents()` method exists only for explicit inspection and diagnostics. The package performs no downloads, scraping, training, optimization, model-weight loading, or autonomous behavior.
 
+## Phase 2.5 training engine
+
+Phase 2.5 introduces the first learning loop while preserving the existing model and dataset boundaries:
+
+```text
+FodciDatasetPipeline.iter_samples()
+              ↓
+bounded batch of TrainingExample
+              ↓
+input_ids / target_ids validation
+              ↓
+FodciModel(input_ids) → logits (B, T, V)
+              ↓
+flattened categorical cross-entropy
+              ↓
+backward → optional gradient clipping → AdamW step
+              ↓
+metrics and optional checkpoint
+              ↓
+validation: eval() + no_grad()
+```
+
+`TrainingConfig` keeps CPU as the default device and exposes epochs, batch size, learning rate, weight decay, gradient norm, seed, logging and checkpoint intervals, validation interval, and output directory. `FodciTrainer` accepts a re-iterable or callable source so that streaming dataset pipelines can be recreated for each epoch without materializing the full dataset. It validates sequence length, equal input/target shapes, and vocabulary ranges before the model forward pass; it does not shift the target a second time.
+
+The trainer uses standard PyTorch cross-entropy and AdamW only. Each checkpoint stores the model and optimizer state dictionaries, completed epoch, global step, serialized training configuration, and latest metrics. `resume()` restores these values and starts at the following epoch. Checkpoint output is directed to ignored artifact directories. The CPU smoke run validates engineering behavior—finite loss, gradients, parameter updates, validation, checkpoint loading, and resume—not useful language capability.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -142,6 +168,7 @@ The repository implements only these foundation pieces:
 | LLM provider | Define typed messages, request/response, provider protocol, and one provider error | Concrete model, runtime, loading, inference, network access |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
+| Training engine | Train the existing model with CPU batching, next-token cross-entropy, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tokenizer | Implement reversible byte fallback, deterministic small-corpus merges, and versioned save/load | Dataset collection, scraping, LLM training, generation, inference |
 | Dataset pipeline | Load local text, validate, exact-deduplicate, tokenize, append EOS boundaries, and stream fixed next-token chunks | Internet downloads, scraping, training loop, optimizer, checkpoints, model weights, inference |
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
