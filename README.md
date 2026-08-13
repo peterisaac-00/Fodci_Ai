@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.10 — Fodci Instruction Training.**
+> **Current status: Phase 2.11 — Fodci Local Inference.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, and Phase 2.10's local instruction-training dataset and response-masked training path. The model remains intentionally tiny at 11,424,400 parameters; training, checkpoint, evaluation, and dataset operations are independently callable from Python and are not integrated into the CLI.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. The model remains intentionally tiny at 11,424,400 parameters; training, checkpoint, evaluation, dataset, and inference operations are independently callable from Python and are not integrated into the CLI.
 
 ## Purpose and Long-Term Vision
 
@@ -57,6 +57,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── config/         # Small environment-backed settings abstraction
 │   ├── core/           # Shared protocols, startup, and project context
 │   ├── evaluation/     # CPU-first loss/perplexity evaluation and comparison
+│   ├── inference/      # Local CPU autoregressive decoding API
 │   ├── llm/            # Typed provider boundary, no model integration
 │   ├── model/          # From-scratch Transformer architecture, no training
 │   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
@@ -80,7 +81,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 
 ## Development
 
-Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch for the isolated model architecture and Phase 2.5/2.6 training workflows. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
+Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch for the isolated model architecture, Phase 2.5/2.6/2.10 training workflows, and Phase 2.11 local inference. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point. Phase 2.11 inference remains a Python API/workflow and is not a new CLI command.
 
 ```bash
 python -m venv .venv
@@ -167,6 +168,14 @@ The reproducible instruction manifest is [fodci-instruction-manifest.json](docs/
 
 Phase 2.10 validates data parsing, response masking, checkpoint compatibility, and before/after response-only objective metrics. It does not claim that Fodci can reliably follow arbitrary instructions, write production code, or perform generation.
 
+## Phase 2.11 local inference
+
+`InferenceEngine` is the first local generation boundary. It accepts an existing `FodciModel`, the existing `FodciTokenizer`, and an optional compatible checkpoint path. The engine validates checkpoint identity through `CheckpointManager`, calls `model.eval()` inside `torch.inference_mode()`, encodes the prompt without truncation, runs autoregressive next-token decoding, and decodes only the generated token IDs back to text.
+
+The default is deterministic greedy decoding: `argmax(logits / temperature)` with `temperature=1.0`, `do_sample=False`, EOS stopping enabled, and a conservative `max_new_tokens` budget. Optional `temperature`, `top_k`, and seeded multinomial sampling are supported; invalid temperatures, invalid top-k values, vocabulary mismatches, empty prompts, and prompts exceeding model context produce clear errors. Generation stops on EOS, the new-token budget, or context-length capacity and never silently truncates the prompt.
+
+`InferenceResult` exposes generated text, prompt and generated token counts, stopped reason, model version, checkpoint identity, and the effective configuration. The smoke workflow is [run_fodci_inference.py](scripts/run_fodci_inference.py). It uses the existing ignored `artifacts/checkpoints/fodci-tiny-v1.pt` on CPU and verifies completion for English and backend-oriented prompts. The resulting text is not evidence of intelligence or production readiness; it only validates the checkpoint → model → tokenizer → autoregressive decoding path.
+
 Check that every package module compiles with:
 
 ```bash
@@ -209,7 +218,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.10 adds only the local instruction dataset, deterministic instruction manifest, response-only loss masking, bounded CPU training workflow, and before/after response-only evaluation. It does not add generation, inference, chat, CLI commands, agent integration, tools, memory, RAG, autonomous behavior, external APIs, pretrained components, architecture changes, or Phase 3 functionality.
+Phase 2.11 adds only the local CPU inference API, compatible checkpoint loading, prompt validation, greedy/temperature/top-k decoding, EOS/context stopping, and testable result metadata. It does not add a new CLI command, chatbot UI, Agent integration, tools, memory, RAG, autonomous behavior, file or terminal operations, external APIs, pretrained components, architecture changes, or Phase 2.12/Phase 3 functionality.
 
 ## License
 

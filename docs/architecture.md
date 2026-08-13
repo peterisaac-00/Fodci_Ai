@@ -277,6 +277,35 @@ The format uses ordinary textual headers rather than new special tokenizer token
 
 The Phase 2.10 workflow is a bounded CPU smoke run from random initialization. It records model/dataset/tokenizer versions, dataset SHA-256, seed, optimizer settings, steps, device, time, checkpoint identity, and before/after response-only validation metrics. It deliberately does not add generation, inference, chat, CLI integration, Agent behavior, or Phase 3 functionality.
 
+## Phase 2.11 local inference
+
+Phase 2.11 adds a local inference boundary without changing the model or tokenizer architecture:
+
+```text
+prompt
+  ↓
+FodciTokenizer.encode()
+  ↓
+InferenceEngine
+  ├── prompt context validation
+  ├── FodciModel.eval()
+  ├── torch.inference_mode()
+  ├── final-position logits
+  └── greedy or optional temperature/top-k selection
+  ↓
+EOS / max_new_tokens / context stop
+  ↓
+FodciTokenizer.decode(generated IDs)
+  ↓
+InferenceResult
+```
+
+`InferenceEngine` receives an existing `FodciModel` and `FodciTokenizer`. If a checkpoint is configured, it uses `CheckpointManager` to load the existing model and optimizer payload into a temporary optimizer solely for complete checkpoint validation; the optimizer is never stepped or exposed. Model version, tokenizer version, vocabulary size, context length, and structural model fields are validated before loading.
+
+The default is CPU greedy decoding with `temperature=1.0`, `do_sample=False`, EOS stopping, and a bounded `max_new_tokens`. Optional seeded multinomial sampling supports positive finite temperature and optional positive `top_k`; `top_k` is filtered before sampling. Prompts are encoded without truncation, and an empty or over-context prompt fails clearly. Generation stops when EOS is selected, the new-token budget is exhausted, or the context window is full. `InferenceResult` exposes only generated text, counts, stop reason, model version, checkpoint identity, and effective configuration.
+
+The real smoke workflow uses the existing ignored Tiny v1 checkpoint on CPU with short English, Python, and backend prompts. It validates the checkpoint → model → tokenizer → autoregressive decoding path only; generated text is not evidence of intelligence or production readiness. No CLI command, chatbot UI, Agent loop, tools, memory, file operations, or Phase 2.12/3 functionality is included.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -290,7 +319,8 @@ The repository implements only these foundation pieces:
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
 | Checkpoint management | Atomically save/load metadata-aware Fodci state, validate compatibility, inspect/list, and select latest/best checkpoints | Committing weights, distributed checkpointing, generation, inference, CLI or Agent integration |
-| Evaluation pipeline | Measure fixed validation objective with no-grad, compare random/trained states, label response-only loss, and emit lightweight reports | Generation, sampling, inference server, CLI or Agent integration |
+| Evaluation pipeline | Measure fixed validation objective with no-grad, compare random/trained states, label response-only loss, and emit lightweight reports | Inference server, CLI or Agent integration |
+| Local inference | Load a compatible checkpoint, validate prompts, decode autoregressively on CPU, stop on EOS/budget/context, and return typed result metadata | Chat UI, CLI command, Agent loop, tools, memory, file/terminal operations, Phase 2.12/3 |
 | Tokenizer | Implement reversible byte fallback, deterministic small-corpus merges, and versioned save/load | Dataset collection, scraping, LLM training, generation, inference |
 | Dataset pipeline | Load local text, validate, report unsupported/rejected files, exact-deduplicate, tokenize, append EOS boundaries, and stream fixed next-token chunks | Internet downloads, scraping, training loop, optimizer, checkpoints, model weights, inference |
 | Coding dataset manifest | Build deterministic train/validation statistics, file identities, language distribution, and leakage checks over the existing pipeline | New tokenizer, new dataset system, training run, generation, inference, CLI or Agent integration |
