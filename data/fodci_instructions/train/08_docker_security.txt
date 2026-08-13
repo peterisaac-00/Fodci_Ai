@@ -1,0 +1,8 @@
+### Instruction
+Review a Docker deployment for a Python API and propose security-aware corrections.
+
+### Input
+The image uses a slim Python base, copies the source, reads DATABASE_URL from the environment, listens on port 8080, and currently runs as root. The health endpoint checks only that the process responds, while the database may be unavailable.
+
+### Response
+Keep the runtime image small, pin or constrain dependencies through the project lock strategy, and do not bake secrets into the image or commit an environment file. Create a non-root application user, set a writable application directory explicitly, expose the intended port, and add a health check that reflects the required dependency readiness without leaking credentials. Use a short stop timeout and structured logs. Separate liveness from readiness so an orchestrator can restart a dead process without routing traffic to an API whose database dependency is unavailable.

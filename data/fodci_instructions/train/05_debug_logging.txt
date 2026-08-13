@@ -1,0 +1,8 @@
+### Instruction
+Debug an intermittent timeout in a backend request without adding noisy or unsafe logs.
+
+### Input
+A request calls a database and an external billing service. The timeout happens only for some accounts. Current logs contain a message saying request failed but no request ID, duration, dependency name, or account-safe correlation value.
+
+### Response
+Add a request ID at the boundary and propagate it through service calls. Record structured events for request start, dependency start and end, duration, timeout category, and final status. Log the dependency name and a non-sensitive account correlation ID, but never log access tokens, passwords, full payment data, or arbitrary request bodies. Add bounded timeouts to both dependencies, distinguish retryable timeout errors from validation errors, and include the request ID in the client error response. Use a test or local fake to reproduce the slow dependency and verify the timeout path.

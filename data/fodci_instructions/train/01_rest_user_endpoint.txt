@@ -1,0 +1,8 @@
+### Instruction
+Create a REST endpoint that returns a user by ID and handles the missing-user case safely.
+
+### Input
+The service is a small Python application. The route receives an integer user_id, the repository returns either a User object or None, and API clients expect JSON responses with stable keys.
+
+### Response
+Use a route that separates transport concerns from persistence. Validate the identifier, call the repository, return a serialized JSON object with HTTP 200 when the user exists, return HTTP 404 with {"error": "not_found"} when it does not, and never expose a database exception or stack trace in the response. Keep the repository call parameterized and make the response schema explicit.

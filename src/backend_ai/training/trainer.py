@@ -145,10 +145,10 @@ class FodciTrainer:
         for batch in _iter_batches(self.train_dataset, self.config.batch_size):
             if self.config.max_steps is not None and self.global_step >= self.config.max_steps:
                 break
-            input_ids, target_ids = self._batch_to_tensors(batch)
+            input_ids, target_ids, loss_mask = self._batch_to_tensors(batch)
             self.optimizer.zero_grad(set_to_none=True)
             logits = self.model(input_ids)
-            loss = _cross_entropy(logits, target_ids)
+            loss = _cross_entropy(logits, target_ids, loss_mask)
             if not torch.isfinite(loss):
                 raise FloatingPointError(f"Non-finite training loss at epoch {epoch}.")
             loss.backward()
@@ -160,7 +160,7 @@ class FodciTrainer:
             self.optimizer.step()
             steps += 1
             self.global_step += 1
-            token_count = target_ids.numel()
+            token_count = int(loss_mask.sum().item())
             total_loss += float(loss.detach().item()) * token_count
             total_tokens += token_count
             if self.config.log_interval and self.global_step % self.config.log_interval == 0:
@@ -188,13 +188,13 @@ class FodciTrainer:
         steps = 0
         with torch.no_grad():
             for batch in _iter_batches(dataset, self.config.batch_size):
-                input_ids, target_ids = self._batch_to_tensors(batch)
+                input_ids, target_ids, loss_mask = self._batch_to_tensors(batch)
                 logits = self.model(input_ids)
-                loss = _cross_entropy(logits, target_ids)
+                loss = _cross_entropy(logits, target_ids, loss_mask)
                 if not torch.isfinite(loss):
                     raise FloatingPointError("Non-finite evaluation loss.")
                 steps += 1
-                token_count = target_ids.numel()
+                token_count = int(loss_mask.sum().item())
                 total_loss += float(loss.item()) * token_count
                 total_tokens += token_count
         if steps == 0 or total_tokens == 0:
@@ -204,7 +204,7 @@ class FodciTrainer:
     def _batch_to_tensors(
         self,
         batch: list[TrainingExample],
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if not batch:
             raise ValueError("Training batch cannot be empty.")
         sequence_lengths = {len(example.input_ids) for example in batch}
@@ -212,6 +212,7 @@ class FodciTrainer:
             raise ValueError("All examples in a batch must have the same sequence length.")
         input_rows: list[tuple[int, ...]] = []
         target_rows: list[tuple[int, ...]] = []
+        mask_rows: list[tuple[bool, ...]] = []
         for example in batch:
             if len(example.input_ids) != len(example.target_ids):
                 raise ValueError("Each example must have equal input and target lengths.")
@@ -219,11 +220,18 @@ class FodciTrainer:
                 raise ValueError("Example sequence length must be within model context length.")
             input_rows.append(example.input_ids)
             target_rows.append(example.target_ids)
+            mask = example.loss_mask or (True,) * len(example.target_ids)
+            if len(mask) != len(example.target_ids):
+                raise ValueError("Each loss_mask must match the target length.")
+            if not any(mask):
+                raise ValueError("Each loss_mask must select at least one response token.")
+            mask_rows.append(tuple(bool(value) for value in mask))
         input_ids = torch.tensor(input_rows, dtype=torch.long, device=self.device)
         target_ids = torch.tensor(target_rows, dtype=torch.long, device=self.device)
+        loss_mask = torch.tensor(mask_rows, dtype=torch.bool, device=self.device)
         self._validate_token_range(input_ids, "input_ids")
         self._validate_token_range(target_ids, "target_ids")
-        return input_ids, target_ids
+        return input_ids, target_ids, loss_mask
 
     def _validate_model_contract(self) -> None:
         config = getattr(self.model, "config", None)
@@ -253,15 +261,28 @@ def _iter_batches(source: ExampleSource, batch_size: int) -> Iterator[list[Train
         yield batch
 
 
-def _cross_entropy(logits: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
+def _cross_entropy(
+    logits: torch.Tensor,
+    target_ids: torch.Tensor,
+    loss_mask: torch.Tensor | None = None,
+) -> torch.Tensor:
     if logits.ndim != 3:
         raise ValueError("Model logits must have shape (batch_size, sequence_length, vocab_size).")
     if target_ids.ndim != 2 or logits.shape[:2] != target_ids.shape:
         raise ValueError("Model logits and target_ids have incompatible shapes.")
-    return F.cross_entropy(
+    per_token_loss = F.cross_entropy(
         logits.reshape(-1, logits.shape[-1]),
         target_ids.reshape(-1),
+        reduction="none",
     )
+    if loss_mask is None:
+        return per_token_loss.mean()
+    if loss_mask.shape != target_ids.shape:
+        raise ValueError("loss_mask and target_ids have incompatible shapes.")
+    active = loss_mask.reshape(-1)
+    if not bool(active.any().item()):
+        raise ValueError("loss_mask must select at least one token.")
+    return per_token_loss[active].mean()
 
 
 def seed_everything(seed: int) -> None:

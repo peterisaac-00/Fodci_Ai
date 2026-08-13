@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.9 — Fodci Coding Dataset.**
+> **Current status: Phase 2.10 — Fodci Instruction Training.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, and Phase 2.9's local backend-engineering coding corpus and manifest layer. The model remains intentionally tiny at 11,424,400 parameters; training, checkpoint, evaluation, and dataset operations are independently callable from Python and are not integrated into the CLI.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, and Phase 2.10's local instruction-training dataset and response-masked training path. The model remains intentionally tiny at 11,424,400 parameters; training, checkpoint, evaluation, and dataset operations are independently callable from Python and are not integrated into the CLI.
 
 ## Purpose and Long-Term Vision
 
@@ -60,7 +60,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── llm/            # Typed provider boundary, no model integration
 │   ├── model/          # From-scratch Transformer architecture, no training
 │   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
-│   ├── dataset/        # Local validation, deduplication, streaming chunks, and manifests
+│   ├── dataset/        # Local coding/instruction validation, samples, and manifests
 │   ├── training/       # CPU training loop, metrics, and resumable checkpoints
 │   ├── checkpoint/     # Atomic metadata-aware checkpoint management
 │   ├── data/           # Small local backend-focused train/validation corpus
@@ -72,7 +72,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── unit/           # Foundation, CLI, model, tokenizer, dataset, and training tests
 │   └── integration/    # Reserved for cross-component tests
 ├── docs/               # Architecture, security, and experiment reports
-├── scripts/            # Reviewed Python workflows for training, evaluation, and manifests
+├── scripts/            # Reviewed Python workflows for training, evaluation, and dataset manifests
 ├── .env.example
 ├── pyproject.toml
 └── README.md
@@ -125,7 +125,7 @@ Tokenizer training is separate from LLM training. It accepts in-memory text only
 
 ## Training engine
 
-`FodciTrainer` is the first phase that permits the randomly initialized model to learn. It receives an existing Fodci model and re-iterable or callable train/validation sources of `TrainingExample` objects. It batches bounded streams, validates sequence lengths and vocabulary IDs, computes standard next-token categorical cross-entropy, performs backpropagation, applies optional gradient clipping, and updates parameters with AdamW. The default device is CPU; `auto` selects CUDA only when available, while an explicit unavailable CUDA request fails clearly.
+`FodciTrainer` is the first phase that permits the randomly initialized model to learn. It receives an existing Fodci model and re-iterable or callable train/validation sources of `TrainingExample` objects. It batches bounded streams, validates sequence lengths and vocabulary IDs, computes standard next-token categorical cross-entropy, performs backpropagation, applies optional gradient clipping, and updates parameters with AdamW. A `TrainingExample` may carry an optional boolean `loss_mask`; when present, only selected target positions contribute to the mean loss and effective token counts. The default device is CPU; `auto` selects CUDA only when available, while an explicit unavailable CUDA request fails clearly.
 
 Each epoch reports training and validation loss, step counts, token counts, learning rate, elapsed time, and guarded perplexity. `TrainingConfig.max_steps` provides an optional hard budget in addition to epochs. Checkpoints contain only the model state, optimizer state, epoch, global step, training configuration, and relevant metrics. `resume()` restores those values and continues from the following epoch. Generated checkpoints are written under ignored artifact directories and are never part of the source repository.
 
@@ -156,6 +156,16 @@ Phase 2.8 uses `scripts/run_fodci_evaluation.py` to compare a fresh random Fodci
 `CodingDatasetManifestBuilder` composes the existing `FodciDatasetPipeline`; it does not create a second tokenizer or dataset loader. The builder records exact file paths, UTF-8 bytes, characters, tokens including EOS, training examples, language/file-type distribution, duplicate and rejected-file counts, split hashes, tokenizer version, vocabulary size, context length, and a deterministic dataset SHA-256. It also reports unsupported extensions and rejects train/validation exact-content leakage. The reproducible manifest is [fodci-coding-manifest.json](docs/datasets/fodci-coding-manifest.json), with a human-readable summary in [fodci-coding.md](docs/datasets/fodci-coding.md).
 
 Phase 2.9 improves the corpus and its identity only. It does not start a new training run, change the Transformer, add inference or generation, integrate the CLI, or claim that Fodci has gained intelligence or useful coding ability.
+
+## Phase 2.10 instruction training
+
+`data/fodci_instructions/` contains a small, deterministic backend-engineering instruction dataset split into `train/` and `validation/`. Each text file uses ordinary delimiters—`### Instruction`, `### Input`, and `### Response`—because no new tokenizer special tokens were introduced. The parser rejects missing sections, empty input, empty responses, malformed ordering, unsupported files, invalid UTF-8, duplicate examples, and train/validation leakage.
+
+`InstructionDatasetPipeline` reuses the existing tokenizer and produces regular `TrainingExample` objects with a response boundary mask. The instruction and input are conditioning context; response target tokens and their EOS boundary are the only positions included in the causal cross-entropy. This minimal response-only masking extension keeps the existing model architecture, optimizer, checkpoint manager, and evaluation infrastructure unchanged.
+
+The reproducible instruction manifest is [fodci-instruction-manifest.json](docs/datasets/fodci-instruction-manifest.json), with a human-readable summary in [fodci-instructions.md](docs/datasets/fodci-instructions.md). The bounded CPU smoke workflow is [run_fodci_instruction_training.py](scripts/run_fodci_instruction_training.py), and its tracked experiment report is [Fodci Instruction Training](docs/experiments/fodci-instruction-training.md). The generated checkpoint and JSON report remain under ignored `artifacts/` directories.
+
+Phase 2.10 validates data parsing, response masking, checkpoint compatibility, and before/after response-only objective metrics. It does not claim that Fodci can reliably follow arbitrary instructions, write production code, or perform generation.
 
 Check that every package module compiles with:
 
@@ -199,7 +209,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.9 adds only the local backend-engineering coding corpus, deterministic train/validation manifest, dataset statistics, unsupported/rejected-file reporting, and leakage prevention over the existing pipeline. It does not start training, change model architecture or tokenizer, add generation, inference, CLI commands, agent integration, tools, memory, autonomous behavior, external APIs, pretrained components, or later-phase functionality.
+Phase 2.10 adds only the local instruction dataset, deterministic instruction manifest, response-only loss masking, bounded CPU training workflow, and before/after response-only evaluation. It does not add generation, inference, chat, CLI commands, agent integration, tools, memory, RAG, autonomous behavior, external APIs, pretrained components, architecture changes, or Phase 3 functionality.
 
 ## License
 

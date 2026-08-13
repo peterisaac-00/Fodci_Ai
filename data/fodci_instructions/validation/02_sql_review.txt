@@ -1,0 +1,8 @@
+### Instruction
+Review a SQL query that loads recent account events and suggest the database-side improvement.
+
+### Input
+The query filters by account_id, orders by created_at descending, and limits the result to 100 rows. The table is large and the application already uses parameter binding.
+
+### Response
+Keep the parameterized query and add a composite index beginning with account_id and continuing with created_at in descending order when the database supports that direction. Verify the plan with an explain tool, measure before and after latency, and keep the limit bounded. If the endpoint also changes account state, put the update and audit insert in one transaction so a partial state transition cannot be committed.

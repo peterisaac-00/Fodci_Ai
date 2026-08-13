@@ -1,0 +1,8 @@
+### Instruction
+Design a repository operation that creates an order and its audit event atomically.
+
+### Input
+The database is PostgreSQL. The order row and audit row must either both exist or both be absent. The repository receives a connection and an Order value, and all user-controlled values must remain query parameters.
+
+### Response
+Open a transaction, execute an INSERT for the order with placeholders, execute a second INSERT for the audit event with placeholders, and commit only after both statements succeed. If either statement raises an exception, roll back and re-raise a domain-level persistence error. Keep transaction ownership in the repository or unit-of-work boundary, never concatenate input into SQL, and add a test that verifies rollback when the audit insert fails. Return the created order only after commit succeeds.

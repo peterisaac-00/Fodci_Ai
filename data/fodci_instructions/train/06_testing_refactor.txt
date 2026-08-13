@@ -1,0 +1,8 @@
+### Instruction
+Refactor a backend service to introduce a repository interface and preserve its behavior.
+
+### Input
+The service currently constructs a database client inside every method, which makes tests slow and couples business logic to one driver. Existing tests cover successful creation and not-found behavior, but do not assert that invalid input avoids database access.
+
+### Response
+Define a small repository protocol with the operations the service actually needs, inject that protocol into the service constructor, and keep transaction and SQL details in the concrete repository. Preserve the public service return values and domain errors. Add unit tests with an in-memory fake for success, not-found, and invalid input; assert the fake is not called for invalid input. Add one integration test for the real database adapter and parameterized SQL. Run the existing suite before and after the refactor so the contract remains stable.

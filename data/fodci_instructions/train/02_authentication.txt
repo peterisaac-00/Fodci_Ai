@@ -1,0 +1,8 @@
+### Instruction
+Explain how to authenticate a password login and authorize a protected backend operation.
+
+### Input
+Users are stored with a password digest, a per-user salt, and a tuple of roles. A login request supplies an email and password. The application needs a short-lived session and an endpoint that requires the admin role.
+
+### Response
+Look up the user by email, derive a candidate digest with the stored salt, and compare digests with a constant-time comparison. Return a generic authentication failure for an unknown email or wrong password. On success issue a short-lived, random session token or a signed JWT containing the user ID and expiry; do not put a password or secret key in the token. For the protected endpoint, validate the token, check expiry, load the user, and require the admin role before running the operation. Log the event without logging credentials or tokens.

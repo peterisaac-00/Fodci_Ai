@@ -1,0 +1,131 @@
+{
+  "context_length": 256,
+  "dataset_name": "fodci-instructions",
+  "dataset_sha256": "c42a4ad2552bb832ced35603eebe15d2df430fec7f463d054df60806ff46af5c",
+  "format": "fodci-instruction-manifest",
+  "instruction_format_version": 1,
+  "tokenizer_version": 1,
+  "train": {
+    "duplicate_count": 0,
+    "files": [
+      {
+        "bytes": 711,
+        "characters": 711,
+        "content_sha256": "2fd77eaf3c2fb849908a68be7c39a2cd2d39e80fccd39f1e974c7e838428a65a",
+        "instruction_sha256": "2fd77eaf3c2fb849908a68be7c39a2cd2d39e80fccd39f1e974c7e838428a65a",
+        "relative_path": "01_rest_user_endpoint.txt",
+        "serialized_tokens": 711
+      },
+      {
+        "bytes": 898,
+        "characters": 898,
+        "content_sha256": "316e3e8df51f650454142ccd80cc6a569f4149d29088af3ed24b4a570f705be9",
+        "instruction_sha256": "316e3e8df51f650454142ccd80cc6a569f4149d29088af3ed24b4a570f705be9",
+        "relative_path": "02_authentication.txt",
+        "serialized_tokens": 898
+      },
+      {
+        "bytes": 845,
+        "characters": 845,
+        "content_sha256": "6e7f214cbe720ef352969450d4612e3d40e18ba53e66729e511759589f91260f",
+        "instruction_sha256": "6e7f214cbe720ef352969450d4612e3d40e18ba53e66729e511759589f91260f",
+        "relative_path": "03_database_transaction.txt",
+        "serialized_tokens": 845
+      },
+      {
+        "bytes": 894,
+        "characters": 894,
+        "content_sha256": "3eaba0baf407969de132b18821ebfbdba2f609a7c52c1a4662db900a4d6bb70d",
+        "instruction_sha256": "3eaba0baf407969de132b18821ebfbdba2f609a7c52c1a4662db900a4d6bb70d",
+        "relative_path": "04_validation_errors.txt",
+        "serialized_tokens": 894
+      },
+      {
+        "bytes": 960,
+        "characters": 960,
+        "content_sha256": "722e78fcfc0b1121ec67142cefff655d21ac539ba9bfb1a5efebaf757a002328",
+        "instruction_sha256": "722e78fcfc0b1121ec67142cefff655d21ac539ba9bfb1a5efebaf757a002328",
+        "relative_path": "05_debug_logging.txt",
+        "serialized_tokens": 960
+      },
+      {
+        "bytes": 947,
+        "characters": 947,
+        "content_sha256": "c0edbc2a967166542ab9f7ea934f0bfab51d943393d3951d90501c8163c64f7e",
+        "instruction_sha256": "c0edbc2a967166542ab9f7ea934f0bfab51d943393d3951d90501c8163c64f7e",
+        "relative_path": "06_testing_refactor.txt",
+        "serialized_tokens": 947
+      },
+      {
+        "bytes": 935,
+        "characters": 935,
+        "content_sha256": "29834c4708e3da4c6dea0537611bfb23ef33139fabf45dfeab1ddbe4b443df1c",
+        "instruction_sha256": "29834c4708e3da4c6dea0537611bfb23ef33139fabf45dfeab1ddbe4b443df1c",
+        "relative_path": "07_cache_jobs.txt",
+        "serialized_tokens": 935
+      },
+      {
+        "bytes": 945,
+        "characters": 945,
+        "content_sha256": "5227f2804be841afd18f413f5d73288f1b3876951cbdc7f503bf6d908988f5a9",
+        "instruction_sha256": "5227f2804be841afd18f413f5d73288f1b3876951cbdc7f503bf6d908988f5a9",
+        "relative_path": "08_docker_security.txt",
+        "serialized_tokens": 945
+      }
+    ],
+    "instruction_count": 8,
+    "issues": [],
+    "name": "train",
+    "path": "data/fodci_instructions/train",
+    "rejected_file_count": 0,
+    "response_tokens": 2994,
+    "split_sha256": "da7aee1bd3bb00334a9a53c5b748c4761171b7e3b252eca5353f2a79ebb71d4b",
+    "total_bytes": 7135,
+    "total_characters": 7135,
+    "total_tokens": 7135,
+    "training_example_count": 15
+  },
+  "train_validation_leakage_count": 0,
+  "validation": {
+    "duplicate_count": 0,
+    "files": [
+      {
+        "bytes": 700,
+        "characters": 700,
+        "content_sha256": "3dfd90e3e8a8f7037c69dc60ae7edd97e4d426f05f2ba4a52cb8616f851f5c79",
+        "instruction_sha256": "3dfd90e3e8a8f7037c69dc60ae7edd97e4d426f05f2ba4a52cb8616f851f5c79",
+        "relative_path": "01_pagination.txt",
+        "serialized_tokens": 700
+      },
+      {
+        "bytes": 729,
+        "characters": 729,
+        "content_sha256": "b7326d05829546b8dfa206a68b9a7939652139c81aed1a17b8c3b1b292267a09",
+        "instruction_sha256": "b7326d05829546b8dfa206a68b9a7939652139c81aed1a17b8c3b1b292267a09",
+        "relative_path": "02_sql_review.txt",
+        "serialized_tokens": 729
+      },
+      {
+        "bytes": 808,
+        "characters": 808,
+        "content_sha256": "b25105f3ef4587d75423ab75e9e25963fe6573aa35a62a22bcc73aef63290798",
+        "instruction_sha256": "b25105f3ef4587d75423ab75e9e25963fe6573aa35a62a22bcc73aef63290798",
+        "relative_path": "03_security_review.txt",
+        "serialized_tokens": 808
+      }
+    ],
+    "instruction_count": 3,
+    "issues": [],
+    "name": "validation",
+    "path": "data/fodci_instructions/validation",
+    "rejected_file_count": 0,
+    "response_tokens": 901,
+    "split_sha256": "b1b1f15bf8b29c7c6d8c82e241a357b2bc3df05dbb55e55a8dfbfe94dc4523f4",
+    "total_bytes": 2237,
+    "total_characters": 2237,
+    "total_tokens": 2237,
+    "training_example_count": 4
+  },
+  "version": 1,
+  "vocabulary_size": 10000
+}

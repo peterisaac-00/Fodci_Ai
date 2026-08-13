@@ -17,6 +17,7 @@ class TrainingExample:
     input_ids: tuple[int, ...]
     target_ids: tuple[int, ...]
     document_id: str
+    loss_mask: tuple[bool, ...] | None = None
 
 
 class TokenSequenceBuilder:

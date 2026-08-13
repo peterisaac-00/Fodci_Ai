@@ -158,3 +158,22 @@ def test_missing_and_corrupt_checkpoint_fail_clearly(tmp_path: Path) -> None:
     corrupt.write_bytes(b"bad checkpoint")
     with pytest.raises(CheckpointFormatError, match="Unable to read"):
         evaluator.evaluate_checkpoint(corrupt, lambda: iter(_examples()))
+
+
+def test_response_only_evaluation_reports_response_loss(tmp_path: Path) -> None:
+    from backend_ai.dataset import TrainingExample
+
+    masked_examples = [
+        TrainingExample((1, 2, 3, 4), (2, 3, 4, 5), "masked", (False, False, False, True)),
+    ]
+    evaluator = FodciEvaluator(
+        _model(),
+        _config(tmp_path),
+        dataset_metadata={"loss_type": "response_only"},
+    )
+
+    result = evaluator.evaluate(lambda: iter(masked_examples))
+
+    assert result.loss_type == "response_only"
+    assert result.response_loss == result.loss
+    assert result.evaluated_tokens == 1

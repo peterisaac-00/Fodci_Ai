@@ -1,0 +1,8 @@
+### Instruction
+Correct an API handler that accepts a profile update and currently returns 500 for malformed input.
+
+### Input
+The request body contains display_name and timezone. Both fields are strings, display_name must be between 1 and 80 characters, and timezone must be from an allowlist. The API uses a stable error envelope with code and field errors.
+
+### Response
+Parse the body at the transport boundary and validate the schema before calling the service. Return HTTP 400 with an error code such as invalid_request and a deterministic list of field errors when display_name is empty, too long, or timezone is not allowed. Do not call the service for invalid input. If validation succeeds, call the service with typed values and return HTTP 200. Reserve HTTP 500 for unexpected failures, log the exception with a request ID, and return a generic internal_error without stack details.

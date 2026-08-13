@@ -38,6 +38,8 @@ class EvaluationResult:
     evaluation_seconds: float
     epoch: int | None = None
     global_step: int | None = None
+    loss_type: str = "token_loss"
+    response_loss: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -138,6 +140,10 @@ class FodciEvaluator:
             evaluation_seconds=elapsed,
             epoch=epoch,
             global_step=global_step,
+            loss_type=str(self.dataset_metadata.get("loss_type", "token_loss")),
+            response_loss=(
+                loss if self.dataset_metadata.get("loss_type") == "response_only" else None
+            ),
         )
 
     def evaluate_checkpoint(

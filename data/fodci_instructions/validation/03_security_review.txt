@@ -1,0 +1,8 @@
+### Instruction
+Review a session-protected endpoint that sometimes returns data to the wrong account.
+
+### Input
+The handler validates a session token and receives resource_id from the URL, but the repository lookup filters only by resource_id. The session contains user_id and expires_at.
+
+### Response
+Reject expired or malformed sessions before the service call, then include the authenticated user_id in the repository query or service authorization check. A resource must be returned only when it belongs to that user or the user has an explicitly required role. Return the same not_found response for an inaccessible resource when appropriate, avoid leaking whether another account owns it, and add tests for owner access, cross-account access, expired sessions, and an authorized administrative role.

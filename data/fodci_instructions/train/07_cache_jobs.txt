@@ -1,0 +1,8 @@
+### Instruction
+Choose a safe caching and background-job strategy for an endpoint that sends account notifications.
+
+### Input
+The endpoint reads an account summary that changes occasionally and enqueues an email notification after a successful update. Duplicate requests must not send duplicate emails, and stale account data should not remain in cache after the update.
+
+### Response
+Cache the read model with a short TTL and an explicit account-scoped key. On a successful write, invalidate or update that key in the same application flow. Create an idempotency record keyed by the client request key before publishing the email job. Include the idempotency key in the job payload, acknowledge the queue only after delivery succeeds, and retry transient failures with bounded backoff. Make the email handler safe to run twice and add tests for cache invalidation, duplicate requests, successful acknowledgement, and retry behavior.

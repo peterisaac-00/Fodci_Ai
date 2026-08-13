@@ -1,0 +1,8 @@
+### Instruction
+Design a paginated endpoint for listing projects while keeping its response deterministic.
+
+### Input
+The API accepts limit and cursor query parameters. A client may request an invalid limit, and the repository returns rows plus an opaque next cursor.
+
+### Response
+Parse limit as an integer and reject values outside a bounded range with a stable 400 error. Treat cursor as opaque input and pass it to the repository without changing its meaning. Return a JSON object containing items, next_cursor, and a stable schema version. Do not expose SQL offsets or internal database details, and add tests for the default limit, invalid limits, an empty page, and a page with a next cursor.
