@@ -86,7 +86,7 @@ Logits (batch, sequence, vocabulary)
 
 The default configuration is intentionally extremely lightweight: 320 hidden dimensions, five heads of 64 dimensions each, four blocks, a 1,280-unit feed-forward layer, a 256-token context, and a 10,000-token synthetic vocabulary. The default is approximately 11.4 million trainable parameters, within the 5–15 million target and below the hard 20 million ceiling. All weights are initialized locally with a configurable normal-distribution standard deviation and optional seed. The learned positional embeddings were selected for simplicity and direct compatibility with a short fixed context; rotary or relative representations are deferred.
 
-The concrete local model is intentionally not implemented as an LLM provider in Phase 2.2. Phase 2.3 adds a separate `FodciTokenizer` boundary; there is still no dataset, training loop, checkpoint, model download, inference runtime, or CLI integration.
+The concrete local model is intentionally not implemented as an LLM provider in Phase 2.2. Phase 2.3 adds a separate `FodciTokenizer` boundary; Phase 2.4 adds a separate local dataset boundary without adding a training loop, checkpoint, model download, inference runtime, or CLI integration.
 
 ## Phase 2.3 tokenizer boundary
 
@@ -106,6 +106,32 @@ FodciModel
 
 Tokenizer training is deliberately separate from language-model training. `save()` and `load()` persist only a small versioned JSON vocabulary definition; no corpus, scraping, or generated artifact is committed.
 
+## Phase 2.4 dataset pipeline
+
+The dataset package consumes only a caller-provided local directory and keeps the transformation path deterministic and streaming-oriented:
+
+```text
+Raw local documents
+        ↓
+LocalDocumentLoader
+        ↓
+UTF-8, size, empty-content, and extension validation
+        ↓
+ExactDeduplicator (SHA-256, first file wins)
+        ↓
+FodciTokenizer
+        ↓
+EOS document boundary
+        ↓
+Context-length chunking
+        ↓
+TrainingExample(input_ids, target_ids)
+```
+
+`DatasetConfig` controls the input directory, supported extensions, maximum file size, context length, optional line-ending normalization, and EOS boundary behavior. `LocalDocumentLoader.iter_documents()` recursively discovers supported files in sorted relative-path order, validates each file, preserves source text by default, and yields one `Document` at a time. Invalid UTF-8, unreadable, oversized, empty, and whitespace-only files become structured `LoadIssue` records instead of crashing the complete scan.
+
+`ExactDeduplicator` hashes decoded UTF-8 content with SHA-256 and retains the first occurrence in deterministic order. `TokenSequenceBuilder` tokenizes each document, optionally appends `<EOS>`, and emits fixed-size next-token examples without crossing document boundaries. `FodciDatasetPipeline.iter_samples()` composes these stages lazily; the batch `load_documents()` method exists only for explicit inspection and diagnostics. The package performs no downloads, scraping, training, optimization, model-weight loading, or autonomous behavior.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -117,6 +143,7 @@ The repository implements only these foundation pieces:
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Tokenizer | Implement reversible byte fallback, deterministic small-corpus merges, and versioned save/load | Dataset collection, scraping, LLM training, generation, inference |
+| Dataset pipeline | Load local text, validate, exact-deduplicate, tokenize, append EOS boundaries, and stream fixed next-token chunks | Internet downloads, scraping, training loop, optimizer, checkpoints, model weights, inference |
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
 | Core contracts | Define typed, runtime-checkable boundaries | Concrete agents, models, tools, stores, or evaluators |
 | Package layout | Reserve cohesive packages for later work | Empty placeholder implementations |
