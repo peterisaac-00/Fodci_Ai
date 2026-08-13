@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.5 — Fodci Training Engine.**
+> **Current status: Phase 2.6 — Fodci Tiny Model Training.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, and Phase 2.5's first CPU-friendly training engine. The model remains intentionally tiny at approximately 11.42M parameters; training is independently callable from Python and is not integrated into the CLI.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, and Phase 2.6's first real Fodci Tiny v1 training experiment. The model remains intentionally tiny at 11,424,400 parameters; training is independently callable from Python and is not integrated into the CLI.
 
 ## Purpose and Long-Term Vision
 
@@ -62,15 +62,16 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
 │   ├── dataset/        # Local validation, exact deduplication, and streaming chunks
 │   ├── training/       # CPU training loop, metrics, and resumable checkpoints
+│   ├── data/           # Small local backend-focused train/validation corpus
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
 │   ├── terminal/       # Session lifecycle and normal text-input boundary
 │   └── tools/          # Future tool boundary
 ├── tests/
-│   ├── unit/           # Foundation, CLI, model, tokenizer, and dataset tests
+│   ├── unit/           # Foundation, CLI, model, tokenizer, dataset, and training tests
 │   └── integration/    # Reserved for cross-component tests
-├── docs/               # Architecture and security foundation
-├── scripts/            # Reserved for reviewed project-maintenance scripts
+├── docs/               # Architecture, security, and experiment reports
+├── scripts/            # Reviewed Python workflows, including Tiny v1 training
 ├── .env.example
 ├── pyproject.toml
 └── README.md
@@ -78,7 +79,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 
 ## Development
 
-Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch for the isolated model architecture and Phase 2.5 training engine. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
+Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch for the isolated model architecture and Phase 2.5/2.6 training workflows. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
 
 ```bash
 python -m venv .venv
@@ -125,9 +126,15 @@ Tokenizer training is separate from LLM training. It accepts in-memory text only
 
 `FodciTrainer` is the first phase that permits the randomly initialized model to learn. It receives an existing Fodci model and re-iterable or callable train/validation sources of `TrainingExample` objects. It batches bounded streams, validates sequence lengths and vocabulary IDs, computes standard next-token categorical cross-entropy, performs backpropagation, applies optional gradient clipping, and updates parameters with AdamW. The default device is CPU; `auto` selects CUDA only when available, while an explicit unavailable CUDA request fails clearly.
 
-Each epoch reports training and validation loss, step counts, learning rate, and guarded perplexity. Checkpoints contain only the model state, optimizer state, epoch, global step, training configuration, and relevant metrics. `resume()` restores those values and continues from the following epoch. Generated checkpoints are written under ignored artifact directories and are never part of the source repository.
+Each epoch reports training and validation loss, step counts, token counts, learning rate, elapsed time, and guarded perplexity. `TrainingConfig.max_steps` provides an optional hard budget in addition to epochs. Checkpoints contain only the model state, optimizer state, epoch, global step, training configuration, and relevant metrics. `resume()` restores those values and continues from the following epoch. Generated checkpoints are written under ignored artifact directories and are never part of the source repository.
 
 The required tiny smoke run is an engineering validation of forward/backward execution, parameter updates, validation, checkpoint creation, checkpoint loading, and resume behavior. It is not evidence that Fodci has acquired useful language capability.
+
+## Tiny Model Training experiment
+
+Phase 2.6 runs `scripts/run_fodci_tiny_v1.py` as a Python workflow, not as a new CLI command. It uses the small, repository-local corpus under `data/fodci_tiny_v1/`, keeps train and validation directories separate, records deterministic SHA-256 dataset fingerprints, evaluates a fresh random model before optimization, and trains with the existing `FodciDatasetPipeline` and `FodciTrainer`. The official run uses CPU, a fixed seed, a conservative step budget, and the unchanged 11,424,400-parameter model.
+
+The human-readable experiment record is [Fodci Tiny v1](docs/experiments/fodci-tiny-v1.md). Generated JSON reports and model checkpoints live under ignored `artifacts/` directories and are never committed. The experiment demonstrates an actual from-scratch parameter update on backend-focused local examples; it does not implement generation, inference, an agent, or a training CLI.
 
 Check that every package module compiles with:
 
@@ -171,7 +178,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.5 adds only the first lightweight training engine over the existing model and dataset boundaries: CPU batching, next-token cross-entropy, backpropagation, optional gradient clipping, AdamW, validation, metrics, deterministic seeding, and resumable checkpoints. It does not redesign the model, tokenizer, or dataset; add downloads, scraping, pretrained weights, generation, inference servers, CLI commands, agent integration, tools, memory, autonomous behavior, reinforcement learning, RLHF, external APIs, or experiment-tracking frameworks.
+Phase 2.6 adds only the first real local training experiment over the existing model, tokenizer, dataset pipeline, and training engine. It adds a small backend-focused train/validation corpus, deterministic dataset statistics, a bounded Python experiment workflow, baseline evaluation, a from-scratch Tiny v1 checkpoint, and a human-readable report. It does not add downloads, scraping, pretrained components, generation, inference servers, CLI commands, agent integration, tools, memory, autonomous behavior, reinforcement learning, RLHF, external APIs, or large datasets.
 
 ## License
 

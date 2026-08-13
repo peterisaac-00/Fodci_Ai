@@ -19,6 +19,9 @@ class EpochMetrics:
     learning_rate: float
     train_perplexity: float
     validation_perplexity: float | None
+    training_tokens: int
+    validation_tokens: int
+    elapsed_seconds: float
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -42,6 +45,7 @@ class TrainingResult:
     history: tuple[EpochMetrics, ...]
     global_step: int
     last_checkpoint: str | None
+    elapsed_seconds: float = 0.0
 
     @property
     def final_metrics(self) -> EpochMetrics | None:

@@ -14,6 +14,7 @@ class TrainingConfig:
     """Small, explicit, CPU-friendly training configuration."""
 
     epochs: int = 1
+    max_steps: int | None = None
     batch_size: int = 2
     learning_rate: float = 3e-4
     weight_decay: float = 0.01
@@ -28,6 +29,8 @@ class TrainingConfig:
     def __post_init__(self) -> None:
         if self.epochs <= 0:
             raise ValueError("epochs must be positive.")
+        if self.max_steps is not None and self.max_steps <= 0:
+            raise ValueError("max_steps must be positive or None.")
         if self.batch_size <= 0:
             raise ValueError("batch_size must be positive.")
         if self.learning_rate <= 0.0:

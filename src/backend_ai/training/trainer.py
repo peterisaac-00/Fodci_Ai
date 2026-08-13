@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from typing import TypeAlias
@@ -57,10 +58,14 @@ class FodciTrainer:
     def train(self) -> TrainingResult:
         """Run configured epochs and return lightweight training metrics."""
 
+        experiment_start = time.perf_counter()
         for epoch in range(self._next_epoch, self.config.epochs + 1):
+            if self.config.max_steps is not None and self.global_step >= self.config.max_steps:
+                break
+            epoch_start = time.perf_counter()
             self.model.train()
-            train_loss, training_steps = self._train_epoch(epoch)
-            validation_loss, validation_steps = self._validate_epoch(epoch)
+            train_loss, training_steps, training_tokens = self._train_epoch(epoch)
+            validation_loss, validation_steps, validation_tokens = self._validate_epoch(epoch)
             learning_rate = float(self.optimizer.param_groups[0]["lr"])
             metrics = EpochMetrics(
                 epoch=epoch,
@@ -71,6 +76,9 @@ class FodciTrainer:
                 learning_rate=learning_rate,
                 train_perplexity=perplexity(train_loss) or float("inf"),
                 validation_perplexity=perplexity(validation_loss),
+                training_tokens=training_tokens,
+                validation_tokens=validation_tokens,
+                elapsed_seconds=time.perf_counter() - epoch_start,
             )
             self._history.append(metrics)
             self._next_epoch = epoch + 1
@@ -79,17 +87,20 @@ class FodciTrainer:
                     self.config.output_dir / f"epoch-{epoch:04d}.pt",
                 )
             logger.info(
-                "Epoch %d/%d train_loss=%.6f val_loss=%s lr=%.6g",
+                "Epoch %d/%d train_loss=%.6f val_loss=%s lr=%.6g steps=%d tokens=%d",
                 epoch,
                 self.config.epochs,
                 train_loss,
                 f"{validation_loss:.6f}" if validation_loss is not None else "n/a",
                 learning_rate,
+                training_steps,
+                training_tokens,
             )
         return TrainingResult(
             history=tuple(self._history),
             global_step=self.global_step,
             last_checkpoint=str(self._last_checkpoint) if self._last_checkpoint else None,
+            elapsed_seconds=time.perf_counter() - experiment_start,
         )
 
     def resume(self, checkpoint_path: Path | str) -> CheckpointState:
@@ -117,11 +128,13 @@ class FodciTrainer:
             metrics=latest_metrics,
         )
 
-    def _train_epoch(self, epoch: int) -> tuple[float, int]:
+    def _train_epoch(self, epoch: int) -> tuple[float, int, int]:
         total_loss = 0.0
         total_tokens = 0
         steps = 0
         for batch in _iter_batches(self.train_dataset, self.config.batch_size):
+            if self.config.max_steps is not None and self.global_step >= self.config.max_steps:
+                break
             input_ids, target_ids = self._batch_to_tensors(batch)
             self.optimizer.zero_grad(set_to_none=True)
             logits = self.model(input_ids)
@@ -144,31 +157,39 @@ class FodciTrainer:
                 logger.info("step=%d train_loss=%.6f", self.global_step, loss.item())
         if steps == 0 or total_tokens == 0:
             raise ValueError("Training dataset produced no examples.")
-        return total_loss / total_tokens, steps
+        return total_loss / total_tokens, steps, total_tokens
 
-    def _validate_epoch(self, epoch: int) -> tuple[float | None, int]:
+    def _validate_epoch(self, epoch: int) -> tuple[float | None, int, int]:
         if self.validation_dataset is None:
-            return None, 0
+            return None, 0, 0
         if self.config.validation_interval == 0 or epoch % self.config.validation_interval != 0:
-            return None, 0
+            return None, 0, 0
+        return self.evaluate(self.validation_dataset)
+
+    def evaluate(
+        self,
+        dataset: ExampleSource,
+    ) -> tuple[float, int, int]:
+        """Evaluate a source without updating parameters or optimizer state."""
+
         self.model.eval()
         total_loss = 0.0
         total_tokens = 0
         steps = 0
         with torch.no_grad():
-            for batch in _iter_batches(self.validation_dataset, self.config.batch_size):
+            for batch in _iter_batches(dataset, self.config.batch_size):
                 input_ids, target_ids = self._batch_to_tensors(batch)
                 logits = self.model(input_ids)
                 loss = _cross_entropy(logits, target_ids)
                 if not torch.isfinite(loss):
-                    raise FloatingPointError(f"Non-finite validation loss at epoch {epoch}.")
+                    raise FloatingPointError("Non-finite evaluation loss.")
                 steps += 1
                 token_count = target_ids.numel()
                 total_loss += float(loss.item()) * token_count
                 total_tokens += token_count
         if steps == 0 or total_tokens == 0:
-            raise ValueError("Validation dataset produced no examples.")
-        return total_loss / total_tokens, steps
+            raise ValueError("Evaluation dataset produced no examples.")
+        return total_loss / total_tokens, steps, total_tokens
 
     def _batch_to_tensors(
         self,

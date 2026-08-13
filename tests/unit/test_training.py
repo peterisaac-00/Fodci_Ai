@@ -104,10 +104,11 @@ def test_validation_does_not_update_parameters_or_global_step(tmp_path: Path) ->
         TrainingConfig(epochs=1, output_dir=tmp_path),
     )
     before = {name: parameter.detach().clone() for name, parameter in model.named_parameters()}
-    loss, steps = trainer._validate_epoch(1)
+    loss, steps, tokens = trainer._validate_epoch(1)
 
     assert loss is not None and loss > 0.0
     assert steps == 2
+    assert tokens == 16
     assert trainer.global_step == 0
     assert all(torch.equal(before[name], parameter.detach()) for name, parameter in model.named_parameters())
 
@@ -271,3 +272,25 @@ def test_context_length_and_missing_checkpoint_fail_clearly(tmp_path: Path) -> N
         trainer.train()
     with pytest.raises(FileNotFoundError, match="Checkpoint does not exist"):
         trainer.resume(tmp_path / "missing.pt")
+
+
+def test_max_steps_caps_training_budget(tmp_path: Path) -> None:
+    trainer = FodciTrainer(
+        _model(),
+        _source(_examples()),
+        _source(_examples()),
+        TrainingConfig(
+            epochs=3,
+            max_steps=1,
+            batch_size=2,
+            output_dir=tmp_path,
+        ),
+    )
+
+    result = trainer.train()
+
+    assert result.global_step == 1
+    assert len(result.history) == 1
+    assert result.final_metrics is not None
+    assert result.final_metrics.training_steps == 1
+    assert result.final_metrics.training_tokens == 8
