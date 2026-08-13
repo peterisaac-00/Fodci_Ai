@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 1.7 — Project Path.**
+> **Current status: Phase 2.1 — LLM Provider Interface.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, the Phase 1.2 application startup flow, the Phase 1.3 interactive-session lifecycle, the Phase 1.4 normal text-input layer, the Phase 1.5 command-handling infrastructure, the Phase 1.6 local `/help` and `/exit` commands, and the Phase 1.7 validated project-root context. At startup, `fodci` resolves `PROJECT_ROOT` or defaults to the current working directory, normalizes it to an absolute path, and validates only that the path exists and is a directory. It does not scan or modify project contents.
+This repository includes the complete Phase 1 CLI foundation and Phase 2.1's minimal typed LLM provider boundary. At startup, `fodci` resolves `PROJECT_ROOT` or defaults to the current working directory, normalizes it to an absolute path, and validates only that the path exists and is a directory. Phase 2.1 adds no model runtime, model files, network access, or inference; the concrete local model is intentionally not implemented.
 
 ## Purpose and Long-Term Vision
 
@@ -44,20 +44,20 @@ Evaluation
 Memory
 ```
 
-The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The official `fodci` console script delegates to the existing `backend_ai.cli.main:main`, which delegates startup and session control to `backend_ai.application`. The application reuses the Phase 0 configuration and logging infrastructure, resolves a minimal `ProjectContext`, then hands control to `InteractiveSession` through the `InputProvider` boundary. `CommandParser` recognizes only input whose first character is `/`, and `CommandDispatcher` routes recognized names to registered handlers. Phase 1.6 registers `/help` and `/exit` locally. The project context contains only the validated absolute root; it contains no file list, framework metadata, Git information, or model information. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
+The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message`, `LLMRequest`, `LLMResponse`, `Tool`, `Memory`, and `Evaluator`. `ProviderBackedAgent` accepts an `LLMProvider` through dependency injection and delegates one request only; it does not plan, call tools, maintain memory, or run autonomously. The official `fodci` console script remains disconnected from the LLM boundary. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
 
 ## Repository Layout
 
 ```text
 .
 ├── src/backend_ai/
-│   ├── agent/          # Future agent orchestration boundary
+│   ├── agent/          # Agent protocol and provider-injected adapter
 │   ├── application.py  # Application startup and session composition
 │   ├── cli/            # Minimal console-entry boundary
 │   ├── config/         # Small environment-backed settings abstraction
 │   ├── core/           # Shared protocols, startup, and project context
 │   ├── evaluation/     # Future evaluator boundary
-│   ├── llm/            # Provider contract, no model integration
+│   ├── llm/            # Typed provider boundary, no model integration
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
 │   ├── terminal/       # Session lifecycle and normal text-input boundary
@@ -153,7 +153,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 1.7 adds only project-root resolution, normalization, validation, and a minimal `ProjectContext`. It does not scan or index files, detect frameworks, inspect Git, read or modify source files, execute project commands, load a model, initialize an Agent, implement tools, or add project analysis, file editing, terminal execution, memory, evaluation, or autonomous behavior.
+Phase 2.1 adds only the typed `LLMProvider` interface, minimal request/response/message contracts, a provider error, and a provider-injected Agent adapter. The concrete local model is intentionally not implemented in Phase 2.1. There is no model loading, inference runtime, model file, network call, prompt system, conversation loop, tool calling, planning, project analysis, file editing, terminal execution, memory, evaluation, self-learning, or autonomous behavior.
 
 ## License
 
