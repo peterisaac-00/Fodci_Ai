@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import shutil
 import sys
 import tomllib
 from pathlib import Path
@@ -38,10 +39,14 @@ def test_cli_entry_point_returns_success_and_prints_startup_confirmation(
     assert captured.err == ""
 
 
+def test_fodci_executable_is_available_after_installation() -> None:
+    assert shutil.which("fodci") is not None
+
+
 def test_console_script_is_configured_in_project_metadata() -> None:
     metadata = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert metadata["project"]["scripts"]["backend-ai"] == "backend_ai.cli.main:main"
+    assert metadata["project"]["scripts"] == {"fodci": "backend_ai.cli.main:main"}
 
 
 def test_cli_module_does_not_initialize_agent_or_llm_boundaries() -> None:

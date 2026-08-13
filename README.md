@@ -4,7 +4,7 @@
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, the Phase 1.2 application startup flow, the Phase 1.3 interactive-session lifecycle, the Phase 1.4 normal text-input layer, the Phase 1.5 command-handling infrastructure, the Phase 1.6 local `/help` and `/exit` commands, and the Phase 1.7 validated project-root context. At startup, `backend-ai` resolves `PROJECT_ROOT` or defaults to the current working directory, normalizes it to an absolute path, and validates only that the path exists and is a directory. It does not scan or modify project contents.
+This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, the Phase 1.2 application startup flow, the Phase 1.3 interactive-session lifecycle, the Phase 1.4 normal text-input layer, the Phase 1.5 command-handling infrastructure, the Phase 1.6 local `/help` and `/exit` commands, and the Phase 1.7 validated project-root context. At startup, `fodci` resolves `PROJECT_ROOT` or defaults to the current working directory, normalizes it to an absolute path, and validates only that the path exists and is a directory. It does not scan or modify project contents.
 
 ## Purpose and Long-Term Vision
 
@@ -44,7 +44,7 @@ Evaluation
 Memory
 ```
 
-The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The `backend-ai` console script delegates to `backend_ai.cli.main:main`, which delegates startup and session control to `backend_ai.application`. The application reuses the Phase 0 configuration and logging infrastructure, resolves a minimal `ProjectContext`, then hands control to `InteractiveSession` through the `InputProvider` boundary. `CommandParser` recognizes only input whose first character is `/`, and `CommandDispatcher` routes recognized names to registered handlers. Phase 1.6 registers `/help` and `/exit` locally. The project context contains only the validated absolute root; it contains no file list, framework metadata, Git information, or model information. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
+The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The official `fodci` console script delegates to the existing `backend_ai.cli.main:main`, which delegates startup and session control to `backend_ai.application`. The application reuses the Phase 0 configuration and logging infrastructure, resolves a minimal `ProjectContext`, then hands control to `InteractiveSession` through the `InputProvider` boundary. `CommandParser` recognizes only input whose first character is `/`, and `CommandDispatcher` routes recognized names to registered handlers. Phase 1.6 registers `/help` and `/exit` locally. The project context contains only the validated absolute root; it contains no file list, framework metadata, Git information, or model information. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
 
 ## Repository Layout
 
@@ -74,7 +74,7 @@ The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Too
 
 ## Development
 
-Use Python 3.11 or later. The project has no runtime dependencies.
+Use Python 3.11 or later. The project has no runtime dependencies. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
 
 ```bash
 python -m venv .venv
@@ -89,10 +89,10 @@ Run the test suite with:
 pytest
 ```
 
-Verify the Phase 1.1 console entry point after installation with:
+Verify the official console entry point after installation with:
 
 ```bash
-backend-ai
+fodci
 ```
 
 The command initializes the existing application configuration and logger, resolves the project root, enters the persistent session lifecycle, and reads normal text from stdin:

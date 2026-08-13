@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-backend-ai = "backend_ai.cli.main:main"
+fodci = "backend_ai.cli.main:main"
 
 [project.urls]
 Repository = "https://github.com/peterisaac-00/Fodci_Ai"

@@ -62,6 +62,7 @@ class InteractiveSession:
         self._active = True
         if self._output is not None:
             print("Interactive session started.", file=self._output, flush=True)
+            print(file=self._output, flush=True)
 
         try:
             while not self._stop_event.is_set():
@@ -85,7 +86,10 @@ class InteractiveSession:
                 if value and self._output is not None:
                     message = _display_message(result, value)
                     if message:
+                        print(file=self._output)
                         print(message, file=self._output, flush=True)
+                        if not result.exit_requested:
+                            print(file=self._output, flush=True)
                 if result.exit_requested:
                     self.stop()
         except KeyboardInterrupt:

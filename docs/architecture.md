@@ -5,7 +5,7 @@
 Phase 1.2 through 1.7 add a thin application boundary between the console entry point and future agent orchestration:
 
 ```text
-backend-ai
+fodci
     ↓
 CLI entry point
     ↓
