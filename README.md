@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.7 — Fodci Checkpoint Management.**
+> **Current status: Phase 2.8 — Fodci Evaluation Pipeline.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, and Phase 2.7's metadata-aware checkpoint manager. The model remains intentionally tiny at 11,424,400 parameters; training and checkpoint operations are independently callable from Python and are not integrated into the CLI.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, and Phase 2.8's CPU-first evaluation pipeline. The model remains intentionally tiny at 11,424,400 parameters; training, checkpoint, and evaluation operations are independently callable from Python and are not integrated into the CLI.
 
 ## Purpose and Long-Term Vision
 
@@ -56,7 +56,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── cli/            # Minimal console-entry boundary
 │   ├── config/         # Small environment-backed settings abstraction
 │   ├── core/           # Shared protocols, startup, and project context
-│   ├── evaluation/     # Future evaluator boundary
+│   ├── evaluation/     # CPU-first loss/perplexity evaluation and comparison
 │   ├── llm/            # Typed provider boundary, no model integration
 │   ├── model/          # From-scratch Transformer architecture, no training
 │   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
@@ -72,7 +72,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── unit/           # Foundation, CLI, model, tokenizer, dataset, and training tests
 │   └── integration/    # Reserved for cross-component tests
 ├── docs/               # Architecture, security, and experiment reports
-├── scripts/            # Reviewed Python workflows, including Tiny v1 training
+├── scripts/            # Reviewed Python workflows for training and evaluation
 ├── .env.example
 ├── pyproject.toml
 └── README.md
@@ -143,6 +143,12 @@ The human-readable experiment record is [Fodci Tiny v1](docs/experiments/fodci-t
 
 The manager supports `save()`, `load()`, `inspect()`, `exists()`, `list()`, `latest()`, and `best()`. Saving writes a temporary file, flushes it, and atomically replaces the destination, preventing an interrupted write from exposing a partial final checkpoint. `latest()` uses metadata progress rather than filenames, while `best()` selects the lowest recorded validation loss. Generated weights remain under ignored `artifacts/` or `checkpoints/` paths and are never committed to Git.
 
+## Evaluation pipeline
+
+`FodciEvaluator` measures the existing causal language-model objective without changing model parameters or optimizer state. It calls `model.eval()` and evaluates inside `torch.no_grad()`, reporting loss, perplexity, evaluation examples, evaluated tokens, and elapsed time. The evaluation source is explicit, so the random baseline and trained checkpoint can be measured on exactly the same validation split.
+
+Phase 2.8 uses `scripts/run_fodci_evaluation.py` to compare a fresh random Fodci Tiny v1 against `artifacts/checkpoints/fodci-tiny-v1.pt`. The evaluator validates checkpoint compatibility through `CheckpointManager`, supports multiple checkpoints and best-checkpoint selection, computes loss/perplexity deltas and relative improvements, and writes the human-readable report to [Fodci Tiny v1 Evaluation](docs/experiments/fodci-tiny-v1-evaluation.md). The generated JSON report remains under ignored `artifacts/reports/`. This is an early small-scale objective evaluation, not generation, inference, intelligence, programming understanding, or production-readiness evidence.
+
 Check that every package module compiles with:
 
 ```bash
@@ -185,7 +191,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.7 adds only the checkpoint-management boundary around the existing training engine: atomic saves, inspectable metadata, compatibility validation, CPU-safe loading, listing, latest/best selection, and resume verification. It does not redesign the model, tokenizer, dataset, or training loop; add generation, inference, CLI commands, agent integration, tools, memory, autonomous behavior, external APIs, pretrained components, or distributed checkpointing.
+Phase 2.8 adds only the CPU-first evaluation boundary: deterministic loss/perplexity measurement, token/example/time counts, baseline-vs-trained comparison on the same validation split, lightweight multiple/best checkpoint evaluation, and JSON/Markdown reports. It does not add generation, sampling, inference, CLI commands, agent integration, tools, memory, autonomous behavior, external APIs, pretrained components, or experiment tracking.
 
 ## License
 

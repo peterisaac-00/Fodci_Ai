@@ -329,7 +329,7 @@ class CheckpointManager:
             raise FileNotFoundError(f"Checkpoint does not exist: {path}")
         try:
             payload = torch.load(path, map_location=map_location)
-        except (OSError, RuntimeError, ValueError, EOFError, pickle.UnpicklingError) as exc:
+        except Exception as exc:
             raise CheckpointFormatError(f"Unable to read checkpoint: {path}") from exc
         if not isinstance(payload, dict):
             raise CheckpointFormatError(f"Checkpoint payload must be an object: {path}")

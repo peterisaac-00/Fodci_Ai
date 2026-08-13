@@ -204,6 +204,28 @@ The checkpoint envelope contains `format`, `format_version`, `model_version`, th
 
 Saving never writes directly to the final path: it writes a unique temporary file, flushes it, and atomically replaces the destination. `list()` ignores malformed or incompatible files rather than presenting them as usable checkpoints, `latest()` orders valid entries by metadata global step/epoch/time, and `best()` chooses the lowest recorded `validation_loss` with a latest-step tie-break. All generated weights remain under ignored artifact directories and are excluded from Git.
 
+## Phase 2.8 evaluation pipeline
+
+Phase 2.8 adds an objective evaluation boundary without generation or inference:
+
+```text
+explicit validation source
+          ↓
+FodciEvaluator
+  ├── model.eval()
+  ├── torch.no_grad()
+  ├── existing cross-entropy path
+  └── loss + perplexity + examples + tokens + elapsed time
+          ↓
+EvaluationResult
+          ↓
+EvaluationComparison(random baseline, trained checkpoint)
+```
+
+`FodciEvaluator` evaluates a supplied re-iterable or callable `TrainingExample` source through the existing `FodciTrainer.evaluate()` implementation, so batching and loss mathematics are not duplicated. A fresh random model is evaluated first; a second model loads the trained checkpoint through `CheckpointManager`, which validates model/tokenizer compatibility before evaluation. Neither evaluation path calls `backward()` or an optimizer step, and tests snapshot both model parameters and optimizer state.
+
+`EvaluationResult` records the explicit dataset path and split, optional document count and dataset hash, checkpoint identity/path, model and tokenizer versions, device, loss, guarded perplexity, evaluation example/token counts, elapsed time, epoch, and global step. `EvaluationComparison` reports trained-minus-baseline deltas and relative improvements. The evaluator can also score multiple checkpoint paths or select `CheckpointManager.best()` while keeping the validation source unchanged. JSON output stays under ignored `artifacts/reports/`; the human-readable report is tracked under `docs/experiments/`.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -217,6 +239,7 @@ The repository implements only these foundation pieces:
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
 | Checkpoint management | Atomically save/load metadata-aware Fodci state, validate compatibility, inspect/list, and select latest/best checkpoints | Committing weights, distributed checkpointing, generation, inference, CLI or Agent integration |
+| Evaluation pipeline | Measure fixed validation objective with no-grad, compare random/trained states, and emit lightweight reports | Generation, sampling, inference server, CLI or Agent integration |
 | Tokenizer | Implement reversible byte fallback, deterministic small-corpus merges, and versioned save/load | Dataset collection, scraping, LLM training, generation, inference |
 | Dataset pipeline | Load local text, validate, exact-deduplicate, tokenize, append EOS boundaries, and stream fixed next-token chunks | Internet downloads, scraping, training loop, optimizer, checkpoints, model weights, inference |
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
