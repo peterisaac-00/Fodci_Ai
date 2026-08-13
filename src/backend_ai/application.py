@@ -7,7 +7,7 @@ from typing import TextIO
 
 from backend_ai.config import Settings
 from backend_ai.core import bootstrap
-from backend_ai.terminal import InteractiveSession
+from backend_ai.terminal import InteractiveSession, StdinInputProvider
 
 
 class Application:
@@ -24,7 +24,7 @@ class Application:
         session: InteractiveSession | None = None,
     ) -> None:
         self._settings = settings
-        self.session = session or InteractiveSession()
+        self.session = session or InteractiveSession(input_provider=StdinInputProvider())
         self.settings: Settings | None = None
 
     def start(self) -> Settings:
@@ -60,7 +60,13 @@ def run_application(
     """Start the application and enter its persistent session lifecycle."""
 
     stream = output or sys.stdout
-    application = Application(settings, session=InteractiveSession(output=stream))
+    application = Application(
+        settings,
+        session=InteractiveSession(
+            output=stream,
+            input_provider=StdinInputProvider(),
+        ),
+    )
     print("Starting application...", file=stream)
     application.start()
     print("Application started successfully.", file=stream)

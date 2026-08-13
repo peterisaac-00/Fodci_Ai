@@ -2,7 +2,7 @@
 
 ## Application startup boundary
 
-Phase 1.2 and 1.3 add a thin application boundary between the console entry point and future agent orchestration:
+Phase 1.2 through 1.4 add a thin application boundary between the console entry point and future agent orchestration:
 
 ```text
 backend-ai
@@ -15,10 +15,12 @@ existing configuration + logging bootstrap
     ↓
 InteractiveSession
     ↓
-active until explicitly stopped
+InputProvider
+    ↓
+stdin
 ```
 
-`backend_ai.cli.main` is responsible only for process-facing output and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`, then delegates persistence to `InteractiveSession`. The session does not read input or parse commands in Phase 1.3. No agent, provider, tool, memory, or execution component is initialized.
+`backend_ai.cli.main` is responsible only for process-facing output and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`, then delegates session persistence and input reception to `InteractiveSession`. `InputProvider` is injectable for deterministic tests and defaults to stdin in production. Phase 1.4 records normal text without interpreting commands. No agent, provider, tool, memory, or execution component is initialized.
 
 ## Phase 0 boundary model
 
@@ -48,6 +50,7 @@ The repository implements only these foundation pieces:
 | Core contracts | Define typed, runtime-checkable boundaries | Concrete agents, models, tools, stores, or evaluators |
 | Package layout | Reserve cohesive packages for later work | Empty placeholder implementations |
 | Application startup | Compose existing configuration and logging behind a testable boundary | Agent startup, command handling |
-| Interactive session | Keep the process alive behind a stoppable lifecycle boundary | User input, commands, prompts, agent requests |
+| Interactive session | Keep the process alive and receive normal text behind stoppable lifecycle boundaries | Command handling, prompts beyond the minimal input prompt, agent requests |
+| Input provider | Read one unprocessed line from stdin or an injected test source | Command parsing, dispatch, LLM or Agent calls |
 
 No package imports another component's future concrete implementation. Any future dependency that would create a cycle should be inverted through a contract in `core` or a deliberately owned boundary module.
