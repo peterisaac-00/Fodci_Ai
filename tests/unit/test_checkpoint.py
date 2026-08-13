@@ -206,3 +206,29 @@ def test_cpu_resume_restores_state_and_continues_training(tmp_path: Path) -> Non
         not torch.equal(before[name], parameter.detach())
         for name, parameter in second_model.named_parameters()
     )
+
+
+def test_checkpoint_save_fsync_uses_writable_descriptor_on_windows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib
+    import os
+
+    manager_module = importlib.import_module("backend_ai.checkpoint.manager")
+    real_fsync = os.fsync
+
+    def assert_writable_and_fsync(file_descriptor: int) -> None:
+        os.write(file_descriptor, b"")
+        real_fsync(file_descriptor)
+
+    monkeypatch.setattr(manager_module.os, "fsync", assert_writable_and_fsync)
+    manager = CheckpointManager(tmp_path)
+
+    checkpoint = manager.save(
+        _model(),
+        _optimizer_with_state(_model()),
+        _config(tmp_path),
+        epoch=1,
+        global_step=1,
+        path=tmp_path / "windows-safe.pt",
+    )
+
+    assert checkpoint.is_file()

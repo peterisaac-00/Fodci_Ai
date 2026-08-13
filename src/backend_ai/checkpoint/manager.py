@@ -208,7 +208,7 @@ class CheckpointManager:
         )
         try:
             torch.save(payload, temporary_path)
-            with temporary_path.open("rb") as stream:
+            with temporary_path.open("r+b") as stream:
                 os.fsync(stream.fileno())
             os.replace(temporary_path, checkpoint_path)
         except Exception:
