@@ -25,7 +25,7 @@ def test_loader_discovers_supported_files_in_deterministic_order_and_preserves_t
     ]
     assert result.documents[1].text == "def z():\n\treturn 1\n"
     assert result.documents[0].language == "md"
-    assert result.issues == ()
+    assert [issue.reason for issue in result.issues] == ["unsupported_extension"]
 
 
 def test_loader_records_invalid_empty_whitespace_and_oversized_files_without_crashing(

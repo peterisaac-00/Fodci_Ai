@@ -39,14 +39,16 @@ class LocalDocumentLoader:
         if not root.is_dir():
             raise NotADirectoryError(f"Dataset input path is not a directory: {root}")
 
-        candidates = sorted(
-            (
-                path
-                for path in root.rglob("*")
-                if path.is_file() and path.suffix.lower() in self.config.supported_extensions
-            ),
+        all_files = sorted(
+            (path for path in root.rglob("*") if path.is_file()),
             key=lambda path: path.relative_to(root).as_posix(),
         )
+        candidates: list[Path] = []
+        for path in all_files:
+            if path.suffix.lower() in self.config.supported_extensions:
+                candidates.append(path)
+            else:
+                self._record_issue(path, "unsupported_extension")
         max_bytes = int(self.config.max_file_size_mb * 1024 * 1024)
 
         for path in candidates:

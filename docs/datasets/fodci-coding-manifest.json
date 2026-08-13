@@ -1,0 +1,138 @@
+{
+  "context_length": 256,
+  "dataset_name": "fodci-coding",
+  "dataset_sha256": "42c1f12f53dc553c8bfa93c9eb7cd48ff9c86102f568b5b0a4614b84c025c954",
+  "format": "fodci-dataset-manifest",
+  "tokenizer_version": 1,
+  "train": {
+    "document_count": 7,
+    "duplicate_count": 0,
+    "files": [
+      {
+        "bytes": 1579,
+        "characters": 1579,
+        "content_sha256": "3c10b58ff9057c4905f1fa5c4a5f9344aaa8341a2f8e5a532aa6d28cff859a2d",
+        "language": "py",
+        "relative_path": "api/routes.py",
+        "tokens_including_eos": 1580
+      },
+      {
+        "bytes": 1790,
+        "characters": 1790,
+        "content_sha256": "9c8f260caae5585ab0ade991a160bf95991165559f0c9be13d7da393cfe7c0ba",
+        "language": "py",
+        "relative_path": "auth/service.py",
+        "tokens_including_eos": 1791
+      },
+      {
+        "bytes": 1204,
+        "characters": 1204,
+        "content_sha256": "e7771f7f21b9cfcdb8f7c2d006fedd367310d0b9d67cce441ece47a2a233d5c5",
+        "language": "py",
+        "relative_path": "config/settings.py",
+        "tokens_including_eos": 1205
+      },
+      {
+        "bytes": 1606,
+        "characters": 1606,
+        "content_sha256": "77ef0037f6733b26aba3f6b1156a7ab4f62d08adf80c1b3aaf6e36f98bf7bf1a",
+        "language": "py",
+        "relative_path": "db/repository.py",
+        "tokens_including_eos": 1607
+      },
+      {
+        "bytes": 1030,
+        "characters": 1030,
+        "content_sha256": "95155d91b30068f24307a8c9ca4a81fac794f227f5d4cb1821e27159d70f1c69",
+        "language": "md",
+        "relative_path": "docs/backend_architecture.md",
+        "tokens_including_eos": 1031
+      },
+      {
+        "bytes": 1534,
+        "characters": 1534,
+        "content_sha256": "9b98fc80b12213263903136b89c0695a3b290467e680bbfac7821c7372d92273",
+        "language": "py",
+        "relative_path": "tests/test_backend.py",
+        "tokens_including_eos": 1535
+      },
+      {
+        "bytes": 955,
+        "characters": 955,
+        "content_sha256": "87cafbaa56cfb2d0228f745f10d20e9aabca8a5e9b69d922c677521f68f6e0c9",
+        "language": "py",
+        "relative_path": "workers/jobs.py",
+        "tokens_including_eos": 956
+      }
+    ],
+    "issues": [],
+    "language_distribution": {
+      "md": 1,
+      "py": 6
+    },
+    "name": "train",
+    "path": "data/fodci_coding/train",
+    "rejected_file_count": 0,
+    "split_sha256": "4987a0692de0f8a276d521366e9c6b7572452c076083fb17feee01e4eb2d0f60",
+    "total_bytes": 9698,
+    "total_characters": 9698,
+    "total_tokens": 9705,
+    "training_example_count": 34
+  },
+  "train_validation_leakage_count": 0,
+  "use_eos_document_boundaries": true,
+  "validation": {
+    "document_count": 4,
+    "duplicate_count": 0,
+    "files": [
+      {
+        "bytes": 864,
+        "characters": 864,
+        "content_sha256": "d4407875fd8b8807178f4b3970d1ec48bde3043240e053eadf781c71f58f1854",
+        "language": "py",
+        "relative_path": "api/validation.py",
+        "tokens_including_eos": 865
+      },
+      {
+        "bytes": 913,
+        "characters": 913,
+        "content_sha256": "ea5a98c728cdbca94fe0dfa99944e9eff68114dcd1bf7419adbb4c2e645db44d",
+        "language": "sql",
+        "relative_path": "db/schema.sql",
+        "tokens_including_eos": 914
+      },
+      {
+        "bytes": 406,
+        "characters": 406,
+        "content_sha256": "75f2e141f3134f25b983f2ab299c81a0f514d56035fccc71d84e03c4221d593e",
+        "language": "dockerfile",
+        "relative_path": "deployment/service.dockerfile",
+        "tokens_including_eos": 407
+      },
+      {
+        "bytes": 861,
+        "characters": 861,
+        "content_sha256": "cee551bcc182005526ae9f4f78e466a5117776b724b0c2812c6c1094776ace01",
+        "language": "py",
+        "relative_path": "tests/test_health.py",
+        "tokens_including_eos": 862
+      }
+    ],
+    "issues": [],
+    "language_distribution": {
+      "dockerfile": 1,
+      "py": 2,
+      "sql": 1
+    },
+    "name": "validation",
+    "path": "data/fodci_coding/validation",
+    "rejected_file_count": 0,
+    "split_sha256": "f34ef07c84dfd7f275bc42bf4a31d772cd7e908a9d22de94213367bbf06803bc",
+    "total_bytes": 3044,
+    "total_characters": 3044,
+    "total_tokens": 3048,
+    "training_example_count": 10
+  },
+  "version": 1,
+  "vocabulary_size": 10000
+}

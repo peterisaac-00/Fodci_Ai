@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.8 — Fodci Evaluation Pipeline.**
+> **Current status: Phase 2.9 — Fodci Coding Dataset.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, and Phase 2.8's CPU-first evaluation pipeline. The model remains intentionally tiny at 11,424,400 parameters; training, checkpoint, and evaluation operations are independently callable from Python and are not integrated into the CLI.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, and Phase 2.9's local backend-engineering coding corpus and manifest layer. The model remains intentionally tiny at 11,424,400 parameters; training, checkpoint, evaluation, and dataset operations are independently callable from Python and are not integrated into the CLI.
 
 ## Purpose and Long-Term Vision
 
@@ -60,7 +60,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── llm/            # Typed provider boundary, no model integration
 │   ├── model/          # From-scratch Transformer architecture, no training
 │   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
-│   ├── dataset/        # Local validation, exact deduplication, and streaming chunks
+│   ├── dataset/        # Local validation, deduplication, streaming chunks, and manifests
 │   ├── training/       # CPU training loop, metrics, and resumable checkpoints
 │   ├── checkpoint/     # Atomic metadata-aware checkpoint management
 │   ├── data/           # Small local backend-focused train/validation corpus
@@ -72,7 +72,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── unit/           # Foundation, CLI, model, tokenizer, dataset, and training tests
 │   └── integration/    # Reserved for cross-component tests
 ├── docs/               # Architecture, security, and experiment reports
-├── scripts/            # Reviewed Python workflows for training and evaluation
+├── scripts/            # Reviewed Python workflows for training, evaluation, and manifests
 ├── .env.example
 ├── pyproject.toml
 └── README.md
@@ -149,6 +149,14 @@ The manager supports `save()`, `load()`, `inspect()`, `exists()`, `list()`, `lat
 
 Phase 2.8 uses `scripts/run_fodci_evaluation.py` to compare a fresh random Fodci Tiny v1 against `artifacts/checkpoints/fodci-tiny-v1.pt`. The evaluator validates checkpoint compatibility through `CheckpointManager`, supports multiple checkpoints and best-checkpoint selection, computes loss/perplexity deltas and relative improvements, and writes the human-readable report to [Fodci Tiny v1 Evaluation](docs/experiments/fodci-tiny-v1-evaluation.md). The generated JSON report remains under ignored `artifacts/reports/`. This is an early small-scale objective evaluation, not generation, inference, intelligence, programming understanding, or production-readiness evidence.
 
+## Phase 2.9 coding dataset
+
+`data/fodci_coding/` is a small, repository-local corpus focused on backend engineering. It is split explicitly into `train/` and `validation/` with no shared exact content hashes. The corpus contains coherent Python backend examples, REST routing and validation, authentication and authorization, SQL and repository transactions, configuration and environment variables, background jobs, tests, backend architecture documentation, JSON/API validation, and a Dockerfile example.
+
+`CodingDatasetManifestBuilder` composes the existing `FodciDatasetPipeline`; it does not create a second tokenizer or dataset loader. The builder records exact file paths, UTF-8 bytes, characters, tokens including EOS, training examples, language/file-type distribution, duplicate and rejected-file counts, split hashes, tokenizer version, vocabulary size, context length, and a deterministic dataset SHA-256. It also reports unsupported extensions and rejects train/validation exact-content leakage. The reproducible manifest is [fodci-coding-manifest.json](docs/datasets/fodci-coding-manifest.json), with a human-readable summary in [fodci-coding.md](docs/datasets/fodci-coding.md).
+
+Phase 2.9 improves the corpus and its identity only. It does not start a new training run, change the Transformer, add inference or generation, integrate the CLI, or claim that Fodci has gained intelligence or useful coding ability.
+
 Check that every package module compiles with:
 
 ```bash
@@ -191,7 +199,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.8 adds only the CPU-first evaluation boundary: deterministic loss/perplexity measurement, token/example/time counts, baseline-vs-trained comparison on the same validation split, lightweight multiple/best checkpoint evaluation, and JSON/Markdown reports. It does not add generation, sampling, inference, CLI commands, agent integration, tools, memory, autonomous behavior, external APIs, pretrained components, or experiment tracking.
+Phase 2.9 adds only the local backend-engineering coding corpus, deterministic train/validation manifest, dataset statistics, unsupported/rejected-file reporting, and leakage prevention over the existing pipeline. It does not start training, change model architecture or tokenizer, add generation, inference, CLI commands, agent integration, tools, memory, autonomous behavior, external APIs, pretrained components, or later-phase functionality.
 
 ## License
 

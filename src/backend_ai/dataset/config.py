@@ -1,4 +1,4 @@
-"""Configuration for the local Phase 2.4 dataset pipeline."""
+"""Configuration for the local deterministic Fodci dataset pipeline."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ DEFAULT_EXTENSIONS = frozenset(
         ".html",
         ".css",
         ".sh",
+        ".dockerfile",
     }
 )
 
