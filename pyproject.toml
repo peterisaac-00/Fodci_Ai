@@ -28,6 +28,9 @@ dependencies = []
 dev = [
   "pytest>=8.0",
 ]
+model = [
+  "torch>=2.0",
+]
 
 [project.scripts]
 fodci = "backend_ai.cli.main:main"

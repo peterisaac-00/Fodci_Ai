@@ -52,8 +52,10 @@ def test_console_script_is_configured_in_project_metadata() -> None:
 def test_cli_module_does_not_initialize_agent_or_llm_boundaries() -> None:
     sys.modules.pop("backend_ai.agent", None)
     sys.modules.pop("backend_ai.llm", None)
+    sys.modules.pop("backend_ai.model", None)
 
     importlib.reload(importlib.import_module("backend_ai.cli.main"))
 
     assert "backend_ai.agent" not in sys.modules
     assert "backend_ai.llm" not in sys.modules
+    assert "backend_ai.model" not in sys.modules

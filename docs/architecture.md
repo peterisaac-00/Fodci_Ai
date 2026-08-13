@@ -2,7 +2,7 @@
 
 ## Application startup boundary
 
-Phase 1.2 through 2.1 add a thin application boundary between the console entry point and future agent orchestration:
+Phase 1.2 through 2.2 add a thin application boundary between the console entry point and future agent orchestration:
 
 ```text
 fodci
@@ -58,7 +58,35 @@ LLMProvider
 Future Local Model
 ```
 
-`Message`, `LLMRequest`, and `LLMResponse` contain only role/content messages and generated text. `LLMProviderError` provides one typed provider-level failure. `ProviderBackedAgent` accepts the provider through dependency injection and delegates one request only. The concrete local model is intentionally not implemented in Phase 2.1; no model runtime, weights, network access, streaming, tools, embeddings, planning, or autonomous loop exists.
+`Message`, `LLMRequest`, and `LLMResponse` contain only role/content messages and generated text. `LLMProviderError` provides one typed provider-level failure. `ProviderBackedAgent` accepts the provider through dependency injection and delegates one request only. Phase 2.2 adds an isolated `FodciModel` architecture with local random initialization and no provider or CLI integration.
+
+## Phase 2.2 model architecture
+
+The first Fodci model is a configurable decoder-only Transformer:
+
+```text
+Input token IDs
+      ↓
+Token + learned position embeddings
+      ↓
+TransformerBlock × N
+  ├── pre-LayerNorm
+  ├── causal multi-head self-attention
+  ├── residual connection
+  ├── pre-LayerNorm
+  ├── GELU feed-forward network
+  └── residual connection
+      ↓
+Final LayerNorm
+      ↓
+Language-modeling head
+      ↓
+Logits (batch, sequence, vocabulary)
+```
+
+The default configuration is intentionally extremely lightweight: 320 hidden dimensions, five heads of 64 dimensions each, four blocks, a 1,280-unit feed-forward layer, a 256-token context, and a 10,000-token synthetic vocabulary. The default is approximately 11.4 million trainable parameters, within the 5–15 million target and below the hard 20 million ceiling. All weights are initialized locally with a configurable normal-distribution standard deviation and optional seed. The learned positional embeddings were selected for simplicity and direct compatibility with a short fixed context; rotary or relative representations are deferred.
+
+The concrete local model is intentionally not implemented as an LLM provider in Phase 2.2. There is no tokenizer, dataset, training loop, checkpoint, model download, or CLI integration.
 
 ## Present implementation
 
@@ -69,6 +97,7 @@ The repository implements only these foundation pieces:
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, and one provider error | Concrete model, runtime, loading, inference, network access |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
+| Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Tokenizer, dataset, training, checkpoints, provider/CLI integration |
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
 | Core contracts | Define typed, runtime-checkable boundaries | Concrete agents, models, tools, stores, or evaluators |
 | Package layout | Reserve cohesive packages for later work | Empty placeholder implementations |

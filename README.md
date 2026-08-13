@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.1 — LLM Provider Interface.**
+> **Current status: Phase 2.2 — Fodci Tiny Model Architecture.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation and Phase 2.1's minimal typed LLM provider boundary. At startup, `fodci` resolves `PROJECT_ROOT` or defaults to the current working directory, normalizes it to an absolute path, and validates only that the path exists and is a directory. Phase 2.1 adds no model runtime, model files, network access, or inference; the concrete local model is intentionally not implemented.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, and Phase 2.2's small decoder-only Transformer architecture built from scratch. The model uses locally initialized random weights and synthetic integer token IDs for architecture tests only. It is not trained, tokenized, connected to the CLI, or backed by pretrained weights.
 
 ## Purpose and Long-Term Vision
 
@@ -44,7 +44,7 @@ Evaluation
 Memory
 ```
 
-The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message`, `LLMRequest`, `LLMResponse`, `Tool`, `Memory`, and `Evaluator`. `ProviderBackedAgent` accepts an `LLMProvider` through dependency injection and delegates one request only; it does not plan, call tools, maintain memory, or run autonomously. The official `fodci` console script remains disconnected from the LLM boundary. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
+The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message`, `LLMRequest`, `LLMResponse`, `Tool`, `Memory`, and `Evaluator`. `ProviderBackedAgent` accepts an `LLMProvider` through dependency injection and delegates one request only. The isolated `backend_ai.model` package contains `FodciModel`, a configurable decoder-only Transformer with token embeddings, learned positional embeddings, causal multi-head attention, GELU feed-forward blocks, final normalization, and a language-modeling head. The official `fodci` console script remains disconnected from the model. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
 
 ## Repository Layout
 
@@ -58,6 +58,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── core/           # Shared protocols, startup, and project context
 │   ├── evaluation/     # Future evaluator boundary
 │   ├── llm/            # Typed provider boundary, no model integration
+│   ├── model/          # From-scratch Transformer architecture, no training
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
 │   ├── terminal/       # Session lifecycle and normal text-input boundary
@@ -74,13 +75,13 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 
 ## Development
 
-Use Python 3.11 or later. The project has no runtime dependencies. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
+Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch only for the isolated architecture layer. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -e "[dev,model]"
 ```
 
 Run the test suite with:
@@ -153,7 +154,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.1 adds only the typed `LLMProvider` interface, minimal request/response/message contracts, a provider error, and a provider-injected Agent adapter. The concrete local model is intentionally not implemented in Phase 2.1. There is no model loading, inference runtime, model file, network call, prompt system, conversation loop, tool calling, planning, project analysis, file editing, terminal execution, memory, evaluation, self-learning, or autonomous behavior.
+Phase 2.2 adds only the architecture and forward pass of a tiny decoder-only Transformer. It does not add a tokenizer, dataset, preprocessing, optimizer, loss, training loop, checkpointing, model download, pretrained weights, inference service, CLI integration, LLM provider integration, project analysis, file editing, terminal execution, tools, memory, evaluation, self-learning, or autonomous behavior.
 
 ## License
 
