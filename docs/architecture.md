@@ -2,7 +2,7 @@
 
 ## Application startup boundary
 
-Phase 1.2 through 2.2 add a thin application boundary between the console entry point and future agent orchestration:
+Phase 1.2 through 2.3 add a thin application boundary between the console entry point and future agent orchestration:
 
 ```text
 fodci
@@ -86,7 +86,25 @@ Logits (batch, sequence, vocabulary)
 
 The default configuration is intentionally extremely lightweight: 320 hidden dimensions, five heads of 64 dimensions each, four blocks, a 1,280-unit feed-forward layer, a 256-token context, and a 10,000-token synthetic vocabulary. The default is approximately 11.4 million trainable parameters, within the 5–15 million target and below the hard 20 million ceiling. All weights are initialized locally with a configurable normal-distribution standard deviation and optional seed. The learned positional embeddings were selected for simplicity and direct compatibility with a short fixed context; rotary or relative representations are deferred.
 
-The concrete local model is intentionally not implemented as an LLM provider in Phase 2.2. There is no tokenizer, dataset, training loop, checkpoint, model download, or CLI integration.
+The concrete local model is intentionally not implemented as an LLM provider in Phase 2.2. Phase 2.3 adds a separate `FodciTokenizer` boundary; there is still no dataset, training loop, checkpoint, model download, inference runtime, or CLI integration.
+
+## Phase 2.3 tokenizer boundary
+
+The tokenizer converts text to IDs and back without normalization:
+
+```text
+Text
+  ↓
+FodciTokenizer
+  ↓
+Token IDs: 0 ... 9,999
+  ↓
+FodciModel
+```
+
+`FodciTokenizer` uses UTF-8 bytes as a permanent fallback and optionally learns deterministic byte-pair merges from a caller-provided in-memory corpus. The four special IDs are stable: `<PAD>=0`, `<UNK>=1`, `<BOS>=2`, and `<EOS>=3`; raw byte tokens begin at ID 4. Because every input string is first encoded as UTF-8 bytes, arbitrary Unicode, Arabic, source code, whitespace, punctuation, and unseen symbols remain reversible. Tokenization never truncates to the model context; sequence truncation remains a later training responsibility.
+
+Tokenizer training is deliberately separate from language-model training. `save()` and `load()` persist only a small versioned JSON vocabulary definition; no corpus, scraping, or generated artifact is committed.
 
 ## Present implementation
 
@@ -97,7 +115,8 @@ The repository implements only these foundation pieces:
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, and one provider error | Concrete model, runtime, loading, inference, network access |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
-| Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Tokenizer, dataset, training, checkpoints, provider/CLI integration |
+| Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
+| Tokenizer | Implement reversible byte fallback, deterministic small-corpus merges, and versioned save/load | Dataset collection, scraping, LLM training, generation, inference |
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
 | Core contracts | Define typed, runtime-checkable boundaries | Concrete agents, models, tools, stores, or evaluators |
 | Package layout | Reserve cohesive packages for later work | Empty placeholder implementations |

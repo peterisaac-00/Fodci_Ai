@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.2 — Fodci Tiny Model Architecture.**
+> **Current status: Phase 2.3 — Fodci Tokenizer.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, and Phase 2.2's small decoder-only Transformer architecture built from scratch. The model uses locally initialized random weights and synthetic integer token IDs for architecture tests only. It is not trained, tokenized, connected to the CLI, or backed by pretrained weights.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, and Phase 2.3's reversible byte-level tokenizer. The model remains randomly initialized and untrained; the tokenizer is isolated from the CLI and future dataset pipeline.
 
 ## Purpose and Long-Term Vision
 
@@ -59,6 +59,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── evaluation/     # Future evaluator boundary
 │   ├── llm/            # Typed provider boundary, no model integration
 │   ├── model/          # From-scratch Transformer architecture, no training
+│   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
 │   ├── terminal/       # Session lifecycle and normal text-input boundary
@@ -112,6 +113,12 @@ Input is preserved except for the line ending added by stdin. Empty input is ret
 
 `/help` displays the registered command list and keeps the session active. `/exit` prints `Goodbye.` and requests a clean session stop. Arguments such as `/help now` and `/exit now` return usage text without triggering command behavior. An unregistered `/status` is reported as unknown without crashing. Normal text such as `Build /api/users` is passed through unchanged. EOF and Ctrl+C terminate the session cleanly.
 
+## Tokenizer
+
+`FodciTokenizer` uses UTF-8 bytes as a permanent lossless fallback, with optional deterministic byte-pair merges learned only from a caller-provided small corpus. Its default vocabulary is exactly 10,000 IDs, compatible with `ModelConfig.vocab_size`. Special IDs are stable: `<PAD>=0`, `<UNK>=1`, `<BOS>=2`, and `<EOS>=3`; byte tokens start at ID 4. Encoding does not normalize, truncate, lowercase, or alter whitespace. `decode(encode(text))` reconstructs supported text exactly, including source code, indentation, URLs, JSON, and Unicode.
+
+Tokenizer training is separate from LLM training. It accepts in-memory text only, performs no scraping or dataset collection, and produces a small versioned JSON definition through `save()` and `load()`.
+
 Check that every package module compiles with:
 
 ```bash
@@ -154,7 +161,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.2 adds only the architecture and forward pass of a tiny decoder-only Transformer. It does not add a tokenizer, dataset, preprocessing, optimizer, loss, training loop, checkpointing, model download, pretrained weights, inference service, CLI integration, LLM provider integration, project analysis, file editing, terminal execution, tools, memory, evaluation, self-learning, or autonomous behavior.
+Phase 2.3 adds only the tokenizer implementation, deterministic small-corpus merge training, and versioned save/load. It does not add dataset collection, scraping, code downloading, preprocessing pipelines, LLM training, optimizer, loss, backpropagation, checkpointing, generation, inference runtime, agent integration, tools, memory, evaluation, external APIs, or self-learning.
 
 ## License
 
