@@ -1,17 +1,17 @@
-"""Console entry point for the Backend Engineering Agent.
-
-Phase 1.1 establishes executable packaging only. Interactive behavior,
-user-input handling, and agent initialization intentionally belong to later phases.
-"""
+"""Console entry point for the Backend Engineering Agent."""
 
 from __future__ import annotations
 
+from backend_ai.application import start_application
+
 
 def main() -> int:
-    """Print a minimal confirmation that the CLI entry point is available."""
+    """Start the application and return a process status code."""
 
     print("Backend Engineering Agent")
-    print("CLI entry point initialized.")
+    print("Starting application...")
+    start_application()
+    print("Application started successfully.")
     return 0
 
 

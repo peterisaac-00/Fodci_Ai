@@ -1,5 +1,23 @@
 # Architecture Direction
 
+## Application startup boundary
+
+Phase 1.2 adds a thin application boundary between the console entry point and future agent orchestration:
+
+```text
+backend-ai
+    ↓
+CLI entry point
+    ↓
+Application.start()
+    ↓
+existing configuration + logging bootstrap
+    ↓
+ready status
+```
+
+`backend_ai.cli.main` is responsible only for process-facing output and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`. No agent, provider, tool, memory, or execution component is initialized yet.
+
 ## Phase 0 boundary model
 
 The first phase defines dependency boundaries without implementing agent behavior. `core.contracts` owns small shared protocols. The domain packages re-export the protocol relevant to their boundary, while future concrete implementations must live behind those contracts.
@@ -27,5 +45,6 @@ The repository implements only these foundation pieces:
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
 | Core contracts | Define typed, runtime-checkable boundaries | Concrete agents, models, tools, stores, or evaluators |
 | Package layout | Reserve cohesive packages for later work | Empty placeholder implementations |
+| Application startup | Compose existing configuration and logging behind a testable boundary | Agent startup, interactive session, command handling |
 
 No package imports another component's future concrete implementation. Any future dependency that would create a cycle should be inverted through a contract in `core` or a deliberately owned boundary module.
