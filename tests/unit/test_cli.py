@@ -7,9 +7,8 @@ from pathlib import Path
 
 from backend_ai.cli.main import main
 
+
 cli_main = importlib.import_module("backend_ai.cli.main")
-
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -19,16 +18,23 @@ def test_cli_module_can_be_imported() -> None:
     assert module.main is main
 
 
-def test_cli_entry_point_returns_success_and_prints_confirmation(capsys: object) -> None:
+def test_cli_entry_point_returns_success_and_prints_startup_confirmation(
+    monkeypatch: object,
+    capsys: object,
+) -> None:
+    calls: list[object] = []
+
+    def fake_run_application(*, output: object) -> None:
+        calls.append(output)
+
+    monkeypatch.setattr(cli_main, "run_application", fake_run_application)  # type: ignore[attr-defined]
+
     exit_code = main()
     captured = capsys.readouterr()  # type: ignore[attr-defined]
 
     assert exit_code == 0
-    assert captured.out == (
-        "Backend Engineering Agent\n"
-        "Starting application...\n"
-        "Application started successfully.\n"
-    )
+    assert calls == [sys.stdout]
+    assert captured.out == "Backend Engineering Agent\n"
     assert captured.err == ""
 
 
@@ -36,18 +42,6 @@ def test_console_script_is_configured_in_project_metadata() -> None:
     metadata = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert metadata["project"]["scripts"]["backend-ai"] == "backend_ai.cli.main:main"
-
-
-def test_cli_entry_point_invokes_application_startup(monkeypatch: object) -> None:
-    calls: list[bool] = []
-
-    def fake_start_application() -> None:
-        calls.append(True)
-
-    monkeypatch.setattr(cli_main, "start_application", fake_start_application)  # type: ignore[attr-defined]
-
-    assert cli_main.main() == 0
-    assert calls == [True]
 
 
 def test_cli_module_does_not_initialize_agent_or_llm_boundaries() -> None:

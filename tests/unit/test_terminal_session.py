@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from io import StringIO
+from threading import Thread
+from time import sleep
+
+import pytest
+
+from backend_ai.terminal import InteractiveSession
+
+
+def test_session_can_be_imported_and_stopped_cleanly() -> None:
+    output = StringIO()
+    session = InteractiveSession(output=output)
+    thread = Thread(target=session.run)
+
+    thread.start()
+    for _ in range(100):
+        if session.is_active:
+            break
+        sleep(0.001)
+
+    assert session.is_active
+    assert "Interactive session started." in output.getvalue()
+
+    session.stop()
+    thread.join(timeout=1)
+
+    assert not thread.is_alive()
+    assert not session.is_active
+
+
+def test_session_run_rejects_nested_start() -> None:
+    session = InteractiveSession()
+    thread = Thread(target=session.run)
+    thread.start()
+
+    for _ in range(100):
+        if session.is_active:
+            break
+        sleep(0.001)
+
+    assert session.is_active
+    with pytest.raises(RuntimeError, match="already running"):
+        session.run()
+
+    session.stop()
+    thread.join(timeout=1)
+    assert not thread.is_alive()

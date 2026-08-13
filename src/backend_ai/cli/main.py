@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from backend_ai.application import start_application
+import sys
+
+from backend_ai.application import run_application
 
 
 def main() -> int:
-    """Start the application and return a process status code."""
+    """Start the application and enter its interactive session."""
 
     print("Backend Engineering Agent")
-    print("Starting application...")
-    start_application()
-    print("Application started successfully.")
+    run_application(output=sys.stdout)
     return 0
 
 

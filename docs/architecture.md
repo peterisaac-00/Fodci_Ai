@@ -2,7 +2,7 @@
 
 ## Application startup boundary
 
-Phase 1.2 adds a thin application boundary between the console entry point and future agent orchestration:
+Phase 1.2 and 1.3 add a thin application boundary between the console entry point and future agent orchestration:
 
 ```text
 backend-ai
@@ -13,10 +13,12 @@ Application.start()
     ↓
 existing configuration + logging bootstrap
     ↓
-ready status
+InteractiveSession
+    ↓
+active until explicitly stopped
 ```
 
-`backend_ai.cli.main` is responsible only for process-facing output and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`. No agent, provider, tool, memory, or execution component is initialized yet.
+`backend_ai.cli.main` is responsible only for process-facing output and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`, then delegates persistence to `InteractiveSession`. The session does not read input or parse commands in Phase 1.3. No agent, provider, tool, memory, or execution component is initialized.
 
 ## Phase 0 boundary model
 
@@ -45,6 +47,7 @@ The repository implements only these foundation pieces:
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
 | Core contracts | Define typed, runtime-checkable boundaries | Concrete agents, models, tools, stores, or evaluators |
 | Package layout | Reserve cohesive packages for later work | Empty placeholder implementations |
-| Application startup | Compose existing configuration and logging behind a testable boundary | Agent startup, interactive session, command handling |
+| Application startup | Compose existing configuration and logging behind a testable boundary | Agent startup, command handling |
+| Interactive session | Keep the process alive behind a stoppable lifecycle boundary | User input, commands, prompts, agent requests |
 
 No package imports another component's future concrete implementation. Any future dependency that would create a cycle should be inverted through a contract in `core` or a deliberately owned boundary module.

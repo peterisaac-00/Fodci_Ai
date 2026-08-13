@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 1.2 — Application Startup Flow.**
+> **Current status: Phase 1.3 — Interactive Terminal Session.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, and the Phase 1.2 application startup flow. Installing the package provides `backend-ai`, which initializes the existing configuration and logging boundaries, prints a short startup confirmation, and exits successfully. It does **not** yet implement a CLI interaction loop, user input, LLM inference, tool calling, filesystem access, terminal execution, planning, memory, evaluation behavior, or autonomous behavior.
+This repository includes the Phase 0 foundation, the Phase 1.1 executable entry point, the Phase 1.2 application startup flow, and the Phase 1.3 interactive-session lifecycle. Installing the package provides `backend-ai`, which initializes the existing configuration and logging boundaries, enters a persistent session, and remains active until the session is stopped. Phase 1.3 does **not** yet implement user input, command parsing, `/help`, `/exit`, LLM inference, tool calling, filesystem access, terminal execution, planning, memory, evaluation behavior, or autonomous behavior.
 
 ## Purpose and Long-Term Vision
 
@@ -44,7 +44,7 @@ Evaluation
 Memory
 ```
 
-The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The `backend-ai` console script delegates to `backend_ai.cli.main:main`, which delegates startup to `backend_ai.application.start_application`. The startup flow reuses the Phase 0 configuration and logging infrastructure and does not initialize an agent or provider. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
+The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Tool`, `Memory`, and `Evaluator`. They establish contracts only; they do not perform backend-agent work. The `backend-ai` console script delegates to `backend_ai.cli.main:main`, which delegates startup and session control to `backend_ai.application`. The application reuses the Phase 0 configuration and logging infrastructure, then hands control to `InteractiveSession`. No agent or provider is initialized. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
 
 ## Repository Layout
 
@@ -52,13 +52,14 @@ The package currently exposes minimal protocols for `Agent`, `LLMProvider`, `Too
 .
 ├── src/backend_ai/
 │   ├── agent/          # Future agent orchestration boundary
-│   ├── application.py  # Application startup composition boundary
+│   ├── application.py  # Application startup and session composition
 │   ├── cli/            # Minimal console-entry boundary
 │   ├── config/         # Small environment-backed settings abstraction
 │   ├── core/           # Shared protocols and startup utilities
 │   ├── evaluation/     # Future evaluator boundary
 │   ├── llm/            # Provider contract, no model integration
 │   ├── memory/         # Future memory boundary
+│   ├── terminal/       # Persistent session lifecycle, no input handling yet
 │   └── tools/          # Future tool boundary
 ├── tests/
 │   ├── unit/           # Meaningful Phase 0, 1.1, and 1.2 unit tests
@@ -93,7 +94,7 @@ Verify the Phase 1.1 console entry point after installation with:
 backend-ai
 ```
 
-The command initializes the existing application configuration and logger, prints a short startup confirmation, and exits with status `0`; it does not begin an interactive session or wait for user input.
+The command initializes the existing application configuration and logger, enters the persistent session lifecycle, and remains active until it is stopped. It does not read user input or parse commands in the current phase.
 
 Check that every package module compiles with:
 
@@ -137,7 +138,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 1.2 does not add an interactive terminal, user input, command handling, project-path handling, model loading, hosted LLM SDK, chat interface, tool implementation, file-editing feature, terminal runner, git integration, planner, database, vector store, RAG system, training pipeline, multi-agent system, web interface, authentication, or deployment service. It only establishes application startup above the existing CLI entry point.
+Phase 1.3 establishes only the persistent session lifecycle. It does not add user input, command handling, `/help`, `/exit`, project-path handling, model loading, hosted LLM SDK, chat interface, tool implementation, file-editing feature, terminal runner, git integration, planner, database, vector store, RAG system, training pipeline, multi-agent system, web interface, authentication, or deployment service.
 
 ## License
 
