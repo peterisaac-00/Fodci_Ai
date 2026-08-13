@@ -9,7 +9,12 @@ from __future__ import annotations
 from threading import Event
 from typing import TextIO
 
-from backend_ai.commands import CommandDispatcher, CommandParser, CommandResult
+from backend_ai.commands import (
+    CommandDispatcher,
+    CommandParser,
+    CommandResult,
+    register_builtin_commands,
+)
 from backend_ai.terminal.input import InputProvider
 
 
@@ -28,6 +33,7 @@ class InteractiveSession:
         self._input_provider = input_provider
         self.command_parser = command_parser or CommandParser()
         self.command_dispatcher = command_dispatcher or CommandDispatcher()
+        register_builtin_commands(self.command_dispatcher)
         self._stop_event = Event()
         self._active = False
         self.received_inputs: list[str] = []
@@ -78,6 +84,8 @@ class InteractiveSession:
                     message = _display_message(result, value)
                     if message:
                         print(message, file=self._output, flush=True)
+                if result.exit_requested:
+                    self.stop()
         except KeyboardInterrupt:
             self.stop()
         finally:

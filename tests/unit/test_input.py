@@ -41,8 +41,9 @@ def test_session_receives_multiple_inputs_and_routes_commands() -> None:
 
     assert session.received_inputs == ["hello", "/exit"]
     assert "Received: hello" in output.getvalue()
-    assert "Unknown command: /exit" in output.getvalue()
-    assert session.dispatch_results[1].kind == "unknown_command"
+    assert "Goodbye." in output.getvalue()
+    assert session.dispatch_results[1].kind == "handled"
+    assert session.dispatch_results[1].exit_requested
     assert not session.is_active
 
 
