@@ -14,7 +14,12 @@ def main() -> int:
     print("Backend Engineering Agent")
     try:
         run_application(output=sys.stdout)
+    except KeyboardInterrupt:
+        return 0
     except InvalidProjectRootError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    except Exception as error:
         print(str(error), file=sys.stderr)
         return 1
     return 0

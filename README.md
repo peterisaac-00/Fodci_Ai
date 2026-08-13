@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.11 — Fodci Local Inference.**
+> **Current status: Phase 2.12 — Fodci CLI Integration (final Phase 2 phase).**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. The model remains intentionally tiny at 11,424,400 parameters; training, checkpoint, evaluation, dataset, and inference operations are independently callable from Python and are not integrated into the CLI.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, tool, file operation, terminal execution, RAG, memory, or autonomous loop is present.
 
 ## Purpose and Long-Term Vision
 
@@ -44,7 +44,7 @@ Evaluation
 Memory
 ```
 
-The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message`, `LLMRequest`, `LLMResponse`, `Tool`, `Memory`, and `Evaluator`. `ProviderBackedAgent` accepts an `LLMProvider` through dependency injection and delegates one request only. The isolated `backend_ai.model` package contains `FodciModel`, a configurable decoder-only Transformer with token embeddings, learned positional embeddings, causal multi-head attention, GELU feed-forward blocks, final normalization, and a language-modeling head. The official `fodci` console script remains disconnected from the model. See [the architecture notes](docs/architecture.md) for the intended dependency direction.
+The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message`, `LLMRequest`, `LLMResponse`, `Tool`, `Memory`, and `Evaluator`. `ProviderBackedAgent` accepts an `LLMProvider` through dependency injection and delegates one request only. The isolated `backend_ai.model` package contains `FodciModel`, a configurable decoder-only Transformer with token embeddings, learned positional embeddings, causal multi-head attention, GELU feed-forward blocks, final normalization, and a language-modeling head. The official `fodci` console script composes `InteractiveSession` with `FodciLocalProvider`; the CLI itself does not import Transformer or PyTorch internals. See [the architecture notes](docs/architecture.md) for the dependency direction.
 
 ## Repository Layout
 
@@ -58,7 +58,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── core/           # Shared protocols, startup, and project context
 │   ├── evaluation/     # CPU-first loss/perplexity evaluation and comparison
 │   ├── inference/      # Local CPU autoregressive decoding API
-│   ├── llm/            # Typed provider boundary, no model integration
+│   ├── llm/            # Typed provider boundary and local Fodci adapter
 │   ├── model/          # From-scratch Transformer architecture, no training
 │   ├── tokenizer/      # Reversible byte-level tokenizer and tiny BPE training
 │   ├── dataset/        # Local coding/instruction validation, samples, and manifests
@@ -67,13 +67,13 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── data/           # Small local backend-focused train/validation corpus
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
-│   ├── terminal/       # Session lifecycle and normal text-input boundary
+│   ├── terminal/       # Session lifecycle, commands, and provider-backed input
 │   └── tools/          # Future tool boundary
 ├── tests/
 │   ├── unit/           # Foundation, CLI, model, tokenizer, dataset, and training tests
-│   └── integration/    # Reserved for cross-component tests
+│   └── integration/    # CLI subprocess and cross-component tests
 ├── docs/               # Architecture, security, and experiment reports
-├── scripts/            # Reviewed Python workflows for training, evaluation, and dataset manifests
+├── scripts/            # Reviewed workflows for training, evaluation, manifests, and inference
 ├── .env.example
 ├── pyproject.toml
 └── README.md
@@ -81,7 +81,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 
 ## Development
 
-Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch for the isolated model architecture, Phase 2.5/2.6/2.10 training workflows, and Phase 2.11 local inference. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point. Phase 2.11 inference remains a Python API/workflow and is not a new CLI command.
+Use Python 3.11 or later. The base package and CLI have no runtime dependencies. The optional `model` extra adds PyTorch for the model architecture, Phase 2.5/2.6/2.10 training workflows, Phase 2.11 inference, and the Phase 2.12 local CLI provider. The official executable is `fodci`, mapped to the existing `backend_ai.cli.main:main` entry point.
 
 ```bash
 python -m venv .venv
@@ -102,11 +102,11 @@ Verify the official console entry point after installation with:
 fodci
 ```
 
-The command initializes the existing application configuration and logger, resolves the project root, enters the persistent session lifecycle, and reads normal text from stdin:
+The command initializes the existing application configuration and logger, resolves the project root, loads `artifacts/checkpoints/fodci-tiny-v1.pt` once through `FodciLocalProvider`, enters the persistent session lifecycle, and reads normal text from stdin:
 
 ```text
 You > hello
-Received: hello
+Fodci > ...
 ```
 
 Input is preserved except for the line ending added by stdin. Empty input is retained and does not terminate the session. A command is recognized only when `/` is the first character; command names are case-insensitive, while arguments remain available as text. The available local commands are:
@@ -140,7 +140,7 @@ The human-readable experiment record is [Fodci Tiny v1](docs/experiments/fodci-t
 
 ## Checkpoint management
 
-`CheckpointManager` wraps the existing training engine with an atomic, metadata-aware storage boundary. Each checkpoint records model version, model configuration, tokenizer version, vocabulary size, context length, epoch, global step, training configuration, metrics, seed, format identifier, format version, and UTC creation time. `inspect()` reads this metadata without constructing another model; `load()` maps tensors to the requested device and validates identity and structural compatibility before mutating the model or optimizer.
+`CheckpointManager` wraps the existing training engine with an atomic, metadata-aware storage boundary. Each checkpoint records model version, model configuration, tokenizer version, vocabulary size, context length, epoch, global step, training configuration, metrics, seed, format identifier, format version, and UTC creation time. `inspect()` reads this metadata without constructing another model; `load_model()` maps model tensors to the requested device and validates identity and structural compatibility without creating an optimizer; `load()` remains the training resume path that restores both model and optimizer state.
 
 The manager supports `save()`, `load()`, `inspect()`, `exists()`, `list()`, `latest()`, and `best()`. Saving writes a temporary file, flushes it, and atomically replaces the destination, preventing an interrupted write from exposing a partial final checkpoint. `latest()` uses metadata progress rather than filenames, while `best()` selects the lowest recorded validation loss. Generated weights remain under ignored `artifacts/` or `checkpoints/` paths and are never committed to Git.
 
@@ -175,6 +175,14 @@ Phase 2.10 validates data parsing, response masking, checkpoint compatibility, a
 The default is deterministic greedy decoding: `argmax(logits / temperature)` with `temperature=1.0`, `do_sample=False`, EOS stopping enabled, and a conservative `max_new_tokens` budget. Optional `temperature`, `top_k`, and seeded multinomial sampling are supported; invalid temperatures, invalid top-k values, vocabulary mismatches, empty prompts, and prompts exceeding model context produce clear errors. Generation stops on EOS, the new-token budget, or context-length capacity and never silently truncates the prompt.
 
 `InferenceResult` exposes generated text, prompt and generated token counts, stopped reason, model version, checkpoint identity, and the effective configuration. The smoke workflow is [run_fodci_inference.py](scripts/run_fodci_inference.py). It uses the existing ignored `artifacts/checkpoints/fodci-tiny-v1.pt` on CPU and verifies completion for English and backend-oriented prompts. The resulting text is not evidence of intelligence or production readiness; it only validates the checkpoint → model → tokenizer → autoregressive decoding path.
+
+## Phase 2.12 CLI integration
+
+`FodciLocalProvider` adapts the existing `LLMRequest`/`LLMResponse` contract to `InferenceEngine.generate()`. `Application` resolves the project root, constructs the checkpoint path, creates the provider once, and injects it into `InteractiveSession`; `cli.main` remains unaware of `FodciModel`, PyTorch, tokenizer internals, checkpoint metadata, and sampling details. A session preserves system, user, and assistant messages in deterministic bounded history, never persists them to disk, and reports context-limit or inference failures explicitly without silently truncating user input.
+
+The existing `/help` and `/exit` behavior, EOF handling, and Ctrl+C handling remain available. Normal input is rendered as `Fodci > ...`; an unavailable, malformed, or incompatible checkpoint produces a concise startup error and never falls back to random weights. The local model may produce whitespace, repetitive text, or weak responses because this is an extremely small from-scratch model trained on a tiny local corpus. Phase 2.12 success means only that `fodci` reaches the local inference pipeline.
+
+The end-to-end test sends `Hi` followed by `/exit` to the real `fodci` subprocess and verifies provider-backed output, clean termination, and exit code `0`. No external LLM API, network access, tool invocation, file analysis, terminal command, project understanding, planning, RAG, memory, or agent loop is introduced.
 
 Check that every package module compiles with:
 
@@ -218,7 +226,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.11 adds only the local CPU inference API, compatible checkpoint loading, prompt validation, greedy/temperature/top-k decoding, EOS/context stopping, and testable result metadata. It does not add a new CLI command, chatbot UI, Agent integration, tools, memory, RAG, autonomous behavior, file or terminal operations, external APIs, pretrained components, architecture changes, or Phase 2.12/Phase 3 functionality.
+Phase 2.12 adds only the integration of the existing local CPU inference API into the official `fodci` terminal application through `FodciLocalProvider`, bounded in-session conversation history, explicit provider/checkpoint errors, and integration tests. It does not add Project Understanding, tools, memory, RAG, planning, tool calling, autonomous behavior, file operations, terminal execution, external APIs, pretrained components, architecture expansion, or Phase 3 functionality.
 
 ## License
 

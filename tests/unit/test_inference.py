@@ -155,3 +155,21 @@ def test_real_fodci_checkpoint_inference_on_cpu() -> None:
     assert result.prompt_token_count == 2
     assert result.generated_token_count <= 2
     assert isinstance(result.generated_text, str)
+
+
+def test_checkpoint_inference_does_not_initialize_an_optimizer(monkeypatch: pytest.MonkeyPatch) -> None:
+    checkpoint = Path("artifacts/checkpoints/fodci-tiny-v1.pt")
+    if not checkpoint.is_file():
+        pytest.skip("existing local Fodci Tiny v1 checkpoint is unavailable")
+
+    def fail_optimizer(*args: object, **kwargs: object) -> None:
+        raise AssertionError("inference must not initialize an optimizer")
+
+    monkeypatch.setattr(torch.optim, "AdamW", fail_optimizer)
+    engine = InferenceEngine(
+        FodciModel(),
+        FodciTokenizer(),
+        InferenceConfig(max_new_tokens=1, device="cpu", checkpoint_path=checkpoint),
+    )
+
+    assert engine.checkpoint_identity == str(checkpoint)

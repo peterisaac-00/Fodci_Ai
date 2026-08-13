@@ -15,6 +15,10 @@ existing configuration + logging bootstrap
     ↓
 ProjectContext(root)
     ↓
+Application provider composition
+    ↓
+FodciLocalProvider (one loaded engine)
+    ↓
 InteractiveSession
     ↓
 InputProvider
@@ -27,7 +31,7 @@ CommandDispatcher
     └── normal input passthrough
 ```
 
-`backend_ai.cli.main` is responsible only for process-facing output and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`, resolves a minimal `ProjectContext`, and then delegates session persistence and input reception to `InteractiveSession`. `ProjectContext` contains only an absolute, normalized, validated root path; resolution checks existence and directory type but never scans the root. `InputProvider` is injectable for deterministic tests and defaults to stdin in production. `CommandParser` recognizes only a leading `/`; `CommandDispatcher` routes registered names and reports unknown commands without executing them. Phase 1.6 registers `/help` and `/exit` through this same registry. `/help` derives its output from registered metadata, while `/exit` returns a structured stop request that the session handles. The CLI does not import or initialize a concrete provider or model.
+`backend_ai.cli.main` is responsible only for process-facing output, clean startup errors, and status. `backend_ai.application` composes the currently available startup steps through `core.bootstrap`, resolves a minimal `ProjectContext`, creates the configured provider once, and then delegates session persistence and input reception to `InteractiveSession`. `ProjectContext` contains only an absolute, normalized, validated root path; resolution checks existence and directory type but never scans the root. `InputProvider` is injectable for deterministic tests and defaults to stdin in production. `CommandParser` recognizes only a leading `/`; `CommandDispatcher` routes registered names and reports unknown commands without executing them. Phase 1.6 registers `/help` and `/exit` through this same registry. `/help` derives its output from registered metadata, while `/exit` returns a structured stop request that the session handles. The CLI module itself does not import or initialize a concrete provider or model; the application boundary owns that composition.
 
 ## Phase 0 boundary model
 
@@ -196,7 +200,8 @@ temporary .tmp file → fsync → atomic os.replace()
 ignored .pt checkpoint
 
 inspect() → metadata only
-load() → compatibility validation → state restoration
+load_model() → compatibility validation → model weights only
+load() → compatibility validation → model + optimizer restoration
 list() → latest()/best() from metadata progress/loss
 ```
 
@@ -300,11 +305,42 @@ FodciTokenizer.decode(generated IDs)
 InferenceResult
 ```
 
-`InferenceEngine` receives an existing `FodciModel` and `FodciTokenizer`. If a checkpoint is configured, it uses `CheckpointManager` to load the existing model and optimizer payload into a temporary optimizer solely for complete checkpoint validation; the optimizer is never stepped or exposed. Model version, tokenizer version, vocabulary size, context length, and structural model fields are validated before loading.
+`InferenceEngine` receives an existing `FodciModel` and `FodciTokenizer`. If a checkpoint is configured, it uses `CheckpointManager.load_model()` to validate metadata and restore only model weights; inference never creates an optimizer, steps it, or exposes optimizer state. Model version, tokenizer version, vocabulary size, context length, and structural model fields are validated before loading.
 
 The default is CPU greedy decoding with `temperature=1.0`, `do_sample=False`, EOS stopping, and a bounded `max_new_tokens`. Optional seeded multinomial sampling supports positive finite temperature and optional positive `top_k`; `top_k` is filtered before sampling. Prompts are encoded without truncation, and an empty or over-context prompt fails clearly. Generation stops when EOS is selected, the new-token budget is exhausted, or the context window is full. `InferenceResult` exposes only generated text, counts, stop reason, model version, checkpoint identity, and effective configuration.
 
-The real smoke workflow uses the existing ignored Tiny v1 checkpoint on CPU with short English, Python, and backend prompts. It validates the checkpoint → model → tokenizer → autoregressive decoding path only; generated text is not evidence of intelligence or production readiness. No CLI command, chatbot UI, Agent loop, tools, memory, file operations, or Phase 2.12/3 functionality is included.
+The real smoke workflow uses the existing ignored Tiny v1 checkpoint on CPU with short English, Python, and backend prompts. It validates the checkpoint → model → tokenizer → autoregressive decoding path only; generated text is not evidence of intelligence or production readiness. No CLI integration, Agent loop, tools, memory, file operations, or Phase 2.12/3 functionality is included.
+
+## Phase 2.12 CLI integration
+
+Phase 2.12 connects the existing local inference path to the existing terminal application without changing the model architecture or introducing a second provider abstraction:
+
+```text
+User input
+    ↓
+fodci CLI entry point
+    ↓
+Application.start()
+    ├── bootstrap settings + logging
+    ├── resolve ProjectContext(root)
+    └── FodciLocalProvider.from_checkpoint(root/artifacts/checkpoints/fodci-tiny-v1.pt)
+            ↓ one construction per application
+    FodciModel + FodciTokenizer + InferenceEngine
+            ↓
+InteractiveSession
+    ├── /help and /exit through CommandDispatcher
+    └── normal input → LLMRequest → FodciLocalProvider → LLMResponse
+            ↓
+Fodci > generated text
+```
+
+`FodciLocalProvider` is structurally an `LLMProvider`: it receives the existing typed message request, formats a deterministic instruction-style prompt, delegates to the existing `InferenceEngine.generate()`, and returns the existing `LLMResponse`. The minimal system prompt identifies Fodci as a local backend-engineering model, asks for concise and honest behavior, and forbids claiming tools, file inspection, or command execution. It does not add tool instructions or project-analysis behavior.
+
+`InteractiveSession` keeps system, user, and assistant messages only for the active process. History is bounded to a deterministic even number of messages, old complete user/assistant turns are removed from the left when the bound is reached, and nothing is persisted to disk. User prompts are never silently truncated; the inference engine returns a clear context-limit failure when the formatted prompt cannot fit. Assistant whitespace is retained as valid history because the tiny checkpoint may generate whitespace.
+
+Provider construction fails clearly for missing, malformed, or incompatible checkpoints. The CLI catches normal startup failures and Ctrl+C without exposing a traceback, never falls back to random weights, and never downloads or creates a replacement checkpoint. Session inference failures are rendered as `Fodci error: ...`, while `/help`, `/exit`, EOF, and the standard-library terminal UX remain unchanged.
+
+The integration suite verifies provider protocol behavior, one-time construction, multi-turn history, model/optimizer safety, checkpoint errors, no-network scope, and the real subprocess flow `Hi` → `Fodci > ...` → `/exit`. This phase intentionally does not implement project understanding, tools, file operations, terminal execution, code search, planning, RAG, memory, tool calling, or autonomous loops.
 
 ## Present implementation
 
@@ -313,14 +349,14 @@ The repository implements only these foundation pieces:
 | Area | Phase 0 responsibility | Intentionally absent |
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
-| LLM provider | Define typed messages, request/response, provider protocol, and one provider error | Concrete model, runtime, loading, inference, network access |
+| LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
 | Checkpoint management | Atomically save/load metadata-aware Fodci state, validate compatibility, inspect/list, and select latest/best checkpoints | Committing weights, distributed checkpointing, generation, inference, CLI or Agent integration |
 | Evaluation pipeline | Measure fixed validation objective with no-grad, compare random/trained states, label response-only loss, and emit lightweight reports | Inference server, CLI or Agent integration |
-| Local inference | Load a compatible checkpoint, validate prompts, decode autoregressively on CPU, stop on EOS/budget/context, and return typed result metadata | Chat UI, CLI command, Agent loop, tools, memory, file/terminal operations, Phase 2.12/3 |
+| Local inference and CLI integration | Load a compatible checkpoint without an optimizer, validate prompts, decode autoregressively on CPU, adapt requests through `FodciLocalProvider`, preserve bounded active-session history, and render responses in `fodci` | Project understanding, tools, memory, RAG, planning, file/terminal operations, autonomous loops, Phase 3 |
 | Tokenizer | Implement reversible byte fallback, deterministic small-corpus merges, and versioned save/load | Dataset collection, scraping, LLM training, generation, inference |
 | Dataset pipeline | Load local text, validate, report unsupported/rejected files, exact-deduplicate, tokenize, append EOS boundaries, and stream fixed next-token chunks | Internet downloads, scraping, training loop, optimizer, checkpoints, model weights, inference |
 | Coding dataset manifest | Build deterministic train/validation statistics, file identities, language distribution, and leakage checks over the existing pipeline | New tokenizer, new dataset system, training run, generation, inference, CLI or Agent integration |
@@ -328,8 +364,8 @@ The repository implements only these foundation pieces:
 | Logging | Configure the project logger safely | Runtime telemetry, log shipping, event tracing |
 | Core contracts | Define typed, runtime-checkable boundaries | Concrete agents, models, tools, stores, or evaluators |
 | Package layout | Reserve cohesive packages for later work | Empty placeholder implementations |
-| Application startup | Compose existing configuration and logging behind a testable boundary | Agent startup, command handling |
-| Interactive session | Keep the process alive and receive normal text behind stoppable lifecycle boundaries | Command handling, prompts beyond the minimal input prompt, agent requests |
+| Application startup | Compose configuration, logging, project context, one local provider, and the terminal session behind testable boundaries | Agent startup, project analysis, tool initialization |
+| Interactive session | Keep the process alive, preserve bounded active-session messages, delegate normal text to an injected provider, and retain commands | Persistent memory, planning, tools, file operations, terminal execution |
 | Input provider | Read one unprocessed line from stdin or an injected test source | Command parsing, dispatch, LLM or Agent calls |
 | Command parser | Recognize leading-slash syntax, normalize names, preserve arguments | Command behavior, execution, Agent or LLM calls |
 | Command dispatcher | Route registered handlers and report unknown commands | `/status` or future command behavior |

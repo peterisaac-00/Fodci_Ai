@@ -224,6 +224,25 @@ class CheckpointManager:
         metadata = _metadata_from_payload(payload, checkpoint_path)
         return CheckpointInfo(path=checkpoint_path, metadata=metadata)
 
+    def load_model(
+        self,
+        path: Path | str,
+        model: nn.Module,
+        *,
+        device: torch.device,
+    ) -> LoadedCheckpoint:
+        """Validate compatibility, then restore model weights without an optimizer."""
+
+        checkpoint_path = Path(path)
+        payload, metadata = self._validated_payload(checkpoint_path, model, device=device)
+        try:
+            model.load_state_dict(payload["model_state_dict"])
+        except (RuntimeError, TypeError, ValueError, KeyError) as exc:
+            raise CheckpointCompatibilityError(
+                "Checkpoint state is incompatible with the instantiated model."
+            ) from exc
+        return LoadedCheckpoint(metadata=metadata)
+
     def load(
         self,
         path: Path | str,
@@ -235,17 +254,27 @@ class CheckpointManager:
         """Validate compatibility, then restore model and optimizer state."""
 
         checkpoint_path = Path(path)
-        payload = self._read_payload(checkpoint_path, map_location=device)
-        metadata = _metadata_from_payload(payload, checkpoint_path)
-        self.validate_compatibility(model, metadata)
+        payload, metadata = self._validated_payload(checkpoint_path, model, device=device)
         try:
             model.load_state_dict(payload["model_state_dict"])
             optimizer.load_state_dict(payload["optimizer_state_dict"])
         except (RuntimeError, TypeError, ValueError, KeyError) as exc:
             raise CheckpointCompatibilityError(
-                "Checkpoint state is incompatible with the instantiated model or optimizer."
+                "Checkpoint optimizer state is incompatible with the instantiated optimizer."
             ) from exc
         return LoadedCheckpoint(metadata=metadata)
+
+    def _validated_payload(
+        self,
+        checkpoint_path: Path,
+        model: nn.Module,
+        *,
+        device: torch.device,
+    ) -> tuple[dict[str, Any], CheckpointMetadata]:
+        payload = self._read_payload(checkpoint_path, map_location=device)
+        metadata = _metadata_from_payload(payload, checkpoint_path)
+        self.validate_compatibility(model, metadata)
+        return payload, metadata
 
     def validate_compatibility(
         self,

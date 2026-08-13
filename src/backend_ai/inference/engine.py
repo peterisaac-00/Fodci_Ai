@@ -80,10 +80,7 @@ class InferenceEngine:
             model_version=self.config.model_version,
             tokenizer_version=self.config.tokenizer_version,
         )
-        # CheckpointManager requires an optimizer to restore its complete payload.
-        # The temporary optimizer is not exposed and is never stepped during inference.
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=0.0)
-        self._checkpoint_manager.load(path, self.model, optimizer, device=self.device)
+        self._checkpoint_manager.load_model(path, self.model, device=self.device)
         self._checkpoint_identity = str(path)
 
     def generate(self, prompt: str) -> InferenceResult:

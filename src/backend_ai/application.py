@@ -1,39 +1,46 @@
-"""Application startup boundary for the Backend Engineering Agent."""
+"""Application startup and composition boundary for the Backend Engineering Agent."""
 
 from __future__ import annotations
 
 import sys
-from typing import TextIO
+from pathlib import Path
+from typing import Any, Callable, TextIO
 
 from backend_ai.config import Settings
 from backend_ai.core import ProjectContext, bootstrap, resolve_project_context
 from backend_ai.terminal import InteractiveSession, StdinInputProvider
 
+ProviderFactory = Callable[[Path], Any]
+DEFAULT_CHECKPOINT_RELATIVE_PATH = Path("artifacts") / "checkpoints" / "fodci-tiny-v1.pt"
+
 
 class Application:
-    """Compose currently available application initialization steps.
-
-    Future agent orchestration can be added behind this boundary without
-    requiring the console entry point to know how startup is composed.
-    """
+    """Compose startup, project context, provider, and terminal session."""
 
     def __init__(
         self,
         settings: Settings | None = None,
         *,
         session: InteractiveSession | None = None,
+        provider_factory: ProviderFactory | None = None,
     ) -> None:
         self._settings = settings
+        self._provider_factory = provider_factory
         self.session = session or InteractiveSession(input_provider=StdinInputProvider())
         self.settings: Settings | None = None
         self.project_context: ProjectContext | None = None
+        self.provider: Any | None = self.session.provider
 
     def start(self) -> Settings:
-        """Initialize configuration and logging, then return ready settings."""
+        """Initialize settings/project context and load one optional provider."""
 
         self.settings = bootstrap(self._settings)
         self.project_context = resolve_project_context(self.settings)
         self.session.project_context = self.project_context
+        if self.provider is None and self._provider_factory is not None:
+            checkpoint_path = self.project_context.root / DEFAULT_CHECKPOINT_RELATIVE_PATH
+            self.provider = self._provider_factory(checkpoint_path)
+            self.session.set_provider(self.provider)
         return self.settings
 
     def run(self) -> None:
@@ -50,7 +57,7 @@ class Application:
 
 
 def start_application(settings: Settings | None = None) -> Settings:
-    """Start the application through the application-level boundary."""
+    """Start the application through the foundation-only boundary."""
 
     return Application(settings).start()
 
@@ -60,11 +67,14 @@ def run_application(
     *,
     output: TextIO | None = None,
 ) -> None:
-    """Start the application and enter its persistent session lifecycle."""
+    """Start the local provider and enter the persistent terminal session."""
 
     stream = output or sys.stdout
+    from backend_ai.llm import FodciLocalProvider
+
     application = Application(
         settings,
+        provider_factory=FodciLocalProvider.from_checkpoint,
         session=InteractiveSession(
             output=stream,
             input_provider=StdinInputProvider(),
