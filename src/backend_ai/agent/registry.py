@@ -14,6 +14,7 @@ from backend_ai.tools import (
     ReadFileTool,
     SearchCodeTool,
     ToolMetadata,
+    WriteFileTool,
 )
 
 
@@ -82,6 +83,17 @@ class ToolRegistry:
                 ProjectContextTool(),
             )
         )
+
+    @classmethod
+    def with_write_file(cls) -> "ToolRegistry":
+        """Create an explicit Phase 4.1 registry without changing AgentLoop defaults."""
+
+        return cls((*cls.default()._tool_instances(), WriteFileTool()))
+
+    def _tool_instances(self) -> tuple[Tool, ...]:
+        """Return registered concrete tools for controlled registry composition."""
+
+        return tuple(item.tool for item in self._tools.values())
 
     def list(self) -> tuple[ToolMetadata, ...]:
         """Return metadata in deterministic name order."""

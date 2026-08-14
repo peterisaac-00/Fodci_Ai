@@ -529,6 +529,28 @@ The implementation reuses the existing `InferenceEngine` and does not create a s
 
 The loop is strictly read-only. It cannot create, edit, or delete files; execute shell/commands/tests; install packages; change Git; access the network; call external LLMs; use memory/RAG; or start background/autonomous loops. Phase 3.6 closes the first Agent foundation only; it is not a full autonomous coding agent.
 
+## Phase 4.1 create-only write tool
+
+Phase 4.1 adds one narrowly scoped mutating primitive without changing the AgentLoop:
+
+```text
+write_file(project_root, relative_path, UTF-8 content)
+        ↓
+validate root, path, parent, symlink components, content bytes, max_bytes
+        ↓
+write + flush + fsync private temporary file
+        ↓
+exclusive atomic publish to the absent target
+        ↓
+WriteFileResult or structured ToolError
+```
+
+`WriteFileTool` implements the existing `Tool` protocol. It requires an explicit existing root, refuses traversal/absolute-outside paths and symlink components, accepts only string content encodable as UTF-8, and applies a bounded byte limit. Missing parent directories may be created one component at a time, only inside the root and only up to the bounded depth; the root itself is never created. It never overwrites files, directories, FIFOs, or other existing paths. The implementation writes to a private `0o600` temporary file, flushes and synchronizes it, and publishes it with an exclusive hard link; temporary artifacts and newly-created empty parents are cleaned on handled failures.
+
+`WriteFileResult` is immutable and serializable, containing the root-relative path, filename, `size_bytes`, UTF-8 encoding, and creation status. The default maximum content size is 1 MiB and the default maximum newly-created parent depth is 32. `FILE_EXISTS`, `PATH_NOT_FOUND`, `NOT_DIRECTORY`, `PATH_OUTSIDE_ROOT`, `INVALID_UTF8`, `FILE_TOO_LARGE`, `PERMISSION_DENIED`, `FILESYSTEM_ERROR`, and `INVALID_ARGUMENT` remain machine-readable through the shared `ToolError` boundary.
+
+`ToolRegistry.default()` intentionally remains the five-tool Phase 3 read-only registry. `ToolRegistry.with_write_file()` is an explicit opt-in registry for direct Phase 4.1 consumers. `AgentLoop` still calls `ToolRegistry.default()` when no registry is injected, so no model-generated action can write a file merely because Phase 4.1 is installed. No edit/delete/diff/Git/command/test/execution or autonomous modification workflow is included.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -537,8 +559,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files`, `ReadFileTool`/`read_file`, `SearchCodeTool`/`search_code`, `ProjectStructureTool`/`project_structure`, and `ProjectContextTool`/`project_context` with structured results/errors, deterministic boundaries, symlink safety, and bounds | File mutation, terminal execution, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and add bounded `AgentLoop` orchestration over the registry and read-only tools | File mutation, command execution, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file` with structured result/errors, deterministic boundaries, symlink safety, byte bounds, and atomic no-overwrite publication; keep mutation opt-in | Edit/delete, diffs, Git, terminal execution, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling mutation by default | Agent modification loops, command execution, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

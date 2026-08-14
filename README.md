@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 3.6 — First bounded Agent Loop; Phase 3 complete.**
+> **Current status: Phase 4.1 — Safe file creation; Phase 4.1 only.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. Phase 3.2 adds the second read-only tool, `read_file`, for bounded exact UTF-8 reading inside that root. Phase 3.3 adds the third standalone read-only tool, `search_code`, for bounded literal or explicitly enabled regex search across safe UTF-8 source files. Phase 3.4 adds `project_structure`, a bounded evidence-based structural detector for technologies, components, languages, configurations, tests, and likely entry points. Phase 3.5 adds the canonical immutable `ProjectContext` layer and builder that transforms structural facts into a compact deterministic context for future Agent reasoning. Phase 3.6 adds the first bounded read-only `AgentLoop`, a deterministic `ToolRegistry`, a strict ACTION/ARGS protocol, and structured execution results over the existing tools. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, file mutation, terminal execution, RAG, memory, or autonomous loop is present.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. Phase 3.2 adds the second read-only tool, `read_file`, for bounded exact UTF-8 reading inside that root. Phase 3.3 adds the third standalone read-only tool, `search_code`, for bounded literal or explicitly enabled regex search across safe UTF-8 source files. Phase 3.4 adds `project_structure`, a bounded evidence-based structural detector for technologies, components, languages, configurations, tests, and likely entry points. Phase 3.5 adds the canonical immutable `ProjectContext` layer and builder that transforms structural facts into a compact deterministic context for future Agent reasoning. Phase 3.6 adds the first bounded read-only `AgentLoop`, a deterministic `ToolRegistry`, a strict ACTION/ARGS protocol, and structured execution results over the existing tools. Phase 4.1 adds `write_file`, a bounded atomic create-only tool that is available through an explicit opt-in registry but is not automatically used by `AgentLoop`. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, file editing/deletion, terminal execution, RAG, memory, or autonomous loop is present.
 
 ## Purpose and Long-Term Vision
 
@@ -279,6 +279,14 @@ Free-form JSON, arbitrary natural-language tool calls, malformed actions, unknow
 
 The existing `fodci` CLI remains unchanged in this phase to preserve its provider-backed interactive behavior. The clean integration boundary is the public `AgentLoop` API; CLI wiring can be added only in a later explicitly scoped change.
 
+## Phase 4.1 safe file creation
+
+`backend_ai.tools.write_file(project_root, path, content)` creates exactly one new regular UTF-8 file inside an explicitly validated, existing project root. Missing parent directories may be created one component at a time when they remain safely inside the root; the tool never creates the root itself, overwrites an existing path, follows symbolic links, or accepts traversal/absolute paths outside the root. Content is bounded by `max_bytes` after UTF-8 encoding, with a default of 1 MiB, so Arabic and other Unicode text are handled by byte-accurate validation.
+
+The write uses a private `0o600` temporary file, flushes and `fsync`s its complete content, then publishes it through an exclusive atomic hard-link operation. A concurrent target is rejected with the structured `FILE_EXISTS` error, temporary artifacts are removed after success or failure, and newly-created parent directories are cleaned up if the operation fails. Results are immutable `WriteFileResult` values with relative path, filename, `size_bytes`, encoding, and `created` status. Parent creation is bounded by `max_parent_directories`, defaulting to 32.
+
+`WriteFileTool` implements the existing `Tool` protocol and is exported from `backend_ai.tools`. `ToolRegistry.default()` remains the original five-tool Phase 3 read-only registry. `ToolRegistry.with_write_file()` is an explicit Phase 4.1 opt-in registry; the existing `AgentLoop` does not automatically use it and no agent modification workflow is added. Phase 4.1 does not implement `edit_file`, `delete_file`, diffs, Git status, command/test execution, shell/subprocess access, package installation, network access, memory, RAG, or autonomous behavior.
+
 ## Configuration and Logging
 
 Copy `.env.example` to `.env` only for local development. `.env` is ignored by Git. The settings abstraction recognizes `LOG_LEVEL` and `PROJECT_ROOT`, uses the current working directory when `PROJECT_ROOT` is omitted, and validates the log level. During application startup, the resolved project root must exist and be a directory; an explicitly invalid path fails clearly without falling back to the current working directory. Phase 1.7 does not inspect files inside the root. The example also documents reserved names for later stages without reading them yet.
@@ -297,7 +305,8 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 | 1 | CLI |
 | 2 | Local LLM |
 | 3 | Project Understanding |
-| 4 | File Modification |
+| 4.1 | Safe file creation (`write_file`) |
+| 4.2+ | File modification and later Phase 4 work |
 | 5 | Terminal + Execution |
 | 6 | Autonomous Agent Loop |
 | 7 | Testing + Self-Correction |
@@ -309,7 +318,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 3.6 completes Phase 3 with only the bounded read-only `AgentLoop`, structured agent state, `ToolRegistry`, strict ACTION protocol, project-context integration, context budgeting, and safety/limit handling. It does not add Phase 4 file modification, autonomous coding, command or shell execution, package installation, Git operations, network access, memory, RAG, embeddings, external APIs, or any later functionality.
+Phase 4.1 adds only the bounded atomic `write_file` creation tool, its immutable result/error behavior, tests, documentation, and explicit opt-in registry integration. It does not add `edit_file`, `delete_file`, diffs, Git operations, Agent modification loops, autonomous coding, command or shell execution, package installation, network access, memory, RAG, embeddings, external APIs, or Phase 4.2+ functionality.
 
 ## License
 
