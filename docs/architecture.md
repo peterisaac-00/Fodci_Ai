@@ -582,6 +582,32 @@ Real edits preserve the original permission mode, including executable bits, by 
 
 `ToolRegistry.with_file_modification()` is an explicit Phase 4.2 registry containing the read-only tools plus `write_file` and `edit_file`. `ToolRegistry.default()` and `ToolRegistry.with_write_file()` remain unchanged. `AgentLoop` does not automatically receive or invoke `edit_file`; no planning, self-correction, deletion, Git, command execution, or autonomous modification workflow is included.
 
+## Phase 4.3 regular-file deletion
+
+Phase 4.3 adds one narrowly bounded deletion primitive:
+
+```text
+delete_file(root, relative_path)
+        ↓
+validate root, path, existing target, and symlink components
+        ↓
+lstat target: regular file only
+        ↓
+open parent directory with no-follow flags where supported
+        ↓
+revalidate target identity immediately before unlink
+        ↓
+unlink target entry only
+        ↓
+DeleteFileResult or structured ToolError
+```
+
+`DeleteFileTool` reuses the existing `Tool` protocol, root/path validation, and shared `ToolError` system. It requires an explicit existing root and existing target, never reads file contents, never creates directories, never deletes directories or parents, never recurses, and never follows or deletes symlinks. Directories, FIFOs, sockets, devices, broken links, traversal paths, and outside-root paths are rejected. `DeleteFileResult` is immutable and reports only the relative path, filename, original metadata size, and `deleted` status.
+
+The implementation uses `lstat` and `stat(..., follow_symlinks=False)` and compares device, inode, mode, size, and modification time before `unlink`. Where supported, the parent directory is opened with `O_DIRECTORY | O_NOFOLLOW` and unlink is performed relative to that descriptor. If the entry changes during the checked operation, `CONCURRENT_MODIFICATION` is returned and the target is not intentionally deleted. Filesystem races after the final check cannot be made absolutely race-free across every platform, so no stronger guarantee is claimed. Parent directories and unrelated files are never removed by this tool.
+
+`ToolRegistry.with_file_modification()` is extended additively to contain the read-only tools plus `write_file`, `edit_file`, and `delete_file`. `ToolRegistry.default()` and `ToolRegistry.with_write_file()` remain unchanged, and `AgentLoop` does not automatically receive or invoke deletion. Phase 4.3 does not include backups, diffs, Git, command/test execution, shell/subprocess access, network, memory, RAG, planning, or autonomous modification loops.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -590,8 +616,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file` and exact existing-file `EditFileTool`/`edit_file` with structured results/errors, deterministic boundaries, symlink safety, byte bounds, atomic publication, and opt-in mutation | Delete, diffs, Git, terminal execution, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit mutation by default | Agent modification loops, command execution, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, and regular-file-only `DeleteFileTool`/`delete_file` with structured results/errors, deterministic boundaries, symlink safety, revalidation, and opt-in mutation | Backups, diffs, Git, terminal execution, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation by default | Agent modification loops, command execution, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

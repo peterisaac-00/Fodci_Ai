@@ -19,6 +19,7 @@ from backend_ai.tools.edit_file import (
     EditFileTool,
     edit_file,
 )
+from backend_ai.tools.delete_file import DeleteFileResult, DeleteFileTool, delete_file
 from backend_ai.tools.project_context import (
     ProjectContext,
     ProjectContextBuilder,
@@ -104,6 +105,9 @@ __all__ = [
     "EditFileResult",
     "EditFileTool",
     "edit_file",
+    "DeleteFileResult",
+    "DeleteFileTool",
+    "delete_file",
     "DEFAULT_IGNORED_DIRECTORIES",
     "DEFAULT_MAX_DEPTH",
     "DEFAULT_MAX_DIRECTORIES",

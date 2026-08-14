@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 4.2 — Safe exact file editing; Phase 4.2 only.**
+> **Current status: Phase 4.3 — Safe regular-file deletion; Phase 4.3 only.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. Phase 3.2 adds the second read-only tool, `read_file`, for bounded exact UTF-8 reading inside that root. Phase 3.3 adds the third standalone read-only tool, `search_code`, for bounded literal or explicitly enabled regex search across safe UTF-8 source files. Phase 3.4 adds `project_structure`, a bounded evidence-based structural detector for technologies, components, languages, configurations, tests, and likely entry points. Phase 3.5 adds the canonical immutable `ProjectContext` layer and builder that transforms structural facts into a compact deterministic context for future Agent reasoning. Phase 3.6 adds the first bounded read-only `AgentLoop`, a deterministic `ToolRegistry`, a strict ACTION/ARGS protocol, and structured execution results over the existing tools. Phase 4.1 adds `write_file`, a bounded atomic create-only tool that is available through an explicit opt-in registry but is not automatically used by `AgentLoop`. Phase 4.2 adds `edit_file`, a bounded atomic exact replacement tool for existing UTF-8 files, also available only through an explicit modification registry. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, file deletion, terminal execution, RAG, memory, or autonomous loop is present.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. Phase 3.2 adds the second read-only tool, `read_file`, for bounded exact UTF-8 reading inside that root. Phase 3.3 adds the third standalone read-only tool, `search_code`, for bounded literal or explicitly enabled regex search across safe UTF-8 source files. Phase 3.4 adds `project_structure`, a bounded evidence-based structural detector for technologies, components, languages, configurations, tests, and likely entry points. Phase 3.5 adds the canonical immutable `ProjectContext` layer and builder that transforms structural facts into a compact deterministic context for future Agent reasoning. Phase 3.6 adds the first bounded read-only `AgentLoop`, a deterministic `ToolRegistry`, a strict ACTION/ARGS protocol, and structured execution results over the existing tools. Phase 4.1 adds `write_file`, a bounded atomic create-only tool that is available through an explicit opt-in registry but is not automatically used by `AgentLoop`. Phase 4.2 adds `edit_file`, a bounded atomic exact replacement tool for existing UTF-8 files, also available only through an explicit modification registry. Phase 4.3 adds `delete_file`, a regular-file-only deletion tool with no recursive behavior and explicit opt-in registry exposure. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, terminal execution, RAG, memory, or autonomous loop is present.
 
 ## Purpose and Long-Term Vision
 
@@ -297,6 +297,14 @@ A no-op replacement (`old_content == new_content`) returns an immutable `EditFil
 
 `EditFileTool` is exported from `backend_ai.tools`. `ToolRegistry.with_file_modification()` is an explicit Phase 4.2 registry containing the read-only tools plus `write_file` and `edit_file`. `ToolRegistry.default()` and `ToolRegistry.with_write_file()` are unchanged, and `AgentLoop` does not automatically edit files.
 
+## Phase 4.3 safe regular-file deletion
+
+`backend_ai.tools.delete_file(project_root, path)` deletes exactly one existing regular file inside an explicitly validated project root. It does not read the file contents, create paths, delete parent directories, recurse, create backups, or print output. Missing targets return `FILE_NOT_FOUND`; directories, symlinks, broken symlinks, FIFOs, sockets, devices, and other special entries return structured errors without deletion.
+
+The tool reuses the existing path and symlink protections, rejects traversal and paths outside the root, and opens the parent directory with no-follow flags where the platform supports them. It revalidates the target immediately before unlinking and compares device, inode, mode, size, and timestamps; a detected replacement returns `CONCURRENT_MODIFICATION`. This narrows TOCTOU risk but does not claim absolute race-free deletion on every filesystem/platform. Only the requested file entry is unlinked; parent and unrelated files remain untouched.
+
+`DeleteFileResult` is immutable and serializable with relative path, filename, original `size_bytes`, and `deleted=True`. `DeleteFileTool` implements the existing `Tool` protocol. `ToolRegistry.with_file_modification()` now explicitly contains `write_file`, `edit_file`, and `delete_file`, while `ToolRegistry.default()` and `ToolRegistry.with_write_file()` remain unchanged. `AgentLoop` does not automatically receive or invoke deletion. Phase 4.3 does not implement backups, diffs, Git status, command/test execution, shell/subprocess access, network access, memory, RAG, or autonomous behavior.
+
 ## Configuration and Logging
 
 Copy `.env.example` to `.env` only for local development. `.env` is ignored by Git. The settings abstraction recognizes `LOG_LEVEL` and `PROJECT_ROOT`, uses the current working directory when `PROJECT_ROOT` is omitted, and validates the log level. During application startup, the resolved project root must exist and be a directory; an explicitly invalid path fails clearly without falling back to the current working directory. Phase 1.7 does not inspect files inside the root. The example also documents reserved names for later stages without reading them yet.
@@ -317,7 +325,8 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 | 3 | Project Understanding |
 | 4.1 | Safe file creation (`write_file`) |
 | 4.2 | Safe exact editing (`edit_file`) |
-| 4.3+ | File deletion and later Phase 4 work |
+| 4.3 | Safe regular-file deletion (`delete_file`) |
+| 4.4+ | Backup/diff safeguards and later Phase 4 work |
 | 5 | Terminal + Execution |
 | 6 | Autonomous Agent Loop |
 | 7 | Testing + Self-Correction |
@@ -329,7 +338,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 4.2 adds only the bounded exact `edit_file` tool, its immutable result/error behavior, tests, documentation, and explicit opt-in registry integration. It does not add `delete_file`, diffs, Git operations, Agent modification loops, autonomous coding, command or shell execution, package installation, network access, memory, RAG, embeddings, external APIs, or Phase 4.3+ functionality.
+Phase 4.3 adds only the bounded regular-file-only `delete_file` tool, its immutable result/error behavior, tests, documentation, and explicit opt-in registry integration. It does not add backups, diffs, Git operations, Agent deletion loops, autonomous coding, command or shell execution, package installation, network access, memory, RAG, embeddings, external APIs, or Phase 4.4+ functionality.
 
 ## License
 

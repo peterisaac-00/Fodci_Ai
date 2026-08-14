@@ -16,6 +16,7 @@ from backend_ai.tools import (
     ToolMetadata,
     WriteFileTool,
     EditFileTool,
+    DeleteFileTool,
 )
 
 
@@ -95,7 +96,7 @@ class ToolRegistry:
     def with_file_modification(cls) -> "ToolRegistry":
         """Create an explicit Phase 4.2 registry with create and edit tools."""
 
-        return cls((*cls.with_write_file()._tool_instances(), EditFileTool()))
+        return cls((*cls.with_write_file()._tool_instances(), EditFileTool(), DeleteFileTool()))
 
     def _tool_instances(self) -> tuple[Tool, ...]:
         """Return registered concrete tools for controlled registry composition."""
