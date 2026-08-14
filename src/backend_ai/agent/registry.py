@@ -17,6 +17,7 @@ from backend_ai.tools import (
     WriteFileTool,
     EditFileTool,
     DeleteFileTool,
+    GitDiffTool,
 )
 
 
@@ -97,6 +98,12 @@ class ToolRegistry:
         """Create an explicit Phase 4.2 registry with create and edit tools."""
 
         return cls((*cls.with_write_file()._tool_instances(), EditFileTool(), DeleteFileTool()))
+
+    @classmethod
+    def with_git_inspection(cls) -> "ToolRegistry":
+        """Create an explicit read-only registry with the Git diff tool."""
+
+        return cls((*cls.default()._tool_instances(), GitDiffTool()))
 
     def _tool_instances(self) -> tuple[Tool, ...]:
         """Return registered concrete tools for controlled registry composition."""

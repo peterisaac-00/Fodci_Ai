@@ -20,6 +20,18 @@ from backend_ai.tools.edit_file import (
     edit_file,
 )
 from backend_ai.tools.delete_file import DeleteFileResult, DeleteFileTool, delete_file
+from backend_ai.tools.git_diff import (
+    DEFAULT_GIT_TIMEOUT_SECONDS,
+    DEFAULT_MAX_CHANGED_FILES,
+    DEFAULT_MAX_COMMAND_OUTPUT_BYTES,
+    DEFAULT_MAX_DIFF_BYTES,
+    DEFAULT_MAX_DIFF_LINES,
+    GitChangedFile,
+    GitDiffResult,
+    GitDiffTool,
+    GitReadOnlyAdapter,
+    git_diff,
+)
 from backend_ai.tools.safe_editing import (
     BackupResult,
     DEFAULT_SAFE_EDIT_BACKUP_DIRECTORY,
@@ -132,6 +144,16 @@ __all__ = [
     "SafeEditPolicy",
     "SafeEditResult",
     "SafeEditSession",
+    "DEFAULT_GIT_TIMEOUT_SECONDS",
+    "DEFAULT_MAX_CHANGED_FILES",
+    "DEFAULT_MAX_COMMAND_OUTPUT_BYTES",
+    "DEFAULT_MAX_DIFF_BYTES",
+    "DEFAULT_MAX_DIFF_LINES",
+    "GitChangedFile",
+    "GitDiffResult",
+    "GitDiffTool",
+    "GitReadOnlyAdapter",
+    "git_diff",
     "DEFAULT_IGNORED_DIRECTORIES",
     "DEFAULT_MAX_DEPTH",
     "DEFAULT_MAX_DIRECTORIES",
