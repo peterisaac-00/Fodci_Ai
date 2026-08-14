@@ -20,6 +20,14 @@ from backend_ai.tools.edit_file import (
     edit_file,
 )
 from backend_ai.tools.delete_file import DeleteFileResult, DeleteFileTool, delete_file
+from backend_ai.tools.git_status import (
+    DEFAULT_MAX_STATUS_FILES,
+    DEFAULT_MAX_STATUS_PATH_LENGTH,
+    GitStatusFile,
+    GitStatusResult,
+    GitStatusTool,
+    git_status,
+)
 from backend_ai.tools.git_diff import (
     DEFAULT_GIT_TIMEOUT_SECONDS,
     DEFAULT_MAX_CHANGED_FILES,
@@ -154,6 +162,12 @@ __all__ = [
     "GitDiffTool",
     "GitReadOnlyAdapter",
     "git_diff",
+    "DEFAULT_MAX_STATUS_FILES",
+    "DEFAULT_MAX_STATUS_PATH_LENGTH",
+    "GitStatusFile",
+    "GitStatusResult",
+    "GitStatusTool",
+    "git_status",
     "DEFAULT_IGNORED_DIRECTORIES",
     "DEFAULT_MAX_DEPTH",
     "DEFAULT_MAX_DIRECTORIES",

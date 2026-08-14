@@ -657,6 +657,16 @@ git_diff(explicit_project_root)
 
 The explicit root must itself be the repository returned by `git rev-parse --show-toplevel`; a non-Git root returns `is_git_repository=False` rather than selecting an unrelated parent repository. All returned paths are repository-relative POSIX paths. Diff bytes, diff lines, changed-file count, command output, and timeout are independently bounded. `ToolRegistry.with_git_inspection()` is opt-in, `ToolRegistry.default()` remains read-only, and `AgentLoop` is not given automatic Git access.
 
+## Phase 4.6 read-only Git status
+
+Phase 4.6 reuses the same `GitReadOnlyAdapter` and adds only two whitelisted read operations: porcelain status with branch headers, and the same command with explicit ignored entries. `GitStatusTool` requires an explicit root and returns immutable `GitStatusResult` metadata.
+
+The parser consumes NUL-delimited `--porcelain=v1 --branch` records. It does not split filenames on whitespace, so spaces, tabs, Unicode, quotes, and punctuation remain part of the repository-relative path. Each `GitStatusFile` preserves the two-character index/worktree status codes and derives stable classifications for staged, unstaged, untracked, ignored, renamed, deleted, added, modified, and common unmerged conflict states. Rename records keep old and new paths.
+
+Branch/HEAD semantics are explicit: normal committed branches are `head_state="branch"`, detached commits are `"detached"`, and an unborn branch is `"unborn"` with `head=None`. Local upstream and ahead/behind information is reported only when Git exposes it in local status metadata; no network is contacted and unavailable values remain `None`. Ignored entries are excluded by default and included only with `include_ignored=True`; their contents are never read.
+
+Status records are bounded by maximum files, command output bytes, path length, and timeout. Truncation is marked and explained. Non-Git roots return structured `is_git_repository=False`, while Git availability, command failure, and timeout use shared `ToolError` codes. `ToolRegistry.with_git_inspection()` exposes both read-only Git tools, `ToolRegistry.default()` remains unchanged, and `AgentLoop` receives no automatic Git Status capability.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -665,8 +675,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, and read-only `GitDiffTool`/`git_diff` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection | Git status/mutation, terminal execution, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation or Git inspection by default; do not inject SafeEditSession or GitDiffTool | Agent modification loops, command execution, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, and read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection | Git mutation, terminal execution, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation or Git inspection by default; do not inject SafeEditSession, GitDiffTool, or GitStatusTool | Agent modification loops, command execution, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

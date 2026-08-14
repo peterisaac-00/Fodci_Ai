@@ -127,6 +127,8 @@ class GitReadOnlyAdapter:
         "head": ("rev-parse", "--verify", "HEAD"),
         "branch": ("branch", "--show-current"),
         "working_tree": ("status", "--porcelain=v1", "-z", "--untracked-files=all", "--renames"),
+        "status_branch": ("status", "--porcelain=v1", "-z", "--branch", "--untracked-files=all", "--renames"),
+        "status_branch_ignored": ("status", "--porcelain=v1", "-z", "--branch", "--untracked-files=all", "--ignored", "--renames"),
         "unstaged_diff": ("diff", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", "--unified=3"),
         "staged_diff": ("diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", "--unified=3"),
         "unstaged_numstat": ("diff", "--numstat", "-z", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames"),
