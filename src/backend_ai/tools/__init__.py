@@ -40,6 +40,12 @@ from backend_ai.tools.git_diff import (
     GitReadOnlyAdapter,
     git_diff,
 )
+from backend_ai.tools.modification_transaction import (
+    ModificationOperation,
+    ModificationTransaction,
+    ModificationTransactionResult,
+    RecoveryResult,
+)
 from backend_ai.tools.modification_verification import (
     ACTUAL_DIRECTORY,
     ACTUAL_INVALID_UTF8,
@@ -182,6 +188,10 @@ __all__ = [
     "ModificationVerificationResult",
     "ModificationVerifier",
     "verify_modification",
+    "ModificationOperation",
+    "ModificationTransaction",
+    "ModificationTransactionResult",
+    "RecoveryResult",
     "DEFAULT_GIT_TIMEOUT_SECONDS",
     "DEFAULT_MAX_CHANGED_FILES",
     "DEFAULT_MAX_COMMAND_OUTPUT_BYTES",

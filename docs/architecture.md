@@ -691,6 +691,30 @@ Target statuses are deterministic: successful expected states are `VERIFIED`; mi
 
 `SafeEditSession.create/edit/delete` continues to delegate all mutation to the Phase 4.1–4.3 tools. After successful mutation, it attaches a read-only `ModificationVerificationResult` to `SafeEditResult.verification` while preserving prior result fields and mutation behavior. The verifier itself performs no mutation, directory creation, subprocess execution, network access, project-code execution, Git access, or AgentLoop integration; `ToolRegistry.default()` remains conservative.
 
+## Phase 4.8 modification transaction and recovery
+
+Phase 4.8 adds a single-operation transaction boundary above `SafeEditSession`:
+
+```text
+ModificationOperation
+        ↓ planned → snapshotted → executing
+SafeEditSession mutation + existing atomic publication/backups
+        ↓
+ModificationVerifier post-state check
+        ↓
+committed  OR  failed/recovery_required
+        ↓
+conservative RecoveryResult when provably safe
+```
+
+`ModificationOperation` records only one explicit create/edit/delete plan and its immutable lifecycle metadata. `ModificationTransactionResult` reports operation records, committed/failed/recovered paths, verification, recovery state, warnings, errors, completeness, and recoverability. It intentionally does not support multi-file rollback or claim filesystem-wide transactional guarantees.
+
+The transaction reuses `SafeEditSession`, including its existing atomic same-directory temporary publication, fsync, permissions, `FileSnapshot`, backup, concurrency, and Phase 4.7 verification mechanisms. It does not duplicate an atomic writer or backup store. Successful mutations are verified before backup cleanup. A failure before publication leaves the original target unchanged and cleans the controlled backup when safe. If a mutation appears to have published the expected state but finalization fails, the transaction enters `recovery_required` rather than silently discarding evidence.
+
+Edit recovery is allowed only when the current target still has the exact transaction-generated hash/size and the controlled backup remains safely rooted and valid strict UTF-8. The existing exact `edit_file` path then restores the pre-mutation bytes atomically and the pre-snapshot is reverified. If the current target differs, the result is `user_change_preserved` and no overwrite is attempted. Delete recovery is explicitly `recovery_unavailable` because recreating a deleted file cannot be proven safe under this architecture. Temporary paths and backups are bounded, project-relative, permission-restricted, and cleaned after successful finalization; cleanup failures remain visible in structured results.
+
+No transaction/recovery class is registered as an Agent Tool, `ToolRegistry.default()` remains unchanged, `AgentLoop` receives no automatic mutation capability, and Git inspection remains read-only and independent from recovery.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -699,8 +723,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, and read-only `ModificationVerifier`/`verify_modification` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection | Git mutation, terminal execution, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation or Git inspection by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, or ModificationVerifier | Agent modification loops, command execution, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, and additive `ModificationTransaction`/recovery models with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection | Git mutation, terminal execution, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation or Git inspection by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, or ModificationTransaction | Agent modification loops, command execution, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
