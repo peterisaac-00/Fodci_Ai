@@ -667,6 +667,30 @@ Branch/HEAD semantics are explicit: normal committed branches are `head_state="b
 
 Status records are bounded by maximum files, command output bytes, path length, and timeout. Truncation is marked and explained. Non-Git roots return structured `is_git_repository=False`, while Git availability, command failure, and timeout use shared `ToolError` codes. `ToolRegistry.with_git_inspection()` exposes both read-only Git tools, `ToolRegistry.default()` remains unchanged, and `AgentLoop` receives no automatic Git Status capability.
 
+## Phase 4.7 read-only modification verification
+
+Phase 4.7 adds an additive verifier around the existing Safe Editing layer:
+
+```text
+ExpectedModification records + optional FileSnapshot baseline
+                         ↓
+          ModificationVerifier / verify_modification
+                         ↓
+      strict root/path/lstat/bounded hash + UTF-8 checks
+                         ↓
+     immutable ModificationVerificationResult
+                         ↓
+       SafeEditResult.verification metadata (optional caller view)
+```
+
+`ExpectedModification` makes the expected intent explicit as `created`, `modified`, `deleted`, or `unchanged`. It can carry expected UTF-8 content, expected byte size, expected SHA-256, and a pre-mutation `FileSnapshot`; expected content is used only for strict comparison and is never returned in result serialization. `ModificationVerificationItem` reports repository-relative path, expected/actual state, status, sizes, hashes, type, and a bounded diagnostic message without source content.
+
+The verifier resolves an explicit project root and relative path using existing path normalization. Parent symlinks, traversal, absolute escapes, Windows/UNC bypasses, and NUL paths are rejected. The final entry is inspected with `lstat` without following symlinks, allowing the verifier to classify a replaced symlink, directory, FIFO, socket, device, or other special entry as a type change rather than reading through it. Regular files are hashed with bounded reads and decoded with strict UTF-8 only; replacement and ignored decoding errors are forbidden.
+
+Target statuses are deterministic: successful expected states are `VERIFIED`; missing targets, content/hash mismatches, type changes, unexpected modifications/creations/deletions, invalid UTF-8, and unavailable verification each receive an explicit machine-readable status. A baseline mapping enables bounded comparison of non-target files through the existing `list_files` discovery limits, detecting unexpected modifications, creations, and deletions outside intended targets. Without a baseline, target verification can still succeed when `detect_unexpected=False`, but project-wide completeness is explicitly reported as unavailable/incomplete rather than inferred.
+
+`SafeEditSession.create/edit/delete` continues to delegate all mutation to the Phase 4.1–4.3 tools. After successful mutation, it attaches a read-only `ModificationVerificationResult` to `SafeEditResult.verification` while preserving prior result fields and mutation behavior. The verifier itself performs no mutation, directory creation, subprocess execution, network access, project-code execution, Git access, or AgentLoop integration; `ToolRegistry.default()` remains conservative.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -675,8 +699,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, and read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection | Git mutation, terminal execution, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation or Git inspection by default; do not inject SafeEditSession, GitDiffTool, or GitStatusTool | Agent modification loops, command execution, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, and read-only `ModificationVerifier`/`verify_modification` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection | Git mutation, terminal execution, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation or Git inspection by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, or ModificationVerifier | Agent modification loops, command execution, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

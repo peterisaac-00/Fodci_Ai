@@ -219,6 +219,7 @@ class SafeEditResult:
     backup: BackupResult | None
     verification_passed: bool
     concurrent_change_detected: bool = False
+    verification: Any | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -236,6 +237,7 @@ class SafeEditResult:
             "backup": self.backup.to_dict() if self.backup else None,
             "verification_passed": self.verification_passed,
             "concurrent_change_detected": self.concurrent_change_detected,
+            "verification": self.verification.to_dict() if self.verification is not None else None,
         }
 
 
@@ -312,7 +314,10 @@ class SafeEditSession:
         after = self.snapshot(root, relative)
         expected_hash = hashlib.sha256(content_bytes).hexdigest()
         self._verify(after.exists and after.content_hash == expected_hash, relative)
-        return SafeEditResult("create", relative, True, True, True, False, 0, len(content_bytes), None, expected_hash, diff, None, True)
+        from backend_ai.tools.modification_verification import ExpectedModification, verify_modification
+        verification = verify_modification(root, [ExpectedModification.created(relative, expected_sha256=expected_hash, expected_size=len(content_bytes))], detect_unexpected=False, max_file_bytes=self.policy.max_file_size)
+        self._verify(verification.success, relative)
+        return SafeEditResult("create", relative, True, True, True, False, 0, len(content_bytes), None, expected_hash, diff, None, True, verification=verification)
 
     def edit(self, project_root: Path | str, path: Path | str, old_content: str, new_content: str) -> SafeEditResult:
         self._require_capability("edit")
@@ -336,7 +341,10 @@ class SafeEditSession:
             )
             after = self.snapshot(root, relative)
             self._verify(after.exists and after.content_hash == before.content_hash, relative)
-            return SafeEditResult("edit", relative, True, False, False, False, result.original_size_bytes, result.new_size_bytes, before.content_hash, after.content_hash, diff, None, True)
+            from backend_ai.tools.modification_verification import ExpectedModification, verify_modification
+            verification = verify_modification(root, [ExpectedModification.unchanged(relative, expected_sha256=before.content_hash, expected_size=before.size_bytes, before_snapshot=before)], detect_unexpected=False, max_file_bytes=self.policy.max_file_size)
+            self._verify(verification.success, relative)
+            return SafeEditResult("edit", relative, True, False, False, False, result.original_size_bytes, result.new_size_bytes, before.content_hash, after.content_hash, diff, None, True, verification=verification)
         backup = self._backup_if_enabled(root, relative, target, before)
         result = edit_file(
             root,
@@ -350,8 +358,11 @@ class SafeEditSession:
         )
         after = self.snapshot(root, relative)
         self._verify(after.exists and after.content_hash is not None, relative)
+        from backend_ai.tools.modification_verification import ExpectedModification, verify_modification
+        verification = verify_modification(root, [ExpectedModification.modified(relative, expected_sha256=after.content_hash, expected_size=after.size_bytes, before_snapshot=before)], detect_unexpected=False, max_file_bytes=self.policy.max_file_size)
+        self._verify(verification.success, relative)
         backup = self._finish_backup(root, backup)
-        return SafeEditResult("edit", relative, True, result.changed, False, False, result.original_size_bytes, result.new_size_bytes, before.content_hash, after.content_hash, diff, backup, True)
+        return SafeEditResult("edit", relative, True, result.changed, False, False, result.original_size_bytes, result.new_size_bytes, before.content_hash, after.content_hash, diff, backup, True, verification=verification)
 
     def delete(self, project_root: Path | str, path: Path | str) -> SafeEditResult:
         self._require_capability("delete")
@@ -364,8 +375,11 @@ class SafeEditSession:
         result = delete_file(root, relative)
         after = self.snapshot(root, relative)
         self._verify(not after.exists, relative)
+        from backend_ai.tools.modification_verification import ExpectedModification, verify_modification
+        verification = verify_modification(root, [ExpectedModification.deleted(relative, before_snapshot=before)], detect_unexpected=False, max_file_bytes=self.policy.max_file_size)
+        self._verify(verification.success, relative)
         backup = self._finish_backup(root, backup)
-        return SafeEditResult("delete", relative, True, True, False, result.deleted, before.size_bytes, 0, before.content_hash, None, diff, backup, True)
+        return SafeEditResult("delete", relative, True, True, False, result.deleted, before.size_bytes, 0, before.content_hash, None, diff, backup, True, verification=verification)
 
     def _require_capability(self, operation: OperationName) -> None:
         if not getattr(self.policy, f"allow_{operation}"):
