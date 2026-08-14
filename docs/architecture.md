@@ -342,6 +342,38 @@ Provider construction fails clearly for missing, malformed, or incompatible chec
 
 The integration suite verifies provider protocol behavior, one-time construction, multi-turn history, model/optimizer safety, checkpoint errors, no-network scope, and the real subprocess flow `Hi` → `Fodci > ...` → `/exit`. This phase intentionally does not implement project understanding, tools, file operations, terminal execution, code search, planning, RAG, memory, tool calling, or autonomous loops.
 
+## Phase 3.1 file discovery tool
+
+Phase 3.1 introduces the first concrete Agent tool without connecting it to the LLM, `ProviderBackedAgent`, or the `fodci` interactive loop:
+
+```text
+Explicit project_root
+        ↓
+ListFilesTool.run(arguments)
+        ↓ validation + ToolError boundary
+list_files(project_root)
+        ↓
+read-only deterministic traversal
+        ├── regular files → DiscoveredFile metadata
+        ├── directories   → DiscoveredDirectory metadata
+        ├── default/custom ignore policy
+        ├── hidden-file policy
+        ├── symlink skip policy
+        └── max_files/max_directories/max_depth bounds
+        ↓
+FileDiscoveryResult
+```
+
+`backend_ai.tools` reuses the existing core `Tool` protocol and adds package-owned `ToolMetadata`, `ToolError`, and stable `ToolErrorCode` values. `ListFilesTool` exposes the name `list_files`, a description, and an explicit input schema requiring `project_root`. The direct `list_files()` function accepts the same root plus bounded options and returns immutable dataclass records rather than a formatted string.
+
+The root is expanded and normalized explicitly; missing roots, file-shaped roots, invalid arguments, permission failures, and filesystem failures become structured errors. Results use root-relative POSIX paths, separate files from directories, include cheap file metadata only, and use case-folded relative-path ordering with a stable tie-break so Windows and Linux have equivalent ordering as reasonably as possible. The tool never reads complete file contents.
+
+The default ignore set is centralized and deliberately small: `.git`, `__pycache__`, `node_modules`, `.venv`, `venv`, `env`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.coverage`, `dist`, `build`, and `.eggs`. Hidden files are included by default except for ignored entries; `include_hidden=False` excludes dot-prefixed entries. Custom ignored directory names extend the defaults. Full `.gitignore` semantics are intentionally not implemented or claimed in this phase.
+
+All symbolic links are skipped, including symlinked files, directories outside the root, and recursive links. Special filesystem entries such as sockets and devices are ignored rather than treated as regular files. The result reports `truncated=True` and a reason when `max_files`, `max_directories`, or `max_depth` stops traversal, so bounded discovery never silently presents a complete-looking result.
+
+The tool layer owns filesystem access. The LLM does not receive filesystem APIs, the CLI does not invoke the tool automatically, and no Agent loop or tool-calling protocol is added. `ProjectContext` remains a validated root-only dataclass and is not expanded with file lists or project analysis. Later phases may add `read_file`, `search_code`, and orchestration, but they are intentionally absent here.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -350,13 +382,14 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
+| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files` with structured results/errors, deterministic ordering, ignore rules, symlink safety, and bounds | `read_file`, `search_code`, file mutation, terminal execution, LLM tool-calling, Agent loop |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
 | Checkpoint management | Atomically save/load metadata-aware Fodci state, validate compatibility, inspect/list, and select latest/best checkpoints | Committing weights, distributed checkpointing, generation, inference, CLI or Agent integration |
 | Evaluation pipeline | Measure fixed validation objective with no-grad, compare random/trained states, label response-only loss, and emit lightweight reports | Inference server, CLI or Agent integration |
-| Local inference and CLI integration | Load a compatible checkpoint without an optimizer, validate prompts, decode autoregressively on CPU, adapt requests through `FodciLocalProvider`, preserve bounded active-session history, and render responses in `fodci` | Project understanding, tools, memory, RAG, planning, file/terminal operations, autonomous loops, Phase 3 |
+| Local inference and CLI integration | Load a compatible checkpoint without an optimizer, validate prompts, decode autoregressively on CPU, adapt requests through `FodciLocalProvider`, preserve bounded active-session history, and render responses in `fodci` | Project understanding, tool invocation, memory, RAG, planning, file/terminal operations, autonomous loops, later Phase 3 behavior |
 | Tokenizer | Implement reversible byte fallback, deterministic small-corpus merges, and versioned save/load | Dataset collection, scraping, LLM training, generation, inference |
 | Dataset pipeline | Load local text, validate, report unsupported/rejected files, exact-deduplicate, tokenize, append EOS boundaries, and stream fixed next-token chunks | Internet downloads, scraping, training loop, optimizer, checkpoints, model weights, inference |
 | Coding dataset manifest | Build deterministic train/validation statistics, file identities, language distribution, and leakage checks over the existing pipeline | New tokenizer, new dataset system, training run, generation, inference, CLI or Agent integration |

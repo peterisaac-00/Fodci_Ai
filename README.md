@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 2.12 — Fodci CLI Integration (final Phase 2 phase).**
+> **Current status: Phase 3.1 — Agent File Discovery.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, tool, file operation, terminal execution, RAG, memory, or autonomous loop is present.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, file mutation, terminal execution, RAG, memory, or autonomous loop is present.
 
 ## Purpose and Long-Term Vision
 
@@ -68,7 +68,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
 │   ├── terminal/       # Session lifecycle, commands, and provider-backed input
-│   └── tools/          # Future tool boundary
+│   └── tools/          # Tool protocol, structured errors, and list_files discovery
 ├── tests/
 │   ├── unit/           # Foundation, CLI, model, tokenizer, dataset, and training tests
 │   └── integration/    # CLI subprocess and cross-component tests
@@ -196,6 +196,18 @@ For the minimal runtime package installation only, use:
 python -m pip install -e .
 ```
 
+## Phase 3.1 file discovery
+
+`backend_ai.tools.list_files(project_root)` is the first concrete Agent tool. It recursively discovers regular files and directories below an explicit project root and returns a `FileDiscoveryResult` rather than a formatted string. Files expose root-relative POSIX paths, names, extensions, and byte sizes; directories are returned separately. Results include the normalized root, totals, and explicit truncation metadata.
+
+The traversal is deterministic: entries and final result collections are ordered by normalized relative path using a platform-independent case-folded comparison with a stable tie-break. Default exclusions cover `.git`, `__pycache__`, `node_modules`, virtual environments, test/type/linter caches, `dist`, `build`, and `.eggs`. Hidden files are included by default when they are not excluded directories, so `.env.example`, `.gitignore`, and `.dockerignore` remain discoverable. Set `include_hidden=False` to exclude dot-prefixed entries; custom ignored directory names extend the defaults.
+
+Discovery is read-only and bounded. `max_files`, `max_directories`, and `max_depth` have explicit defaults and are validated as non-negative integers. When a bound stops traversal, the result sets `truncated=True` and records `truncation_reason` as `max_files`, `max_directories`, or `max_depth`; files are never silently truncated without metadata. File contents are not read, and no file is modified, created, deleted, executed, or downloaded.
+
+Every symbolic link is skipped, including symlinked files, directories, links outside the root, and recursive links. The tool normalizes the explicit root and rejects missing paths, non-directory roots, invalid arguments, permission failures, and filesystem errors with `ToolError` and stable `ToolErrorCode` values. Full `.gitignore` semantics are intentionally not implemented in this phase; the centralized default exclusion set is the documented policy and can be extended later without adding a dependency.
+
+The tool layer remains separate from both the LLM and the Agent loop. `ListFilesTool` exposes stable metadata and an input schema through the existing `Tool` protocol, but `fodci` does not automatically invoke it. Phase 3.1 does not implement `read_file`, `search_code`, `ProjectContext` expansion, framework detection, project understanding, planning, tool calling, file modification, terminal execution, memory, RAG, or an autonomous Agent loop.
+
 ## Configuration and Logging
 
 Copy `.env.example` to `.env` only for local development. `.env` is ignored by Git. The settings abstraction recognizes `LOG_LEVEL` and `PROJECT_ROOT`, uses the current working directory when `PROJECT_ROOT` is omitted, and validates the log level. During application startup, the resolved project root must exist and be a directory; an explicitly invalid path fails clearly without falling back to the current working directory. Phase 1.7 does not inspect files inside the root. The example also documents reserved names for later stages without reading them yet.
@@ -226,7 +238,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 2.12 adds only the integration of the existing local CPU inference API into the official `fodci` terminal application through `FodciLocalProvider`, bounded in-session conversation history, explicit provider/checkpoint errors, and integration tests. It does not add Project Understanding, tools, memory, RAG, planning, tool calling, autonomous behavior, file operations, terminal execution, external APIs, pretrained components, architecture expansion, or Phase 3 functionality.
+Phase 3.1 adds only the read-only `list_files` Agent tool, its structured contract/errors, deterministic relative-path discovery, default exclusions, symlink safety, and bounded traversal. It does not add `read_file`, `search_code`, ProjectContext expansion, framework detection, project understanding, planning, LLM tool-calling, file mutation, terminal execution, memory, RAG, autonomous behavior, or any later Phase 3 functionality.
 
 ## License
 
