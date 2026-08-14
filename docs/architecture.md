@@ -487,6 +487,48 @@ Context inherits the structure tool's root normalization, symlink/path safety, d
 
 `ProjectContextTool` is a standalone implementation of the existing `Tool` protocol with explicit `project_root` and the same bounded discovery/inspection options. It is not connected to the model, tokenizer, inference engine, checkpoint manager, CLI, LLM tool-calling, planning, memory, RAG, terminal execution, file mutation, or Agent loop. Phase 3.5 establishes a canonical data layer only; later phases may consume it.
 
+## Phase 3.6 first bounded Agent loop
+
+Phase 3.6 adds the first real orchestration layer without claiming mature autonomous reasoning:
+
+```text
+User task + explicit project_root
+        ↓
+AgentLoop
+        ├── project_context (initial read-only tool)
+        ├── compact context budget using existing tokenizer
+        ├── InferenceEngine.generate()
+        ├── strict FINAL/ACTION parser
+        ├── ToolRegistry lookup and existing Tool validation
+        ├── bounded ToolResult injection
+        └── repeat until final answer or explicit stop
+```
+
+The model-facing action protocol is intentionally deterministic:
+
+```text
+FINAL: answer text
+```
+
+or:
+
+```text
+ACTION: search_code
+ARGS: {"query":"FastAPI"}
+```
+
+A response without `ACTION:` is a final answer; `ACTION:` must be followed by one valid identifier-like tool name and one JSON object on `ARGS:`. Free-form JSON, arbitrary natural-language calls, unknown tools, malformed JSON, missing arguments, and invalid tool arguments are never executed. Parser failures become structured Agent errors, while tool failures become `ToolResult(success=False, error_code, message)` and may be observed by the next model step.
+
+`ToolRegistry` owns only deterministic discovery, metadata, lookup, and dispatch. Its default order is `list_files`, `project_context`, `project_structure`, `read_file`, `search_code`; it does not duplicate or bypass any tool implementation. `AgentLoop` always establishes context through `project_context`, rewrites/validates every later call against the explicit root, and never dispatches a call outside that boundary.
+
+Agent state is immutable and serializable through `AgentMessage`, `AgentTask`, `AgentStep`, `ToolCall`, `ToolResult`, `AgentUsage`, and `AgentResult`. `AgentResult` records the final answer, status, complete bounded history, project context, stop reason, usage, warnings, and errors.
+
+`AgentConfig` sets `max_steps=8`, `max_tool_calls=8`, a 256-token maximum context with reserved response space, bounded tool-result characters, and bounded history. `ContextBudget` uses the existing tokenizer to estimate prompt tokens. It shrinks optional project fields, drops oldest history deterministically, bounds tool-result text with `[tool_result_truncated]`, and returns `context_limit` if the task itself cannot fit; it never silently truncates required task text.
+
+The implementation reuses the existing `InferenceEngine` and does not create a second model runtime. The current tiny model may return empty or non-protocol text; that is represented as a completed empty final answer or a structured invalid-action/inference result rather than fabricated tool use. The existing `fodci` CLI remains unchanged in Phase 3.6; the public `AgentLoop` API is the clean integration boundary and preserves the Phase 2 provider-backed CLI behavior.
+
+The loop is strictly read-only. It cannot create, edit, or delete files; execute shell/commands/tests; install packages; change Git; access the network; call external LLMs; use memory/RAG; or start background/autonomous loops. Phase 3.6 closes the first Agent foundation only; it is not a full autonomous coding agent.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -495,8 +537,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files`, `ReadFileTool`/`read_file`, `SearchCodeTool`/`search_code`, `ProjectStructureTool`/`project_structure`, and `ProjectContextTool`/`project_context` with structured results/errors, deterministic boundaries, symlink safety, and bounds | Agent loop, file mutation, terminal execution, LLM tool-calling |
-| Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
+| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files`, `ReadFileTool`/`read_file`, `SearchCodeTool`/`search_code`, `ProjectStructureTool`/`project_structure`, and `ProjectContextTool`/`project_context` with structured results/errors, deterministic boundaries, symlink safety, and bounds | File mutation, terminal execution, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and add bounded `AgentLoop` orchestration over the registry and read-only tools | File mutation, command execution, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
@@ -516,6 +558,6 @@ The repository implements only these foundation pieces:
 | Command parser | Recognize leading-slash syntax, normalize names, preserve arguments | Command behavior, execution, Agent or LLM calls |
 | Command dispatcher | Route registered handlers and report unknown commands | `/status` or future command behavior |
 | Built-in commands | Provide deterministic local `/help` and `/exit` handlers | LLM, Agent, external API, or process-level `sys.exit()` behavior |
-| Project context | Hold one validated absolute project root in core; expose a separate immutable structural `ProjectContext` through the tools layer, built from `ProjectStructureResult` | Project understanding, Git/model metadata, planning, memory, LLM tool-calling, Agent orchestration |
+| Project context | Hold one validated absolute project root in core; expose an immutable structural `ProjectContext` and bounded `AgentLoop` consumption through the tools/agent layers | File mutation, Git/model metadata, planning, memory, RAG, autonomous execution |
 
 No package imports another component's future concrete implementation. Any future dependency that would create a cycle should be inverted through a contract in `core` or a deliberately owned boundary module.

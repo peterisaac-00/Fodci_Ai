@@ -1,6 +1,57 @@
-"""Agent boundary and its provider-injected Phase 2.1 adapter."""
+"""Agent boundary, registry, structured protocol, and bounded first loop."""
 
 from backend_ai.agent.agent import ProviderBackedAgent
+from backend_ai.agent.budget import BudgetedPrompt, ContextBudget, ContextBudgetError
+from backend_ai.agent.loop import AgentLoop
+from backend_ai.agent.models import (
+    AgentConfig,
+    AgentMessage,
+    AgentMessageRole,
+    AgentResult,
+    AgentStatus,
+    AgentStep,
+    AgentTask,
+    AgentUsage,
+    ToolCall,
+    ToolResult,
+)
+from backend_ai.agent.protocol import (
+    ActionParseError,
+    ParsedFinalAnswer,
+    ParsedToolAction,
+    parse_agent_output,
+)
+from backend_ai.agent.registry import (
+    RegisteredTool,
+    ToolRegistry,
+    ToolRegistryError,
+    UnknownToolError,
+)
 from backend_ai.core.contracts import Agent
 
-__all__ = ["Agent", "ProviderBackedAgent"]
+__all__ = [
+    "ActionParseError",
+    "Agent",
+    "AgentConfig",
+    "AgentLoop",
+    "AgentMessage",
+    "AgentMessageRole",
+    "AgentResult",
+    "AgentStatus",
+    "AgentStep",
+    "AgentTask",
+    "AgentUsage",
+    "BudgetedPrompt",
+    "ContextBudget",
+    "ContextBudgetError",
+    "ParsedFinalAnswer",
+    "ParsedToolAction",
+    "ProviderBackedAgent",
+    "RegisteredTool",
+    "ToolCall",
+    "ToolRegistry",
+    "ToolRegistryError",
+    "ToolResult",
+    "UnknownToolError",
+    "parse_agent_output",
+]

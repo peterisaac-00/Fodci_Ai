@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 3.5 — Canonical Project Context.**
+> **Current status: Phase 3.6 — First bounded Agent Loop; Phase 3 complete.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. Phase 3.2 adds the second read-only tool, `read_file`, for bounded exact UTF-8 reading inside that root. Phase 3.3 adds the third standalone read-only tool, `search_code`, for bounded literal or explicitly enabled regex search across safe UTF-8 source files. Phase 3.4 adds `project_structure`, a bounded evidence-based structural detector for technologies, components, languages, configurations, tests, and likely entry points. Phase 3.5 adds the canonical immutable `ProjectContext` layer and builder that transforms structural facts into a compact deterministic context for future Agent reasoning. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, file mutation, terminal execution, RAG, memory, or autonomous loop is present.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. Phase 3.2 adds the second read-only tool, `read_file`, for bounded exact UTF-8 reading inside that root. Phase 3.3 adds the third standalone read-only tool, `search_code`, for bounded literal or explicitly enabled regex search across safe UTF-8 source files. Phase 3.4 adds `project_structure`, a bounded evidence-based structural detector for technologies, components, languages, configurations, tests, and likely entry points. Phase 3.5 adds the canonical immutable `ProjectContext` layer and builder that transforms structural facts into a compact deterministic context for future Agent reasoning. Phase 3.6 adds the first bounded read-only `AgentLoop`, a deterministic `ToolRegistry`, a strict ACTION/ARGS protocol, and structured execution results over the existing tools. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, file mutation, terminal execution, RAG, memory, or autonomous loop is present.
 
 ## Purpose and Long-Term Vision
 
@@ -252,7 +252,32 @@ The context includes the normalized root, project type, concise `stack_summary`,
 
 The stack summary is derived only from detected evidence, for example `Python + FastAPI + PostgreSQL + pytest + Docker`. Empty or ambiguous projects do not receive invented framework claims. Confidence and evidence are inherited from the structural detector, while bounded discovery or targeted-inspection limits are promoted to partial context with explicit warnings.
 
-`ProjectContextTool` exposes the existing `Tool` protocol and requires an explicit `project_root`; discovery limits remain configurable and bounded. The builder never executes or imports the target project, uses no LLM, does not read sensitive files, does not write inside the project, and does not access the network. `project_context` is independently callable and is not connected to `fodci`, tool-calling, an Agent loop, planning, memory, RAG, or autonomous behavior.
+`ProjectContextTool` exposes the existing `Tool` protocol and requires an explicit `project_root`; discovery limits remain configurable and bounded. The builder never executes or imports the target project, uses no LLM, does not read sensitive files, does not write inside the project, and does not access the network.
+
+## Phase 3.6 first bounded Agent loop
+
+`backend_ai.agent.AgentLoop` is the first orchestration layer. It starts with the explicit user task and `project_context`, invokes the existing inference engine, parses the model output, dispatches only through `ToolRegistry`, injects structured tool results into bounded history, and repeats until a final answer or an explicit limit/error stops execution.
+
+The model-facing protocol is deliberately strict:
+
+```text
+FINAL: answer text
+```
+
+or:
+
+```text
+ACTION: search_code
+ARGS: {"query":"FastAPI"}
+```
+
+Free-form JSON, arbitrary natural-language tool calls, malformed actions, unknown tools, and invalid arguments are never executed. They become structured `invalid_action`, `UNKNOWN_TOOL`, or tool-boundary errors. The registry owns only deterministic discovery/lookup/dispatch and registers `list_files`, `read_file`, `search_code`, `project_structure`, and `project_context`; the tools retain their own validation and safety logic.
+
+`AgentConfig` bounds execution with `max_steps=8`, `max_tool_calls=8`, a 256-token model context budget with reserved response space, bounded tool-result characters, and bounded history. `ContextBudget` estimates tokens with the existing tokenizer, compacts optional project context and history deterministically, truncates oversized tool results with an explicit marker, and returns `context_limit` rather than silently cutting required task information.
+
+`AgentResult` preserves final answer, status, immutable steps, tool calls/results, canonical project context, stop reason, usage counters, warnings, and errors. The loop uses the existing `InferenceEngine` and does not create another model runtime. It remains read-only: no file creation/edit/delete, shell or command execution, package installation, Git, network, memory, RAG, or external APIs.
+
+The existing `fodci` CLI remains unchanged in this phase to preserve its provider-backed interactive behavior. The clean integration boundary is the public `AgentLoop` API; CLI wiring can be added only in a later explicitly scoped change.
 
 ## Configuration and Logging
 
@@ -284,7 +309,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 3.5 adds only the canonical immutable `ProjectContext`, `ProjectContextBuilder`, and standalone `ProjectContextTool` composed over Phase 3.1–3.4. It does not add an Agent loop, LLM tool-calling, project-wide summarization, AST/dependency analysis, planning, file mutation, terminal execution, memory, RAG, autonomous behavior, or Phase 3.6+ functionality.
+Phase 3.6 completes Phase 3 with only the bounded read-only `AgentLoop`, structured agent state, `ToolRegistry`, strict ACTION protocol, project-context integration, context budgeting, and safety/limit handling. It does not add Phase 4 file modification, autonomous coding, command or shell execution, package installation, Git operations, network access, memory, RAG, embeddings, external APIs, or any later functionality.
 
 ## License
 
