@@ -20,6 +20,19 @@ from backend_ai.tools.edit_file import (
     edit_file,
 )
 from backend_ai.tools.delete_file import DeleteFileResult, DeleteFileTool, delete_file
+from backend_ai.tools.safe_editing import (
+    BackupResult,
+    DEFAULT_SAFE_EDIT_BACKUP_DIRECTORY,
+    DEFAULT_SAFE_EDIT_MAX_CONTENT_SIZE,
+    DEFAULT_SAFE_EDIT_MAX_DIFF_BYTES,
+    DEFAULT_SAFE_EDIT_MAX_DIFF_LINES,
+    DEFAULT_SAFE_EDIT_MAX_FILE_SIZE,
+    DiffResult,
+    FileSnapshot,
+    SafeEditPolicy,
+    SafeEditResult,
+    SafeEditSession,
+)
 from backend_ai.tools.project_context import (
     ProjectContext,
     ProjectContextBuilder,
@@ -108,6 +121,17 @@ __all__ = [
     "DeleteFileResult",
     "DeleteFileTool",
     "delete_file",
+    "BackupResult",
+    "DEFAULT_SAFE_EDIT_BACKUP_DIRECTORY",
+    "DEFAULT_SAFE_EDIT_MAX_CONTENT_SIZE",
+    "DEFAULT_SAFE_EDIT_MAX_DIFF_BYTES",
+    "DEFAULT_SAFE_EDIT_MAX_DIFF_LINES",
+    "DEFAULT_SAFE_EDIT_MAX_FILE_SIZE",
+    "DiffResult",
+    "FileSnapshot",
+    "SafeEditPolicy",
+    "SafeEditResult",
+    "SafeEditSession",
     "DEFAULT_IGNORED_DIRECTORIES",
     "DEFAULT_MAX_DEPTH",
     "DEFAULT_MAX_DIRECTORIES",

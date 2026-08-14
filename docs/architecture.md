@@ -608,6 +608,33 @@ The implementation uses `lstat` and `stat(..., follow_symlinks=False)` and compa
 
 `ToolRegistry.with_file_modification()` is extended additively to contain the read-only tools plus `write_file`, `edit_file`, and `delete_file`. `ToolRegistry.default()` and `ToolRegistry.with_write_file()` remain unchanged, and `AgentLoop` does not automatically receive or invoke deletion. Phase 4.3 does not include backups, diffs, Git, command/test execution, shell/subprocess access, network, memory, RAG, planning, or autonomous modification loops.
 
+## Phase 4.4 Safe Editing Infrastructure
+
+Phase 4.4 introduces `backend_ai.tools.safe_editing` as a reusable layer above the three existing mutation tools, not as a second tool framework:
+
+```text
+Explicit caller + SafeEditPolicy
+             ↓
+       SafeEditSession
+       ├── FileSnapshot / identity + bounded SHA-256
+       ├── bounded internal DiffResult
+       ├── optional controlled BackupResult
+       ├── existing write_file / edit_file / delete_file
+       └── post-operation verification
+             ↓
+       immutable SafeEditResult
+```
+
+`SafeEditPolicy` is conservative by default. Create, edit, and delete capabilities are disabled until explicitly allowed; roots remain explicit, symlinks remain rejected, atomic writes and metadata preservation remain required, and verification/concurrency detection cannot be disabled. Resource limits bound file/content hashing and diff bytes/lines. The policy is configuration, not permission to bypass the underlying tools.
+
+`FileSnapshot` contains root-relative path, existence, size, mtime, device/inode identity, file type, mode, and an optional SHA-256 hash. It is immutable, deterministic, and does not expose file contents. `SafeEditSession` compares snapshots before mutation and verifies expected state afterward. A changed identity or hash fails with `CONCURRENT_MODIFICATION`; this is optimistic protection and is not claimed to be race-free after the last filesystem check.
+
+`DiffResult` is an internal deterministic unified diff for create/edit/delete. It uses only relative `a/` and `b/` paths and never invokes Git, subprocesses, or external commands. It is bounded by byte and line limits and reports `truncated=True` with an explicit marker when necessary. Diffs are returned only when explicitly requested through the session and are never logged or printed automatically.
+
+When enabled, backups are created only for existing edit/delete targets, only inside project-relative `.fodci/backups/`, with hashed deterministic names, bounded reads, exclusive atomic creation, and restrictive permissions. A successful operation removes the backup unless `retain_backup_on_success=True`; a failed mutation leaves the backup for inspection. This is a controlled snapshot mechanism, not transactional rollback or a claim of multi-operation atomicity.
+
+`SafeEditSession.create/edit/delete` delegates the actual mutation to the existing `write_file`, `edit_file`, and `delete_file` implementations, then returns immutable `SafeEditResult` metadata including operation, path, success/change flags, sizes, hashes, optional bounded diff, backup metadata, and verification status. The layer is not registered as a Tool, `ToolRegistry.default()` remains read-only, `ToolRegistry.with_file_modification()` remains explicit, and `AgentLoop` is not modified to mutate files.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -616,8 +643,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, and regular-file-only `DeleteFileTool`/`delete_file` with structured results/errors, deterministic boundaries, symlink safety, revalidation, and opt-in mutation | Backups, diffs, Git, terminal execution, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation by default | Agent modification loops, command execution, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, and additive `safe_editing` policy/session with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation | Git diff/status, terminal execution, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation by default; do not inject SafeEditSession | Agent modification loops, command execution, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
