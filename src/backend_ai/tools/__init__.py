@@ -3,6 +3,17 @@
 from backend_ai.core.contracts import Tool
 from backend_ai.tools.base import ToolError, ToolErrorCode, ToolMetadata
 from backend_ai.tools.read_file import DEFAULT_MAX_READ_BYTES, ReadFileResult, ReadFileTool, read_file
+from backend_ai.tools.search_code import (
+    DEFAULT_MAX_FILE_BYTES,
+    DEFAULT_MAX_QUERY_LENGTH,
+    DEFAULT_MAX_RESULTS,
+    MAX_MAX_FILE_BYTES,
+    MAX_MAX_RESULTS,
+    SearchCodeResult,
+    SearchCodeTool,
+    SearchMatch,
+    search_code,
+)
 from backend_ai.tools.filesystem import (
     DEFAULT_IGNORED_DIRECTORIES,
     DEFAULT_MAX_DEPTH,
@@ -21,6 +32,15 @@ __all__ = [
     "ToolErrorCode",
     "ToolMetadata",
     "DEFAULT_MAX_READ_BYTES",
+    "DEFAULT_MAX_FILE_BYTES",
+    "DEFAULT_MAX_QUERY_LENGTH",
+    "DEFAULT_MAX_RESULTS",
+    "MAX_MAX_FILE_BYTES",
+    "MAX_MAX_RESULTS",
+    "SearchCodeResult",
+    "SearchCodeTool",
+    "SearchMatch",
+    "search_code",
     "ReadFileResult",
     "ReadFileTool",
     "read_file",

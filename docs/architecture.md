@@ -403,6 +403,36 @@ Path handling uses normalized `pathlib` semantics rather than string-prefix chec
 
 Phase 3.2 does not add `search_code`, grep/ripgrep/regex/AST search, ProjectContext expansion, framework detection, planning, LLM tool-calling, memory, RAG, terminal execution, file modification, or an Agent loop. The LLM, inference engine, tokenizer, checkpoint manager, and existing `fodci` terminal application remain independent from filesystem access.
 
+## Phase 3.3 code search tool
+
+Phase 3.3 adds a third standalone tool over the same filesystem boundary. It does not connect the tools to the LLM or introduce orchestration:
+
+```text
+Explicit project_root + query + optional scope
+                    ↓
+SearchCodeTool.run(arguments)
+                    ↓ validation + shared ToolError boundary
+search_code(project_root, query, path, options)
+                    ↓
+Deterministic scope traversal
+                    ├── default generated/dependency exclusions
+                    ├── symlink and special-entry skip policy
+                    ├── bounded UTF-8 binary reads
+                    ├── literal or explicit regex line matching
+                    └── max results / bytes / depth / directories
+                    ↓
+SearchCodeResult
+    └── SearchMatch(path, line, line_number, column_start, column_end)
+```
+
+`SearchCodeTool` reuses the core `Tool` protocol, package-owned `ToolMetadata`, `ToolError`, and `ToolErrorCode`. Its required inputs are `project_root` and `query`; optional inputs are `path`, `max_results`, `max_file_bytes`, `case_sensitive`, and `use_regex`. The default mode is literal substring search. Regex is compiled only when `use_regex=True`, and malformed expressions return `INVALID_REGEX` rather than escaping or crashing. Literal mode escapes regex metacharacters. Columns are 0-based Unicode code-point offsets on the returned source line; line numbers are 1-based.
+
+Search scope uses the explicit root or an explicit root-relative file/directory path. Root/path normalization rejects traversal, absolute escape, Windows drive/UNC bypass, mixed-separator escape, and symlink components. Directory traversal uses the centralized Phase 3.1 exclusions and deterministic normalized relative-path order. Explicitly selecting an excluded directory still yields no searched files, preserving the default exclusion policy. Symlinks and special entries are never followed or searched.
+
+The implementation reads regular files in bounded binary chunks, checks `max_file_bytes` before and during reading, and decodes strict UTF-8. Invalid UTF-8 files are skipped with `skipped_reasons=("invalid_utf8",)`; no replacement or ignore decoding is used. Oversized files are skipped without partial matches and mark the result truncated with `max_file_bytes`. A result distinguishes no matches from bounded/truncated search using `truncated` and `truncation_reason`; other reasons include `max_results`, `max_depth`, and `max_directories`. Query length and maximum result/file-byte options are themselves bounded to prevent untrusted input from requesting unbounded work.
+
+The tool returns only matching source lines and match coordinates, never complete file content, and never prints or logs source. It does not invoke grep, ripgrep, subprocesses, shell commands, network APIs, project imports, mutation, or execution. `ProjectContext` remains root-only, and the existing `fodci` application is unchanged. Later phases may add orchestration, but Phase 3.3 intentionally does not implement search selection by the LLM, project understanding, file modification, terminal execution, memory, RAG, or an Agent loop.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -411,7 +441,7 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files` and `ReadFileTool`/`read_file` with structured results/errors, deterministic boundaries, symlink safety, and bounds | `search_code`, file mutation, terminal execution, LLM tool-calling, Agent loop |
+| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files`, `ReadFileTool`/`read_file`, and `SearchCodeTool`/`search_code` with structured results/errors, deterministic boundaries, symlink safety, and bounds | Project understanding, file mutation, terminal execution, LLM tool-calling, Agent loop |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
