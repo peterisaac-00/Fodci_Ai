@@ -3,6 +3,12 @@
 from backend_ai.core.contracts import Tool
 from backend_ai.tools.base import ToolError, ToolErrorCode, ToolMetadata
 from backend_ai.tools.read_file import DEFAULT_MAX_READ_BYTES, ReadFileResult, ReadFileTool, read_file
+from backend_ai.tools.project_context import (
+    ProjectContext,
+    ProjectContextBuilder,
+    ProjectContextTool,
+    project_context,
+)
 from backend_ai.tools.project_structure import (
     DEFAULT_MAX_INSPECTED_FILES,
     DEFAULT_MAX_STRUCTURE_FILE_BYTES,
@@ -44,6 +50,10 @@ __all__ = [
     "ToolErrorCode",
     "ToolMetadata",
     "DEFAULT_MAX_READ_BYTES",
+    "ProjectContext",
+    "ProjectContextBuilder",
+    "ProjectContextTool",
+    "project_context",
     "DEFAULT_MAX_INSPECTED_FILES",
     "DEFAULT_MAX_STRUCTURE_FILE_BYTES",
     "MAX_MAX_INSPECTED_FILES",

@@ -85,6 +85,7 @@ class ProjectStructureResult:
     test_frameworks: tuple[Detection, ...]
     infrastructure: tuple[Detection, ...]
     directories: tuple[DirectorySummary, ...]
+    project_files: tuple[str, ...]
     important_files: tuple[str, ...]
     entry_points: tuple[Detection, ...]
     config_files: tuple[str, ...]
@@ -108,6 +109,7 @@ class ProjectStructureResult:
             "test_frameworks": [item.to_dict() for item in self.test_frameworks],
             "infrastructure": [item.to_dict() for item in self.infrastructure],
             "directories": [item.to_dict() for item in self.directories],
+            "project_files": list(self.project_files),
             "important_files": list(self.important_files),
             "entry_points": [item.to_dict() for item in self.entry_points],
             "config_files": list(self.config_files),
@@ -263,6 +265,7 @@ def project_structure(
         test_frameworks=test_frameworks,
         infrastructure=infrastructure,
         directories=directory_results,
+        project_files=file_paths,
         important_files=important_files,
         entry_points=entry_points,
         config_files=config_files,
@@ -569,6 +572,16 @@ def _detect_databases(files: tuple[DiscoveredFile, ...], texts: dict[str, str]) 
     return tuple(sorted(detections, key=lambda item: item.name.casefold()))
 
 
+def _source_import_evidence(text: str, module: str) -> bool:
+    import_prefixes = (f"import {module}", f"from {module} import")
+    require_patterns = (f'require("{module}")', f"require('{module}')")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(import_prefixes) or any(pattern in stripped for pattern in require_patterns):
+            return True
+    return False
+
+
 def _detect_test_frameworks(files: tuple[DiscoveredFile, ...], test_directories: tuple[str, ...], texts: dict[str, str]) -> tuple[Detection, ...]:
     detections: list[Detection] = []
     test_texts = {
@@ -579,13 +592,23 @@ def _detect_test_frameworks(files: tuple[DiscoveredFile, ...], test_directories:
     pytest_evidence = tuple(
         f"{path}: pytest evidence"
         for path, text in test_texts.items()
-        if re.search(r"(?:\bimport\s+pytest\b|\bfrom\s+pytest\b|\bpytest\.)", text, re.IGNORECASE)
-        or (_is_dependency_file(path) and re.search(r"\bpytest\b", text, re.IGNORECASE))
+        if (_is_dependency_file(path) and re.search(r"\bpytest\b", text, re.IGNORECASE))
+        or _source_import_evidence(text, "pytest")
     )
     pytest_evidence += tuple(f"{path}: pytest configuration" for path in files_to_paths(files) if _basename(path) in {"pytest.ini", "tox.ini"})
-    unittest_evidence = tuple(f"{path}: unittest import/evidence" for path, text in test_texts.items() if re.search(r"\bimport\s+unittest\b|\bfrom\s+unittest\b", text, re.IGNORECASE))
-    jest_evidence = tuple(f"{path}: Jest evidence" for path, text in test_texts.items() if re.search(r"(?:[\"']jest[\"']|\bjest\s*[:.({]|from\s+['\"]jest|require\s*\(\s*['\"]jest)", text, re.IGNORECASE))
-    vitest_evidence = tuple(f"{path}: Vitest evidence" for path, text in test_texts.items() if re.search(r"(?:[\"']vitest[\"']|\bvitest\s*[:.({]|from\s+['\"]vitest|require\s*\(\s*['\"]vitest)", text, re.IGNORECASE))
+    unittest_evidence = tuple(f"{path}: unittest import/evidence" for path, text in test_texts.items() if _source_import_evidence(text, "unittest"))
+    jest_evidence = tuple(
+        f"{path}: Jest evidence"
+        for path, text in test_texts.items()
+        if (_is_dependency_file(path) and re.search(r"[\"']jest[\"']\s*:", text, re.IGNORECASE))
+        or _source_import_evidence(text, "jest")
+    )
+    vitest_evidence = tuple(
+        f"{path}: Vitest evidence"
+        for path, text in test_texts.items()
+        if (_is_dependency_file(path) and re.search(r"[\"']vitest[\"']\s*:", text, re.IGNORECASE))
+        or _source_import_evidence(text, "vitest")
+    )
     for name, evidence in (("pytest", pytest_evidence), ("unittest", unittest_evidence), ("Jest", jest_evidence), ("Vitest", vitest_evidence)):
         detection = _make_detection(name, evidence)
         if detection:

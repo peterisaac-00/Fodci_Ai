@@ -461,6 +461,32 @@ The scan is bounded by Phase 3.1 discovery limits plus `max_file_bytes` (default
 
 Every result is deterministic: inventory paths, classifications, languages, detections, evidence, important files, and entry points are sorted with normalized relative paths. Discovery truncation and bounded evidence warnings are explicit. The tool is not connected to the LLM, `InferenceEngine`, model, tokenizer, checkpoint manager, `ProjectContext`, or Agent loop. It does not implement deep project understanding, AST/dependency graphs, planning, file modification, terminal execution, memory, RAG, or later Phase 3 behavior.
 
+## Phase 3.5 canonical project context
+
+Phase 3.5 adds a canonical context layer over the structural tool output without adding orchestration:
+
+```text
+Explicit project_root
+        ↓
+ProjectContextTool.run(arguments)
+        ↓ validation + shared ToolError boundary
+ProjectContextBuilder.build(...)
+        ↓
+project_structure(...)
+        ↓
+ProjectStructureResult
+        ↓ safe structural projection
+ProjectContext
+```
+
+`ProjectContextBuilder` composes `project_structure`; it does not implement a second filesystem scanner and does not execute `list_files`, `read_file`, or source code independently. The structure result now also exposes normalized `project_files`, allowing the context to preserve a bounded project inventory without raw contents or absolute file paths.
+
+`ProjectContext` is an immutable dataclass. It separates structural facts (root, project type, languages, detections, directories, files, entry points) from derived context (`stack_summary`), traceability (`evidence`), quality (`confidence`), limitations (`warnings`), and completeness (`truncated`, `truncation_reason`, `completeness`). The stack summary is a deterministic join of evidence-backed language/runtime, framework, database, test, and infrastructure names; when no meaningful stack evidence exists it returns an explicit insufficient-evidence label.
+
+Context inherits the structure tool's root normalization, symlink/path safety, default exclusions, sensitive-file protection, and bounded discovery. Targeted inspection limits from Phase 3.4 are promoted to partial context when warnings indicate `max_inspected_files` or byte limits. No source bodies, credentials, API keys, `.env` content, private keys, or certificates enter the context. Serialization through `to_dict()` is deterministic and JSON-compatible.
+
+`ProjectContextTool` is a standalone implementation of the existing `Tool` protocol with explicit `project_root` and the same bounded discovery/inspection options. It is not connected to the model, tokenizer, inference engine, checkpoint manager, CLI, LLM tool-calling, planning, memory, RAG, terminal execution, file mutation, or Agent loop. Phase 3.5 establishes a canonical data layer only; later phases may consume it.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -469,7 +495,7 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files`, `ReadFileTool`/`read_file`, `SearchCodeTool`/`search_code`, and `ProjectStructureTool`/`project_structure` with structured results/errors, deterministic boundaries, symlink safety, and bounds | ProjectContext, file mutation, terminal execution, LLM tool-calling, Agent loop |
+| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files`, `ReadFileTool`/`read_file`, `SearchCodeTool`/`search_code`, `ProjectStructureTool`/`project_structure`, and `ProjectContextTool`/`project_context` with structured results/errors, deterministic boundaries, symlink safety, and bounds | Agent loop, file mutation, terminal execution, LLM tool-calling |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
@@ -490,6 +516,6 @@ The repository implements only these foundation pieces:
 | Command parser | Recognize leading-slash syntax, normalize names, preserve arguments | Command behavior, execution, Agent or LLM calls |
 | Command dispatcher | Route registered handlers and report unknown commands | `/status` or future command behavior |
 | Built-in commands | Provide deterministic local `/help` and `/exit` handlers | LLM, Agent, external API, or process-level `sys.exit()` behavior |
-| Project context | Hold one validated absolute project root | File lists, framework detection, Git or model metadata, project scanning |
+| Project context | Hold one validated absolute project root in core; expose a separate immutable structural `ProjectContext` through the tools layer, built from `ProjectStructureResult` | Project understanding, Git/model metadata, planning, memory, LLM tool-calling, Agent orchestration |
 
 No package imports another component's future concrete implementation. Any future dependency that would create a cycle should be inverted through a contract in `core` or a deliberately owned boundary module.
