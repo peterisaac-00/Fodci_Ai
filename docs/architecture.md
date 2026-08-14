@@ -551,6 +551,37 @@ WriteFileResult or structured ToolError
 
 `ToolRegistry.default()` intentionally remains the five-tool Phase 3 read-only registry. `ToolRegistry.with_write_file()` is an explicit opt-in registry for direct Phase 4.1 consumers. `AgentLoop` still calls `ToolRegistry.default()` when no registry is injected, so no model-generated action can write a file merely because Phase 4.1 is installed. No edit/delete/diff/Git/command/test/execution or autonomous modification workflow is included.
 
+## Phase 4.2 exact edit tool
+
+Phase 4.2 adds a targeted existing-file edit primitive rather than an ambiguous whole-file write:
+
+```text
+edit_file(root, path, old_content, new_content)
+        ↓
+validate existing regular UTF-8 target and bounded inputs
+        ↓
+count exact literal matches
+        ├── 0 → MATCH_NOT_FOUND, unchanged
+        ├── >1 → AMBIGUOUS_MATCH, unchanged
+        └── 1 → construct exact replacement in memory
+        ↓
+optimistic snapshot verification
+        ↓
+write + fsync private temporary replacement
+        ↓
+permission-preserving atomic os.replace
+        ↓
+EditFileResult or structured ToolError
+```
+
+`EditFileTool` reuses the Phase 3/4.1 root and symlink validation conventions. The target must be an existing readable and writable regular file inside the explicit root. Matching is literal, case-sensitive, exact decoded UTF-8 text; whitespace, line endings, indentation, Unicode, and final-newline state are not normalized. Empty old text, fuzzy/regex matching, and whole-file replacement are rejected. A no-op where `old_content == new_content` returns `changed=False` without rewriting the inode.
+
+The default 1 MiB bounds independently cover the existing file, old text, new text, and resulting file. The immutable `EditFileResult` reports relative path, filename, original/new byte sizes, signed byte delta, match count, selected occurrence, and changed status. Errors use the shared `ToolError` system with `FILE_NOT_FOUND`, `MATCH_NOT_FOUND`, `AMBIGUOUS_MATCH`, `INVALID_UTF8`, `FILE_TOO_LARGE`, `PATH_OUTSIDE_ROOT`, `NOT_A_FILE`, `PERMISSION_DENIED`, `CONCURRENT_MODIFICATION`, `INVALID_ARGUMENT`, and `FILESYSTEM_ERROR` as applicable.
+
+Real edits preserve the original permission mode, including executable bits, by writing a complete private temporary file, flushing and synchronizing it, then atomically replacing the target. The original remains unchanged for validation, matching, encoding, size, temporary-write, or replacement failures; temporary files are cleaned. An optimistic check compares device/inode/size/mtime/ctime fingerprints and SHA-256 content identity before replacement. This prevents overwriting changes observed during preparation; a filesystem race after the final check remains platform-dependent and is explicitly not claimed to be absolutely race-free.
+
+`ToolRegistry.with_file_modification()` is an explicit Phase 4.2 registry containing the read-only tools plus `write_file` and `edit_file`. `ToolRegistry.default()` and `ToolRegistry.with_write_file()` remain unchanged. `AgentLoop` does not automatically receive or invoke `edit_file`; no planning, self-correction, deletion, Git, command execution, or autonomous modification workflow is included.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -559,8 +590,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file` with structured result/errors, deterministic boundaries, symlink safety, byte bounds, and atomic no-overwrite publication; keep mutation opt-in | Edit/delete, diffs, Git, terminal execution, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling mutation by default | Agent modification loops, command execution, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file` and exact existing-file `EditFileTool`/`edit_file` with structured results/errors, deterministic boundaries, symlink safety, byte bounds, atomic publication, and opt-in mutation | Delete, diffs, Git, terminal execution, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit mutation by default | Agent modification loops, command execution, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

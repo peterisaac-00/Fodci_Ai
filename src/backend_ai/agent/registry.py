@@ -15,6 +15,7 @@ from backend_ai.tools import (
     SearchCodeTool,
     ToolMetadata,
     WriteFileTool,
+    EditFileTool,
 )
 
 
@@ -89,6 +90,12 @@ class ToolRegistry:
         """Create an explicit Phase 4.1 registry without changing AgentLoop defaults."""
 
         return cls((*cls.default()._tool_instances(), WriteFileTool()))
+
+    @classmethod
+    def with_file_modification(cls) -> "ToolRegistry":
+        """Create an explicit Phase 4.2 registry with create and edit tools."""
+
+        return cls((*cls.with_write_file()._tool_instances(), EditFileTool()))
 
     def _tool_instances(self) -> tuple[Tool, ...]:
         """Return registered concrete tools for controlled registry composition."""

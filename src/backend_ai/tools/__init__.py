@@ -10,6 +10,15 @@ from backend_ai.tools.write_file import (
     WriteFileTool,
     write_file,
 )
+from backend_ai.tools.edit_file import (
+    DEFAULT_MAX_FILE_BYTES,
+    DEFAULT_MAX_NEW_CONTENT_BYTES,
+    DEFAULT_MAX_OLD_CONTENT_BYTES,
+    DEFAULT_MAX_RESULT_BYTES,
+    EditFileResult,
+    EditFileTool,
+    edit_file,
+)
 from backend_ai.tools.project_context import (
     ProjectContext,
     ProjectContextBuilder,
@@ -59,6 +68,10 @@ __all__ = [
     "DEFAULT_MAX_READ_BYTES",
     "DEFAULT_MAX_PARENT_DIRECTORIES",
     "DEFAULT_MAX_WRITE_BYTES",
+    "DEFAULT_MAX_FILE_BYTES",
+    "DEFAULT_MAX_NEW_CONTENT_BYTES",
+    "DEFAULT_MAX_OLD_CONTENT_BYTES",
+    "DEFAULT_MAX_RESULT_BYTES",
     "ProjectContext",
     "ProjectContextBuilder",
     "ProjectContextTool",
@@ -88,6 +101,9 @@ __all__ = [
     "WriteFileResult",
     "WriteFileTool",
     "write_file",
+    "EditFileResult",
+    "EditFileTool",
+    "edit_file",
     "DEFAULT_IGNORED_DIRECTORIES",
     "DEFAULT_MAX_DEPTH",
     "DEFAULT_MAX_DIRECTORIES",
