@@ -372,7 +372,36 @@ The default ignore set is centralized and deliberately small: `.git`, `__pycache
 
 All symbolic links are skipped, including symlinked files, directories outside the root, and recursive links. Special filesystem entries such as sockets and devices are ignored rather than treated as regular files. The result reports `truncated=True` and a reason when `max_files`, `max_directories`, or `max_depth` stops traversal, so bounded discovery never silently presents a complete-looking result.
 
-The tool layer owns filesystem access. The LLM does not receive filesystem APIs, the CLI does not invoke the tool automatically, and no Agent loop or tool-calling protocol is added. `ProjectContext` remains a validated root-only dataclass and is not expanded with file lists or project analysis. Later phases may add `read_file`, `search_code`, and orchestration, but they are intentionally absent here.
+The tool layer owns filesystem access. The LLM does not receive filesystem APIs, the CLI does not invoke the tool automatically, and no Agent loop or tool-calling protocol is added. `ProjectContext` remains a validated root-only dataclass and is not expanded with file lists or project analysis. Later phases may add `search_code` and orchestration, but they are intentionally absent here.
+
+## Phase 3.2 read file tool
+
+Phase 3.2 adds the second concrete filesystem tool while reusing the Phase 3.1 `Tool`, `ToolError`, `ToolErrorCode`, root validation, and path-safety conventions:
+
+```text
+Explicit project_root + relative path
+              ↓
+ReadFileTool.run(arguments)
+              ↓ validation + shared ToolError boundary
+read_file(project_root, path, max_bytes)
+              ├── normalize root-relative request
+              ├── reject traversal/absolute escape
+              ├── reject every symlink component
+              ├── validate regular file
+              ├── check bounded byte size
+              ├── read binary once
+              └── decode strict UTF-8
+              ↓
+ReadFileResult(relative_path, file_name, content, encoding, size_bytes)
+```
+
+`ReadFileTool` remains structurally compatible with the existing core `Tool` protocol and exposes explicit metadata requiring `project_root` and `path`, with an optional non-negative `max_bytes`. The direct `read_file()` function returns an immutable `ReadFileResult`; it does not print content or log source bodies. The default maximum is 1 MiB. Files exactly at the limit are accepted, while larger files fail with `FILE_TOO_LARGE` before partial content can be returned; a second bounded read check handles growth between stat and open.
+
+The tool reads regular files as bytes and decodes strictly as UTF-8. It preserves spaces, tabs, indentation, Unicode/Arabic text, CRLF/LF line endings, and final-newline behavior. Invalid byte sequences return `INVALID_UTF8` rather than using replacement or ignore modes. No BOM stripping is performed, so BOM behavior remains predictable through normal UTF-8 decoding. Directories, FIFOs, sockets, devices, and other non-regular entries return `NOT_A_FILE`.
+
+Path handling uses normalized `pathlib` semantics rather than string-prefix checks. Relative `.`/`..` segments and mixed separators are normalized; absolute paths are allowed only when they remain within the explicit root, and Windows drive/UNC-looking paths cannot bypass it. Every symlink component is rejected, including internal links, external links, broken links, and loops, matching Phase 3.1's safer skip policy. The tool never mutates, executes, downloads, or accesses the network.
+
+Phase 3.2 does not add `search_code`, grep/ripgrep/regex/AST search, ProjectContext expansion, framework detection, planning, LLM tool-calling, memory, RAG, terminal execution, file modification, or an Agent loop. The LLM, inference engine, tokenizer, checkpoint manager, and existing `fodci` terminal application remain independent from filesystem access.
 
 ## Present implementation
 
@@ -382,7 +411,7 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files` with structured results/errors, deterministic ordering, ignore rules, symlink safety, and bounds | `read_file`, `search_code`, file mutation, terminal execution, LLM tool-calling, Agent loop |
+| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files` and `ReadFileTool`/`read_file` with structured results/errors, deterministic boundaries, symlink safety, and bounds | `search_code`, file mutation, terminal execution, LLM tool-calling, Agent loop |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
