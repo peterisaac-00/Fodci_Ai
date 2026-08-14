@@ -1,10 +1,10 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 3.3 — Agent Code Search.**
+> **Current status: Phase 3.4 — Agent Project Structure.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
-This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. Phase 3.2 adds the second read-only tool, `read_file`, for bounded exact UTF-8 reading inside that root. Phase 3.3 adds the third standalone read-only tool, `search_code`, for bounded literal or explicitly enabled regex search across safe UTF-8 source files. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, file mutation, terminal execution, RAG, memory, or autonomous loop is present.
+This repository includes the complete Phase 1 CLI foundation, Phase 2.1's minimal typed LLM provider boundary, Phase 2.2's small decoder-only Transformer architecture, Phase 2.3's reversible byte-level tokenizer, Phase 2.4's local streaming dataset pipeline, Phase 2.5's CPU-friendly training engine, Phase 2.6's first real Fodci Tiny v1 training experiment, Phase 2.7's metadata-aware checkpoint manager, Phase 2.8's CPU-first evaluation pipeline, Phase 2.9's local backend-engineering coding corpus and manifest layer, Phase 2.10's local instruction-training dataset and response-masked training path, and Phase 2.11's local CPU inference API. Phase 2.12 connects that existing inference path to the official `fodci` terminal session through `FodciLocalProvider`. Phase 3.1 adds the first read-only Agent tool, `list_files`, for safe deterministic discovery of an explicitly selected project root. Phase 3.2 adds the second read-only tool, `read_file`, for bounded exact UTF-8 reading inside that root. Phase 3.3 adds the third standalone read-only tool, `search_code`, for bounded literal or explicitly enabled regex search across safe UTF-8 source files. Phase 3.4 adds `project_structure`, a bounded evidence-based structural detector for technologies, components, languages, configurations, tests, and likely entry points. The model remains intentionally tiny at 11,424,400 parameters; no external LLM, pretrained component, file mutation, terminal execution, RAG, memory, or autonomous loop is present.
 
 ## Purpose and Long-Term Vision
 
@@ -68,7 +68,7 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 │   ├── memory/         # Future memory boundary
 │   ├── commands/       # Command parsing and dispatch boundaries
 │   ├── terminal/       # Session lifecycle, commands, and provider-backed input
-│   └── tools/          # Tool protocol, structured errors, list_files, read_file, search_code
+│   └── tools/          # Tool protocol, filesystem tools, and project structure detection
 ├── tests/
 │   ├── unit/           # Foundation, CLI, model, tokenizer, dataset, and training tests
 │   └── integration/    # CLI subprocess and cross-component tests
@@ -232,6 +232,18 @@ Search is bounded by `max_results` (default 100, maximum 10,000), `max_file_byte
 
 `SearchCodeTool` exposes the existing `Tool` protocol and metadata schema but is not connected to `fodci`, the LLM, or an Agent loop. Phase 3.3 does not implement ProjectContext expansion, framework detection, project understanding, planning, memory, RAG, file modification, terminal execution, or Phase 3.4+ behavior.
 
+## Phase 3.4 project structure
+
+`backend_ai.tools.project_structure(project_root)` is a standalone read-only structural detector. It reuses `list_files` for deterministic inventory and `read_file` only for a bounded set of known dependency/configuration/entry-point files. It does not read every source file, execute project code, import the target project, or use an LLM.
+
+The immutable `ProjectStructureResult` reports project type, framework detections, language counts, package managers, databases, test frameworks, infrastructure, classified directories, important/config/dependency files, test/source directories, likely entry points, overall confidence, evidence, warnings, and truncation metadata. Individual technology detections carry their own `name`, `confidence` (`high`/`medium`), and sorted evidence items. Evidence strings correspond to observed paths or bounded content observations; ambiguous directory/file names alone do not claim a framework.
+
+The detector covers generic Python and Node projects, Django, FastAPI, Flask, Express, React, JavaScript, TypeScript, PostgreSQL, MySQL, MariaDB, SQLite, MongoDB, pytest, unittest, Jest, Vitest, generic test structure, Docker, Docker Compose, and common CI configuration. It also classifies common source/test/documentation/database/configuration/scripts directories and detects common Python/Node package managers and entry-point conventions.
+
+Structural inspection is bounded by the existing discovery limits plus `max_file_bytes` (default 64 KiB, maximum 1 MiB) and `max_inspected_files` (default 64, maximum 256). Sensitive files such as `.env`, credential/secret/private/password-named files, and key/certificate files are excluded from content inspection; their contents are never returned. If discovery or targeted inspection is incomplete, the result reports `truncated` or warnings rather than presenting an unqualified complete analysis.
+
+The result is deterministic: files, directories, languages, detections, evidence, important files, and entry points are normalized and sorted. This is structural detection, not full project understanding. Phase 3.4 does not add `ProjectContext`, framework execution, dependency graphs, AST analysis, code summarization, planning, tool selection by the LLM, file modification, terminal execution, memory, RAG, or an Agent loop.
+
 ## Configuration and Logging
 
 Copy `.env.example` to `.env` only for local development. `.env` is ignored by Git. The settings abstraction recognizes `LOG_LEVEL` and `PROJECT_ROOT`, uses the current working directory when `PROJECT_ROOT` is omitted, and validates the log level. During application startup, the resolved project root must exist and be a directory; an explicitly invalid path fails clearly without falling back to the current working directory. Phase 1.7 does not inspect files inside the root. The example also documents reserved names for later stages without reading them yet.
@@ -262,7 +274,7 @@ Future implementation must preserve explicit project boundaries, keep secrets ou
 
 ## Non-Goals for the Current Phase
 
-Phase 3.3 adds only the read-only `search_code` Agent tool, its structured match/result models, literal and explicit regex semantics, deterministic ordering, safe exclusions, UTF-8 skip policy, and bounded search. It retains Phase 3.1 and Phase 3.2 and does not add ProjectContext expansion, project understanding, framework detection, planning, LLM tool-calling, file mutation, terminal execution, memory, RAG, autonomous behavior, or any later Phase 3 functionality.
+Phase 3.4 adds only the read-only `project_structure` Agent tool, its immutable structural result and evidence/confidence model, bounded known-file inspection, deterministic classifications, and safe sensitive-file handling. It retains Phase 3.1–3.3 and does not add ProjectContext expansion, full project understanding, AST/dependency analysis, planning, LLM tool-calling, file mutation, terminal execution, memory, RAG, autonomous behavior, or any later Phase 3 functionality.
 
 ## License
 

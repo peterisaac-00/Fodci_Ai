@@ -433,6 +433,34 @@ The implementation reads regular files in bounded binary chunks, checks `max_fil
 
 The tool returns only matching source lines and match coordinates, never complete file content, and never prints or logs source. It does not invoke grep, ripgrep, subprocesses, shell commands, network APIs, project imports, mutation, or execution. `ProjectContext` remains root-only, and the existing `fodci` application is unchanged. Later phases may add orchestration, but Phase 3.3 intentionally does not implement search selection by the LLM, project understanding, file modification, terminal execution, memory, RAG, or an Agent loop.
 
+## Phase 3.4 project structure tool
+
+Phase 3.4 adds structural detection as a fourth standalone tool. It reuses `list_files` for the bounded deterministic inventory and `read_file` for a small allowlist of known dependency/configuration/entry-point files:
+
+```text
+Explicit project_root
+        ↓
+ProjectStructureTool.run(arguments)
+        ↓ validation + shared ToolError boundary
+project_structure(project_root, bounded options)
+        ├── list_files inventory
+        ├── classify files/directories/languages
+        ├── select known non-sensitive inspection candidates
+        ├── read bounded UTF-8 evidence only
+        ├── run modular evidence detectors
+        └── sort all logical output
+        ↓
+ProjectStructureResult
+```
+
+`ProjectStructureResult` is immutable and contains project type, framework detections, language counts, package managers, databases, test frameworks, infrastructure, classified directories, important/config/dependency files, test/source directories, entry points, overall confidence, evidence, warnings, and truncation metadata. Individual `Detection` records carry a name, confidence (`high`/`medium`), and sorted evidence strings. Evidence is tied to observed paths or bounded content matches; directory names such as `django/` or files such as `flask.py` do not claim frameworks by themselves.
+
+The detector covers generic Python/Node/JavaScript/TypeScript projects, Django, FastAPI, Flask, Express, React, PostgreSQL, MySQL, MariaDB, SQLite, MongoDB, pytest, unittest, Jest, Vitest, generic test structure, Docker, Docker Compose, common CI, common package managers, language counts, major directory categories, important files, and likely entry points. It is heuristic and structural, not a static analyzer or a certainty claim.
+
+The scan is bounded by Phase 3.1 discovery limits plus `max_file_bytes` (default 64 KiB, maximum 1 MiB) and `max_inspected_files` (default 64, maximum 256). Sensitive names such as `.env`, credential/secret/private/password files, and key/certificate files are never passed to `read_file`; their contents are never returned. The tool preserves the shared root/path/symlink safety model and never executes, imports, mutates, downloads, logs, or accesses the network.
+
+Every result is deterministic: inventory paths, classifications, languages, detections, evidence, important files, and entry points are sorted with normalized relative paths. Discovery truncation and bounded evidence warnings are explicit. The tool is not connected to the LLM, `InferenceEngine`, model, tokenizer, checkpoint manager, `ProjectContext`, or Agent loop. It does not implement deep project understanding, AST/dependency graphs, planning, file modification, terminal execution, memory, RAG, or later Phase 3 behavior.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -441,7 +469,7 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files`, `ReadFileTool`/`read_file`, and `SearchCodeTool`/`search_code` with structured results/errors, deterministic boundaries, symlink safety, and bounds | Project understanding, file mutation, terminal execution, LLM tool-calling, Agent loop |
+| Tool layer | Reuse the `Tool` protocol and implement read-only `ListFilesTool`/`list_files`, `ReadFileTool`/`read_file`, `SearchCodeTool`/`search_code`, and `ProjectStructureTool`/`project_structure` with structured results/errors, deterministic boundaries, symlink safety, and bounds | ProjectContext, file mutation, terminal execution, LLM tool-calling, Agent loop |
 | Agent adapter | Accept an injected provider and delegate one request | Planning, tools, memory, execution, autonomous loop |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
