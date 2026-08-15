@@ -20,6 +20,8 @@ from backend_ai.tools import (
     GitDiffTool,
     GitStatusTool,
     RunCommandTool,
+    PolicyRunCommandTool,
+    CommandPolicy,
 )
 
 
@@ -112,6 +114,12 @@ class ToolRegistry:
         """Create an explicit Phase 5.1 registry without changing AgentLoop defaults."""
 
         return cls((*cls.default()._tool_instances(), RunCommandTool()))
+
+    @classmethod
+    def with_command_policy(cls, policy: CommandPolicy | None = None) -> "ToolRegistry":
+        """Create an explicit Phase 5.2 policy-wrapped execution registry."""
+
+        return cls((*cls.default()._tool_instances(), PolicyRunCommandTool(policy)))
 
     def _tool_instances(self) -> tuple[Tool, ...]:
         """Return registered concrete tools for controlled registry composition."""

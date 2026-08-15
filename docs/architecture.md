@@ -737,7 +737,29 @@ Working-directory validation reuses the existing root and path conventions. The 
 
 `CommandResult` distinguishes start failure, executable-not-found, permission failure, invalid argument/working directory, non-zero exit, timeout, and output-limit termination. stdout and stderr remain separate, each is independently bounded, and invalid UTF-8 is replacement-decoded with an explicit validity flag and warning. Timeout handling kills and waits for the direct process where supported; process-tree termination is platform-dependent and not claimed to be perfect. stdin is `DEVNULL`, so execution never waits for an interactive terminal.
 
-`RunCommandTool` is exposed only through `ToolRegistry.with_command_execution()`. `ToolRegistry.default()` and `AgentLoop` remain unchanged. This is execution plumbing only: Phase 5.2 command safety policy, allowlists/denylists, autonomous execution, application running, test running, result parsing, package installation, network capability, and Git mutation are intentionally absent.
+`RunCommandTool` is exposed only through `ToolRegistry.with_command_execution()`. `ToolRegistry.default()` and `AgentLoop` remain unchanged.
+
+## Phase 5.2 command safety and policy
+
+Phase 5.2 adds a deterministic policy layer above the existing executor without modifying its `shell=False`, argv, cwd, output, timeout, or result guarantees:
+
+```text
+CommandRequest
+      ↓
+CommandPolicy.evaluate()
+      ├── denied → structured ToolError; no Popen
+      └── allowed → existing run_command(request)
+                         ↓
+                    CommandResult
+```
+
+`CommandPolicy` is immutable and independently testable. `CommandDecision` contains allowed/denied state, `CommandRiskLevel`, normalized secret-safe argv, matched rule/category, reason, warnings, and a shared `ToolErrorCode`. The default policy is deny-by-default. It recognizes only bounded Python/Node version commands and read-only Git inspection; explicit exact-argv or approved executable-path rules remain bounded and cannot override shell/path safety invariants.
+
+Evaluation precedence rejects malformed argv, shell interpreters and emulation patterns, dangerous executable families, destructive/privileged/package/network/system/Git mutation categories, suspicious arguments, unsafe absolute/traversal/Windows/UNC paths, symlink-escaping working directories, unknown executable paths, and disallowed environment variables before any process is started. Environment inheritance is disabled by default in policy-wrapped requests; explicit environment variables use an allowlist, and values never enter decisions or error messages.
+
+`PolicyRunCommandTool` is an opt-in wrapper that calls `run_command` only after an allowed decision. Denials raise shared structured errors such as `COMMAND_NOT_ALLOWED`, `SHELL_BYPASS_ATTEMPT`, `UNSAFE_ARGUMENT`, `UNSAFE_WORKING_DIRECTORY`, `UNSAFE_EXECUTABLE`, `ENVIRONMENT_NOT_ALLOWED`, `GIT_MUTATION_DENIED`, `NETWORK_COMMAND_DENIED`, or `PACKAGE_OPERATION_DENIED`. The policy never invokes a shell, parses shell syntax, calls the AgentLoop, mutates files/Git, accesses the network, or installs packages. `ToolRegistry.with_command_policy()` is explicit; `ToolRegistry.default()` and the low-level `with_command_execution()` registry remain unchanged.
+
+> **Command Safety Policy is a security boundary, not a guarantee that arbitrary developer commands are safe.**
 
 ## Present implementation
 
@@ -747,8 +769,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, and opt-in `RunCommandTool`/`run_command` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution | Git mutation, terminal execution policy, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, or command execution by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, or RunCommandTool | Agent modification loops, automatic command execution, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, and opt-in `PolicyRunCommandTool`/`CommandPolicy` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution | Git mutation, terminal execution beyond explicit policy boundary, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, command execution, or policy-wrapped execution by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, RunCommandTool, or PolicyRunCommandTool | Agent modification loops, automatic command execution, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

@@ -19,6 +19,14 @@ from backend_ai.tools.edit_file import (
     EditFileTool,
     edit_file,
 )
+from backend_ai.tools.command_policy import (
+    CommandDecision,
+    CommandPolicy,
+    CommandRiskLevel,
+    CommandRule,
+    PolicyCommandResult,
+    PolicyRunCommandTool,
+)
 from backend_ai.tools.command import (
     CommandRequest,
     CommandResult,
@@ -176,6 +184,12 @@ __all__ = [
     "edit_file",
     "DeleteFileResult",
     "DeleteFileTool",
+    "CommandDecision",
+    "CommandPolicy",
+    "CommandRiskLevel",
+    "CommandRule",
+    "PolicyCommandResult",
+    "PolicyRunCommandTool",
     "CommandRequest",
     "CommandResult",
     "DEFAULT_COMMAND_TIMEOUT_SECONDS",
