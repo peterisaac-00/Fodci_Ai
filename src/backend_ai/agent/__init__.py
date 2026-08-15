@@ -171,6 +171,17 @@ from backend_ai.agent.completion import (
     TaskCompletionVerifier,
     verify_task_completion,
 )
+from backend_ai.agent.final_verification import (
+    FinalCriterionStatus,
+    FinalEvidenceStrength,
+    FinalVerification,
+    FinalVerificationConfig,
+    FinalVerificationCriterion,
+    FinalVerificationRequest,
+    FinalVerificationResult,
+    FinalVerificationStatus,
+    verify_final_state,
+)
 from backend_ai.agent.recovery import (
     ErrorCategory,
     ErrorClassification,
@@ -368,6 +379,15 @@ __all__ = [
     "TaskCompletionResult",
     "TaskCompletionVerifier",
     "verify_task_completion",
+    "FinalCriterionStatus",
+    "FinalEvidenceStrength",
+    "FinalVerification",
+    "FinalVerificationConfig",
+    "FinalVerificationCriterion",
+    "FinalVerificationRequest",
+    "FinalVerificationResult",
+    "FinalVerificationStatus",
+    "verify_final_state",
     "ErrorCategory",
     "ErrorClassification",
     "ErrorClassifier",

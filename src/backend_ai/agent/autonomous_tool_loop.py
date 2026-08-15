@@ -51,6 +51,7 @@ from backend_ai.agent.root_cause_analysis import RootCauseAnalysis, RootCauseAna
 from backend_ai.agent.automatic_fix import AutomaticFixRequest, AutomaticFixResult, apply_automatic_fix
 from backend_ai.agent.self_correction import SelfCorrectionRequest, SelfCorrectionResult, run_self_correction
 from backend_ai.agent.regression_protection import RegressionProtection, RegressionProtectionRequest, RegressionProtectionResult
+from backend_ai.agent.final_verification import FinalVerificationRequest, FinalVerificationResult, verify_final_state
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.stop_conditions import (
@@ -291,6 +292,7 @@ class AutonomousLoopState:
     usage: AgentUsage
     recovery: RecoveryResult | None = None
     completion: TaskCompletionResult | None = None
+    final_verification: FinalVerificationResult | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -310,6 +312,7 @@ class AutonomousLoopState:
             "usage": self.usage.to_dict(),
             "recovery": self.recovery.to_dict() if self.recovery else None,
             "completion": self.completion.to_dict() if self.completion else None,
+            "final_verification": self.final_verification.to_dict() if self.final_verification else None,
         }
 
 
@@ -333,6 +336,7 @@ class AutonomousLoopResult:
     execution_budget: ExecutionBudgetSnapshot | None = None
     recovery: RecoveryResult | None = None
     completion: TaskCompletionResult | None = None
+    final_verification: FinalVerificationResult | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -352,6 +356,7 @@ class AutonomousLoopResult:
             "execution_budget": self.execution_budget.to_dict() if self.execution_budget else None,
             "recovery": self.recovery.to_dict() if self.recovery else None,
             "completion": self.completion.to_dict() if self.completion else None,
+            "final_verification": self.final_verification.to_dict() if self.final_verification else None,
         }
 
 
@@ -504,13 +509,14 @@ class AutonomousToolLoop:
         budget_decision: BudgetDecision | None = None
         recovery_result: RecoveryResult | None = None
         completion_result: TaskCompletionResult | None = None
+        final_verification: FinalVerificationResult | None = None
         failed_action_signatures: list[str] = []
 
         def snapshot() -> AutonomousLoopState:
-            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result)
+            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification)
 
         def finish(_request: AutonomousLoopRequest, status: LoopStatus, answer: str, finish_plan: ExecutionPlan | None, finish_context: ProjectContext | None, finish_state: AutonomousLoopState, finish_steps: Sequence[AutonomousLoopStep], finish_calls: Sequence[ToolCall], finish_results: Sequence[ToolResult], finish_usage: AgentUsage, finish_warnings: Sequence[str], finish_errors: Sequence[str]) -> AutonomousLoopResult:
-            nonlocal stop_evaluation, budget_decision
+            nonlocal stop_evaluation, budget_decision, final_verification
             if stop_evaluation is None:
                 stop_evaluation = evaluate_stop_condition(StopConditionRequest(
                     plan=finish_plan,
@@ -681,6 +687,21 @@ class AutonomousToolLoop:
 
                 if action.action_type is LoopActionType.FINAL:
                     final_answer = action.message or ""
+                    final_verification = verify_final_state(FinalVerificationRequest(
+                        task=request.task,
+                        plan=plan,
+                        completed_step_ids=tuple(completed_step_ids),
+                        skipped_step_ids=tuple(skipped_step_ids),
+                        blocked_step_ids=(),
+                        tool_results=tuple(results),
+                        verification=verification,
+                        recovery=recovery_result,
+                        budget=budget_ledger.snapshot(),
+                        missing_capabilities=tuple(blocked_capabilities),
+                        safety_blocked=safety_blocked,
+                        evidence_complete=True,
+                        final_action_claim=final_answer,
+                    ))
                     completion_result = verify_task_completion(TaskCompletionRequest(
                         task=request.task,
                         plan=plan,
@@ -692,6 +713,8 @@ class AutonomousToolLoop:
                         budget=budget_ledger.snapshot(),
                         evidence=(TaskCompletionEvidence("final_action", "The model emitted FINAL; this is only a claim and not completion proof.", EvidenceStrength.INDIRECT),),
                         final_response=final_answer,
+                        final_verification_required=True,
+                        final_verification=final_verification,
                     ))
                     stop_evaluation = evaluate_stop_condition(StopConditionRequest(
                         plan=plan,
@@ -963,7 +986,7 @@ class AutonomousToolLoop:
         return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
     def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None, recovery: RecoveryResult | None = None, completion: TaskCompletionResult | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion)
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str) -> AutonomousLoopResult:
         state = AutonomousLoopState(LoopLifecycleState.FAILED, task, None, None, None, None, "", (), False, None, (), (), (message,), AgentUsage())

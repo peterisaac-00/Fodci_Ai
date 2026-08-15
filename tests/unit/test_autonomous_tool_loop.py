@@ -7,6 +7,7 @@ import pytest
 
 from backend_ai.agent import (
     AgentMessage,
+    CompletionDecision,
     AgentUsage,
     AutonomousLoopConfig,
     ExecutionBudget,
@@ -27,6 +28,7 @@ from backend_ai.agent import (
     PlannerTaskType,
     ToolRegistry,
     ToolSelectionStatus,
+    StopDecision,
     parse_loop_action,
 )
 from backend_ai.agent.planner import PlannerResultStatus
@@ -447,3 +449,30 @@ def test_budget_blocks_second_tool_before_dispatch(tmp_path: Path) -> None:
     assert result.execution_budget.usage.tool_calls_attempted == 1
     assert len(first_tool.calls) == 1
     assert second_tool.calls == []
+
+
+def test_final_verification_is_exposed_and_authoritative_for_final_action(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    tool = RecordingTool("project_structure", result={"finding": "safe"})
+    plan = _plan(_step("s1", "Inspect project structure"))
+    loop, _ = _loop(root, [
+        'ACTION: TOOL\nARGS: {"tool":"project_structure","arguments":{}}',
+        'ACTION: FINAL\nARGS: {"message":"inspection complete"}',
+    ], (tool,), plan)
+    result = loop.run(AutonomousLoopRequest("Inspect the project", root, _context(root)))
+    assert result.final_verification is not None
+    assert result.final_verification.status.value == "VERIFIED"
+    assert result.completion is not None and result.completion.decision is CompletionDecision.COMPLETE
+    assert result.stop_evaluation is not None and result.stop_evaluation.decision is StopDecision.DONE
+
+
+def test_final_verification_rejects_final_claim_without_completed_plan_evidence(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    plan = _plan(_step("s1", "Inspect project structure"))
+    loop, _ = _loop(root, ['ACTION: FINAL\nARGS: {"message":"done without evidence"}'], (), plan)
+    result = loop.run(AutonomousLoopRequest("Inspect", root, _context(root)))
+    assert result.final_verification is not None
+    assert result.final_verification.status.value in {"INCOMPLETE", "INSUFFICIENT_EVIDENCE", "BLOCKED"}
+    assert result.stop_evaluation is not None and result.stop_evaluation.decision is StopDecision.BLOCKED

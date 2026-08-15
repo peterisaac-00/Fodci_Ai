@@ -131,6 +131,8 @@ class TaskCompletionRequest:
     final_response: str | None = None
     regression_required: bool = False
     regression_protection: Any | None = None
+    final_verification_required: bool = False
+    final_verification: Any | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.task, str) or not self.task.strip():
@@ -250,6 +252,19 @@ class TaskCompletionVerifier:
                     items.append(TaskCompletionItem(TaskCompletionCriterion("regression", "Required post-fix regression verification is complete.", True, "regression"), CriterionStatus.BLOCKED, evidence, message, True))
                 else:
                     items.append(TaskCompletionItem(TaskCompletionCriterion("regression", "Required post-fix regression verification is complete.", True, "regression"), CriterionStatus.UNVERIFIED, evidence, message, True))
+        if request.final_verification_required:
+            if request.final_verification is None:
+                items.append(TaskCompletionItem(TaskCompletionCriterion("final_verification", "Final Verification authoritatively confirms the task.", True, "final_verification"), CriterionStatus.UNVERIFIED, (), "final verification evidence is missing", True))
+            else:
+                status = getattr(getattr(request.final_verification, "status", None), "value", str(getattr(request.final_verification, "status", "UNKNOWN")))
+                message = getattr(request.final_verification, "final_message", None) or f"final verification returned {status}"
+                evidence = (TaskCompletionEvidence("final_verification", message, EvidenceStrength.DIRECT, status),)
+                if status == "VERIFIED":
+                    items.append(TaskCompletionItem(TaskCompletionCriterion("final_verification", "Final Verification authoritatively confirms the task.", True, "final_verification"), CriterionStatus.SATISFIED, evidence, message))
+                elif status in {"BLOCKED", "BUDGET_EXHAUSTED", "FAILED"}:
+                    items.append(TaskCompletionItem(TaskCompletionCriterion("final_verification", "Final Verification authoritatively confirms the task.", True, "final_verification"), CriterionStatus.BLOCKED, evidence, message, True))
+                else:
+                    items.append(TaskCompletionItem(TaskCompletionCriterion("final_verification", "Final Verification authoritatively confirms the task.", True, "final_verification"), CriterionStatus.UNVERIFIED, evidence, message, True))
         return items
 
     @staticmethod
