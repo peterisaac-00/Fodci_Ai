@@ -19,6 +19,7 @@ from backend_ai.tools import (
     DeleteFileTool,
     GitDiffTool,
     GitStatusTool,
+    RunCommandTool,
 )
 
 
@@ -105,6 +106,12 @@ class ToolRegistry:
         """Create an explicit read-only registry with the Git diff tool."""
 
         return cls((*cls.default()._tool_instances(), GitDiffTool(), GitStatusTool()))
+
+    @classmethod
+    def with_command_execution(cls) -> "ToolRegistry":
+        """Create an explicit Phase 5.1 registry without changing AgentLoop defaults."""
+
+        return cls((*cls.default()._tool_instances(), RunCommandTool()))
 
     def _tool_instances(self) -> tuple[Tool, ...]:
         """Return registered concrete tools for controlled registry composition."""

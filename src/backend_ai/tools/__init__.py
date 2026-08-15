@@ -19,7 +19,21 @@ from backend_ai.tools.edit_file import (
     EditFileTool,
     edit_file,
 )
-from backend_ai.tools.delete_file import DeleteFileResult, DeleteFileTool, delete_file
+from backend_ai.tools.command import (
+    CommandRequest,
+    CommandResult,
+    DEFAULT_COMMAND_TIMEOUT_SECONDS,
+    DEFAULT_MAX_STDERR_BYTES,
+    DEFAULT_MAX_STDOUT_BYTES,
+    MAX_COMMAND_TIMEOUT_SECONDS,
+    RunCommandTool,
+    run_command,
+)
+from backend_ai.tools.delete_file import (
+    DeleteFileResult,
+    DeleteFileTool,
+    delete_file,
+)
 from backend_ai.tools.git_status import (
     DEFAULT_MAX_STATUS_FILES,
     DEFAULT_MAX_STATUS_PATH_LENGTH,
@@ -162,6 +176,14 @@ __all__ = [
     "edit_file",
     "DeleteFileResult",
     "DeleteFileTool",
+    "CommandRequest",
+    "CommandResult",
+    "DEFAULT_COMMAND_TIMEOUT_SECONDS",
+    "DEFAULT_MAX_STDERR_BYTES",
+    "DEFAULT_MAX_STDOUT_BYTES",
+    "MAX_COMMAND_TIMEOUT_SECONDS",
+    "RunCommandTool",
+    "run_command",
     "delete_file",
     "BackupResult",
     "DEFAULT_SAFE_EDIT_BACKUP_DIRECTORY",
