@@ -57,6 +57,15 @@ from backend_ai.agent.tool_selection import (
     ToolSelector,
     create_tool_selection,
 )
+from backend_ai.agent.execution_budget import (
+    BudgetDecision,
+    BudgetDimension,
+    BudgetExhaustion,
+    ExecutionBudget,
+    ExecutionBudgetLedger,
+    ExecutionBudgetSnapshot,
+    ExecutionUsage,
+)
 from backend_ai.agent.stop_conditions import (
     StopConditionEvaluator,
     StopConditionRequest,
@@ -140,6 +149,13 @@ __all__ = [
     "ToolSelectionValidator",
     "ToolSelector",
     "create_tool_selection",
+    "BudgetDecision",
+    "BudgetDimension",
+    "BudgetExhaustion",
+    "ExecutionBudget",
+    "ExecutionBudgetLedger",
+    "ExecutionBudgetSnapshot",
+    "ExecutionUsage",
     "StopConditionEvaluator",
     "StopConditionRequest",
     "StopDecision",

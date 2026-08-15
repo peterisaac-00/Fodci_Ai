@@ -9,6 +9,7 @@ from backend_ai.agent import (
     AgentMessage,
     AgentUsage,
     AutonomousLoopConfig,
+    ExecutionBudget,
     AutonomousLoopRequest,
     AutonomousToolLoop,
     ExecutionPlan,
@@ -193,7 +194,11 @@ def test_single_read_only_tool_then_final_updates_context_and_history(tmp_path: 
         'ACTION: TOOL\nARGS: {"tool":"project_structure","arguments":{}}',
         'ACTION: FINAL\nARGS: {"message":"inspection complete"}',
     ], (repeat_tool,), plan)
-    assert result.to_dict() == repeat_loop.run(AutonomousLoopRequest("Inspect the project", root, _context(root))).to_dict()
+    first_dict = result.to_dict()
+    second_dict = repeat_loop.run(AutonomousLoopRequest("Inspect the project", root, _context(root))).to_dict()
+    first_dict.pop("execution_budget", None)
+    second_dict.pop("execution_budget", None)
+    assert first_dict == second_dict
 
 
 def test_multiple_sequential_tools_and_second_model_action(tmp_path: Path) -> None:
@@ -332,7 +337,11 @@ def test_determinism_and_default_agent_loop_remain_separate(tmp_path: Path) -> N
     first, _ = _loop(root, outputs, (RecordingTool("project_structure", result={"ok": True}),), plan)
     second, _ = _loop(root, outputs, (RecordingTool("project_structure", result={"ok": True}),), plan)
     request = AutonomousLoopRequest("Inspect", root, _context(root))
-    assert first.run(request).to_dict() == second.run(request).to_dict()
+    first_dict = first.run(request).to_dict()
+    second_dict = second.run(request).to_dict()
+    first_dict.pop("execution_budget", None)
+    second_dict.pop("execution_budget", None)
+    assert first_dict == second_dict
     assert ToolRegistry.default().names() == ("list_files", "project_context", "project_structure", "read_file", "search_code")
 
 
@@ -412,3 +421,29 @@ def test_mutation_plus_structured_verification_reaches_done(tmp_path: Path) -> N
     assert result.stop_evaluation.decision.value == "DONE"
     assert result.stop_evaluation.reason.value == "VERIFICATION_PASSED"
     assert len(result.tool_calls) == 2
+
+
+def test_budget_blocks_second_tool_before_dispatch(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    first_tool = RecordingTool("project_structure", result={"ok": True})
+    second_tool = RecordingTool("read_file", result={"content": "x"})
+    plan = _plan(_step("s1", "Inspect project structure"), _step("s2", "Read the known file", dependencies=("s1",)))
+    config = AutonomousLoopConfig(execution_budget=ExecutionBudget(max_tool_calls=1, max_iterations=8, max_action_steps=8))
+    loop = AutonomousToolLoop(
+        FakeEngine([
+            'ACTION: TOOL\nARGS: {"tool":"project_structure","arguments":{}}',
+            'ACTION: TOOL\nARGS: {"tool":"read_file","arguments":{"path":"x.py"}}',
+        ]),
+        registry=ToolRegistry((first_tool, second_tool)),
+        planner=StaticPlanner(plan),
+        config=config,
+    )
+    result = loop.run(AutonomousLoopRequest("Inspect and read", root, _context(root)))
+    assert result.status is LoopStatus.BLOCKED
+    assert result.stop_evaluation is not None
+    assert result.stop_evaluation.decision.value == "BUDGET_EXHAUSTED"
+    assert result.execution_budget is not None
+    assert result.execution_budget.usage.tool_calls_attempted == 1
+    assert len(first_tool.calls) == 1
+    assert second_tool.calls == []

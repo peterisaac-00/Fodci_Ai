@@ -18,6 +18,13 @@ import re
 from typing import Any
 
 from backend_ai.agent.budget import ContextBudget, ContextBudgetError
+from backend_ai.agent.execution_budget import (
+    BudgetDimension,
+    BudgetDecision,
+    ExecutionBudget,
+    ExecutionBudgetLedger,
+    ExecutionBudgetSnapshot,
+)
 from backend_ai.agent.models import (
     AgentConfig,
     AgentMessage,
@@ -173,6 +180,7 @@ class AutonomousLoopConfig:
         "Fodci autonomous tool loop. Return exactly ACTION: TOOL with ARGS JSON "
         "or ACTION: FINAL with ARGS {\"message\": \"...\"}. Never emit prose commands."
     )
+    execution_budget: ExecutionBudget = field(default_factory=ExecutionBudget.conservative_defaults)
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -191,6 +199,8 @@ class AutonomousLoopConfig:
             raise ValueError("Autonomous loop budget exceeds the safety ceiling")
         if not isinstance(self.system_prompt, str) or not self.system_prompt.strip():
             raise ValueError("system_prompt must contain text")
+        if not isinstance(self.execution_budget, ExecutionBudget):
+            raise ValueError("execution_budget must be ExecutionBudget")
 
 
 @dataclass(frozen=True, slots=True)
@@ -307,6 +317,7 @@ class AutonomousLoopResult:
     warnings: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
     stop_evaluation: StopEvaluation | None = None
+    execution_budget: ExecutionBudgetSnapshot | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -323,6 +334,7 @@ class AutonomousLoopResult:
             "warnings": list(self.warnings),
             "errors": list(self.errors),
             "stop_evaluation": self.stop_evaluation.to_dict() if self.stop_evaluation else None,
+            "execution_budget": self.execution_budget.to_dict() if self.execution_budget else None,
         }
 
 
@@ -471,12 +483,14 @@ class AutonomousToolLoop:
         safety_blocked = False
         context_complete = context is not None
         stop_evaluation: StopEvaluation | None = None
+        budget_ledger = ExecutionBudgetLedger(self.config.execution_budget)
+        budget_decision: BudgetDecision | None = None
 
         def snapshot() -> AutonomousLoopState:
             return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage)
 
         def finish(_request: AutonomousLoopRequest, status: LoopStatus, answer: str, finish_plan: ExecutionPlan | None, finish_context: ProjectContext | None, finish_state: AutonomousLoopState, finish_steps: Sequence[AutonomousLoopStep], finish_calls: Sequence[ToolCall], finish_results: Sequence[ToolResult], finish_usage: AgentUsage, finish_warnings: Sequence[str], finish_errors: Sequence[str]) -> AutonomousLoopResult:
-            nonlocal stop_evaluation
+            nonlocal stop_evaluation, budget_decision
             if stop_evaluation is None:
                 stop_evaluation = evaluate_stop_condition(StopConditionRequest(
                     plan=finish_plan,
@@ -494,9 +508,10 @@ class AutonomousToolLoop:
                     verification=verification,
                     emergency_bound_reached=status is LoopStatus.LOOP_BOUND_REACHED,
                     fatal_error=finish_errors[-1] if status is LoopStatus.FAILED and finish_errors else None,
+                    budget_decision=budget_decision,
                     warning_messages=tuple(finish_warnings),
                 ))
-            return self._finalize(_request, status, answer, finish_plan, finish_context, finish_state, finish_steps, finish_calls, finish_results, finish_usage, finish_warnings, finish_errors, stop_evaluation=stop_evaluation)
+            return self._finalize(_request, status, answer, finish_plan, finish_context, finish_state, finish_steps, finish_calls, finish_results, finish_usage, finish_warnings, finish_errors, stop_evaluation=stop_evaluation, execution_budget=budget_ledger.snapshot())
 
         try:
             machine.transition(LoopLifecycleState.PLANNING)
@@ -509,12 +524,21 @@ class AutonomousToolLoop:
                 machine.transition(LoopLifecycleState.SELECTING_TOOL)
                 machine.transition(LoopLifecycleState.VALIDATING_ACTION)
                 bootstrap_call = ToolCall("call-0001", "project_context", {"project_root": str(request.project_root)})
+                bootstrap_budget = budget_ledger.check_tool_operation("project_context")
+                if not bootstrap_budget.allowed:
+                    budget_decision = bootstrap_budget
+                    errors.append(bootstrap_budget.message)
+                    machine.block()
+                    return finish(request, LoopStatus.BLOCKED, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors)
+                budget_ledger.consume("project_context", dimension=BudgetDimension.TOOL_CALLS)
                 machine.transition(LoopLifecycleState.EXECUTING_TOOL)
                 bootstrap_result = self._dispatch(bootstrap_call)
                 calls.append(bootstrap_call)
                 results.append(bootstrap_result)
+                budget_ledger.complete_tool()
                 last_call, last_result = bootstrap_call, bootstrap_result
                 bootstrap_observation = self._safe_result_text(bootstrap_result)
+                budget_ledger.account_tool_result(tool_name=bootstrap_call.name, tool_output_bytes=len(bootstrap_observation), success=bootstrap_result.success)
                 usage = AgentUsage(1, 1, 0, len(bootstrap_observation), 0)
                 machine.transition(LoopLifecycleState.OBSERVING_RESULT)
                 if not bootstrap_result.success or not isinstance(bootstrap_result.data, ProjectContext):
@@ -542,6 +566,24 @@ class AutonomousToolLoop:
             plan_index = 0
             cycle_index = 0
             while True:
+                iteration_decision = budget_ledger.consume("autonomous iteration", dimension=BudgetDimension.ITERATIONS)
+                if not iteration_decision.allowed:
+                    budget_decision = iteration_decision
+                    errors.append(iteration_decision.message)
+                    machine.block()
+                    return finish(request, LoopStatus.BLOCKED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                action_decision = budget_ledger.consume("model action step", dimension=BudgetDimension.ACTION_STEPS)
+                if not action_decision.allowed:
+                    budget_decision = action_decision
+                    errors.append(action_decision.message)
+                    machine.block()
+                    return finish(request, LoopStatus.BLOCKED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                if budget_ledger.snapshot().exhausted_dimensions:
+                    exhausted = budget_ledger.snapshot().exhausted_dimensions[0]
+                    budget_decision = BudgetDecision(False, "autonomous iteration", BudgetDimension(exhausted), None, None, 0, 0, False, "accumulated budget dimension is exhausted")
+                    errors.append(budget_decision.message)
+                    machine.block()
+                    return finish(request, LoopStatus.BLOCKED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
                 if len(calls) >= _EMERGENCY_TOOL_EXECUTION_BOUND:
                     errors.append("The fixed Phase 6.3 emergency tool-execution bound was reached.")
                     stop_evaluation = evaluate_stop_condition(StopConditionRequest(
@@ -685,13 +727,26 @@ class AutonomousToolLoop:
                     machine.fail()
                     return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
 
+                tool_budget = budget_ledger.check_tool_operation(call.name)
+                if not tool_budget.allowed:
+                    budget_decision = tool_budget
+                    errors.append(tool_budget.message)
+                    machine.block()
+                    return finish(request, LoopStatus.BLOCKED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                budget_ledger.consume("tool call", dimension=BudgetDimension.TOOL_CALLS)
+                normalized_tool = call.name.casefold()
+                specific_dimension = {"write_file": BudgetDimension.MUTATIONS, "edit_file": BudgetDimension.MUTATIONS, "delete_file": BudgetDimension.MUTATIONS, "run_command": BudgetDimension.COMMAND_EXECUTIONS, "run_command_with_policy": BudgetDimension.COMMAND_EXECUTIONS, "run_tests": BudgetDimension.TEST_EXECUTIONS, "run_application": BudgetDimension.APPLICATION_LAUNCHES}.get(normalized_tool)
+                if specific_dimension is not None:
+                    budget_ledger.consume(call.name, dimension=specific_dimension)
                 machine.transition(LoopLifecycleState.EXECUTING_TOOL)
                 tool_result = self._dispatch(call)
                 calls.append(call)
                 results.append(tool_result)
                 last_call, last_result = call, tool_result
+                budget_ledger.complete_tool()
                 machine.transition(LoopLifecycleState.OBSERVING_RESULT)
                 bounded_observation = self._safe_result_text(tool_result)
+                budget_ledger.account_tool_result(tool_name=call.name, tool_output_bytes=len(bounded_observation), context_tokens=prompt_tokens, success=tool_result.success)
                 usage = AgentUsage(usage.steps, usage.tool_calls + 1, usage.prompt_tokens, usage.tool_result_chars + len(bounded_observation), usage.context_truncations)
                 if not tool_result.success:
                     message = tool_result.message or "Tool execution failed."
@@ -818,8 +873,8 @@ class AutonomousToolLoop:
         payload = _safe_value(result.to_dict())
         return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
-    def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation)
+    def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None) -> AutonomousLoopResult:
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str) -> AutonomousLoopResult:
         state = AutonomousLoopState(LoopLifecycleState.FAILED, task, None, None, None, None, "", (), False, None, (), (), (message,), AgentUsage())

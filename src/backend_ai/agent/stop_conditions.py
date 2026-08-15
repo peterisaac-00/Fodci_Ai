@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from backend_ai.agent.execution_budget import BudgetDecision
 from backend_ai.agent.models import ToolResult
 from backend_ai.agent.planner import ExecutionPlan
 
@@ -16,6 +17,7 @@ class StopDecision(str, Enum):
     CONTINUE = "CONTINUE"
     FAILED = "FAILED"
     BLOCKED = "BLOCKED"
+    BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
 
 
 class StopReason(str, Enum):
@@ -37,6 +39,7 @@ class StopReason(str, Enum):
     POLICY_DENIED = "POLICY_DENIED"
     TOOL_UNAVAILABLE = "TOOL_UNAVAILABLE"
     VERIFICATION_FAILED = "VERIFICATION_FAILED"
+    BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
 
 
 class VerificationState(str, Enum):
@@ -122,6 +125,7 @@ class StopConditionRequest:
     verification: VerificationEvidence = field(default_factory=VerificationEvidence.not_required)
     emergency_bound_reached: bool = False
     fatal_error: str | None = None
+    budget_decision: BudgetDecision | None = None
     warning_messages: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -158,6 +162,7 @@ class StopConditionRequest:
             "verification": self.verification.to_dict(),
             "emergency_bound_reached": self.emergency_bound_reached,
             "fatal_error": _bounded(self.fatal_error or "", 1_024) if self.fatal_error is not None else None,
+            "budget_decision": self.budget_decision.to_dict() if self.budget_decision else None,
             "warning_messages": list(self.warning_messages),
         }
 
@@ -220,6 +225,8 @@ class StopConditionEvaluator:
         evidence = list(request.completion_evidence)
         warnings = list(request.warning_messages)
 
+        if request.budget_decision is not None and not request.budget_decision.allowed:
+            return self._result(StopDecision.BUDGET_EXHAUSTED, StopReason.BUDGET_EXHAUSTED, request, evidence + [request.budget_decision.message], remaining, "BUDGET_EXHAUSTED", "HIGH", warnings, blocking=[request.budget_decision.exhaustion.value if request.budget_decision.exhaustion else "budget limit reached"])
         if request.fatal_error:
             return self._result(StopDecision.FAILED, StopReason.INTERNAL_ERROR, request, evidence + [request.fatal_error], remaining, "FATAL_ERROR", "HIGH", warnings)
         if request.invalid_action:

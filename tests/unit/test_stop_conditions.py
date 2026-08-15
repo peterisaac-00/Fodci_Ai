@@ -155,3 +155,13 @@ def test_stop_evaluation_is_deterministic_and_serializable() -> None:
     assert first == second
     assert first.to_dict() == second.to_dict()
     assert first.to_dict()["decision"] == "DONE"
+
+
+def test_budget_exhaustion_precedes_continue() -> None:
+    from backend_ai.agent import BudgetDimension, ExecutionBudget, ExecutionBudgetLedger
+
+    ledger = ExecutionBudgetLedger(ExecutionBudget(max_tool_calls=0))
+    decision = ledger.check("next tool", dimension=BudgetDimension.TOOL_CALLS)
+    result = evaluate_stop_condition(StopConditionRequest(budget_decision=decision, final_action_valid=True))
+    assert result.decision is StopDecision.BUDGET_EXHAUSTED
+    assert result.reason is StopReason.BUDGET_EXHAUSTED
