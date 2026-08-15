@@ -1012,6 +1012,32 @@ Evidence and history are bounded by criteria, evidence, tool-result, text, plan-
 
 Phase 6.7 does not implement Phase 7, memory, RAG, dataset collection, model training, fine-tuning, network access, package installation, Git mutation, shell bypasses, background agents, unrestricted autonomy, or automatic CLI autonomy.
 
+## Phase 7.1 automatic test execution
+
+`AutomaticTestOrchestrator` is an explicit, bounded orchestration layer. It does not duplicate `TestCommandResolver`, `TestRunner`, `RunTestsTool`, `CommandPolicy`, `ProcessManager`, `ExecutionBudget`, `StopConditionEvaluator`, or `TaskCompletionVerifier`. Its only execution path is:
+
+```text
+AutomaticTestOrchestrator
+        ↓
+ToolRegistry.run_tests
+        ↓
+TestRunner / TestCommandResolver
+        ↓
+CommandPolicy
+        ↓
+ProcessManager
+        ↓
+TestRunResult
+```
+
+The immutable API includes `AutomaticTestConfig`, `AutomaticTestRequest`, `AutomaticTestDecision`, `AutomaticTestExecution`, and `AutomaticTestResult`. Decisions are `RUN`, `SKIP`, `BLOCKED`, `UNAVAILABLE`, `INVALID`, or `BUDGET_EXHAUSTED`. A run is eligible only at a bounded evidence-based boundary: an explicit user request, a plan test/verification step, completion-required test evidence, or an implementation/bug-fix/refactor task that has changed implementation state and reached verification. Documentation and investigation tasks do not trigger tests by default, and the layer never runs tests after every file operation.
+
+When `RUN` is selected, the orchestrator checks `ExecutionBudgetLedger.check_tool_operation("run_tests")` before dispatch, consumes the normal tool-call and test-execution dimensions, and passes only structured project root, target, test arguments, working directory, timeout, and output limits to the existing `run_tests` tool. If the budget denies execution, no test process starts and the result is `BUDGET_EXHAUSTED`. If the capability is absent, the result is `BLOCKED`; if the existing resolver cannot find an evidence-backed command, the raw result is preserved as `UNAVAILABLE`. No guessed `pytest`, `npm test`, Jest, or Vitest command is constructed.
+
+The raw `TestRunResult` remains authoritative and retains command lifecycle metadata, exit code, stdout/stderr, timeout/output-limit state, policy decision, framework evidence, and warnings. Phase 7.1 does not interpret failures, diagnose root causes, edit files, retry, rerun, or self-correct. `TestResultParser` may be invoked separately through its existing explicit capability; Phase 7.2+ owns analysis. `StopConditionEvaluator` and `TaskCompletionVerifier` can consume the resulting structured evidence, but the automatic-test layer does not replace either evaluator. `ToolRegistry.default()` and the base `AgentLoop` remain unchanged and do not gain execution permissions.
+
+Phase 7.1 does not implement diagnosis, root-cause analysis, automatic fixing, retries, regression protection, memory, RAG, network access, package installation, Git mutation, shell bypasses, background agents, unrestricted autonomy, or Phase 7.2–7.7 functionality. Phase 8 remains unimplemented.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -1020,8 +1046,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, explicit opt-in `AutonomousToolLoop` models, pure `StopConditionEvaluator`/`StopEvaluation` models, pure `ErrorClassifier`/`RecoverabilityPolicy` models, and pure `TaskCompletionVerifier`/`TaskCompletionResult` models with bounded completion evidence | Phase 7 automatic debugging/fixing, generic retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, explicitly constructed `AutonomousToolLoop`, pure stop-condition APIs, execution budgets, explicit recovery APIs, and explicit task-completion verification APIs as separate APIs without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 7 automatic debugging/fixing/retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, explicit opt-in `AutonomousToolLoop` models, pure `StopConditionEvaluator`/`StopEvaluation` models, pure `ErrorClassifier`/`RecoverabilityPolicy` models, pure `TaskCompletionVerifier`/`TaskCompletionResult` models, and explicit `AutomaticTestOrchestrator` models over `run_tests` with bounded evidence | Phase 7.2+ automatic debugging/fixing, generic retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, explicitly constructed `AutonomousToolLoop`, pure stop-condition APIs, execution budgets, explicit recovery APIs, explicit task-completion verification APIs, and explicit automatic-test orchestration without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 7.2+ automatic debugging/fixing/retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

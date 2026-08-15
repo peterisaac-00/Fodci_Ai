@@ -10,7 +10,7 @@ remain explicit safety layers over this loop.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 import json
 from pathlib import Path
@@ -45,6 +45,7 @@ from backend_ai.agent.planner import (
     PlannerTaskType,
 )
 from backend_ai.agent.registry import ToolRegistry, ToolRegistryError, UnknownToolError
+from backend_ai.agent.automatic_testing import AutomaticTestRequest, AutomaticTestResult, AutomaticTestOrchestrator
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.stop_conditions import (
@@ -847,6 +848,12 @@ class AutonomousToolLoop:
             errors.append(str(exc))
             machine.fail()
             return finish(request, LoopStatus.FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+    def run_automatic_tests(self, request: AutomaticTestRequest) -> AutomaticTestResult:
+        """Run one explicit automatic-test orchestration using this loop's registry."""
+        if not isinstance(request, AutomaticTestRequest):
+            raise TypeError("request must be AutomaticTestRequest")
+        return AutomaticTestOrchestrator().run(replace(request, registry=self.registry))
 
     def _coerce_request(self, request: AutonomousLoopRequest | str, project_root: Path | str | None) -> AutonomousLoopRequest:
         if isinstance(request, AutonomousLoopRequest):
