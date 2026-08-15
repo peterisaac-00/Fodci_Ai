@@ -46,6 +46,7 @@ from backend_ai.agent.planner import (
 )
 from backend_ai.agent.registry import ToolRegistry, ToolRegistryError, UnknownToolError
 from backend_ai.agent.automatic_testing import AutomaticTestRequest, AutomaticTestResult, AutomaticTestOrchestrator
+from backend_ai.agent.test_failure_analysis import FailureAnalysisConfig, TestFailureAnalysis, TestFailureAnalysisRequest, TestFailureAnalyzer
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.stop_conditions import (
@@ -854,6 +855,10 @@ class AutonomousToolLoop:
         if not isinstance(request, AutomaticTestRequest):
             raise TypeError("request must be AutomaticTestRequest")
         return AutomaticTestOrchestrator().run(replace(request, registry=self.registry))
+
+    def analyze_test_failure(self, test_result, parsed_result, *, config: FailureAnalysisConfig | None = None) -> TestFailureAnalysis:
+        """Analyze existing test evidence without executing, mutating, or repairing anything."""
+        return TestFailureAnalyzer(config=config).analyze(TestFailureAnalysisRequest(test_result, parsed_result, config or FailureAnalysisConfig()))
 
     def _coerce_request(self, request: AutonomousLoopRequest | str, project_root: Path | str | None) -> AutonomousLoopRequest:
         if isinstance(request, AutonomousLoopRequest):
