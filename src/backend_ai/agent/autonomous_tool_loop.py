@@ -50,6 +50,7 @@ from backend_ai.agent.test_failure_analysis import FailureAnalysisConfig, TestFa
 from backend_ai.agent.root_cause_analysis import RootCauseAnalysis, RootCauseAnalysisConfig, RootCauseAnalysisRequest, RootCauseAnalyzer
 from backend_ai.agent.automatic_fix import AutomaticFixRequest, AutomaticFixResult, apply_automatic_fix
 from backend_ai.agent.self_correction import SelfCorrectionRequest, SelfCorrectionResult, run_self_correction
+from backend_ai.agent.regression_protection import RegressionProtection, RegressionProtectionRequest, RegressionProtectionResult
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.stop_conditions import (
@@ -879,6 +880,16 @@ class AutonomousToolLoop:
         if not isinstance(request, SelfCorrectionRequest):
             raise TypeError("request must be SelfCorrectionRequest")
         return run_self_correction(request)
+
+    def protect_against_regressions(self, request: RegressionProtectionRequest) -> RegressionProtectionResult:
+        """Run one explicit bounded regression scope through this loop's registry."""
+        if not isinstance(request, RegressionProtectionRequest):
+            raise TypeError("request must be RegressionProtectionRequest")
+        regression = RegressionProtection(test_orchestrator=AutomaticTestOrchestrator())
+        active_request = request
+        if request.regression_test_request is not None:
+            active_request = replace(request, regression_test_request=replace(request.regression_test_request, registry=self.registry))
+        return regression.run(active_request)
 
     def _coerce_request(self, request: AutonomousLoopRequest | str, project_root: Path | str | None) -> AutonomousLoopRequest:
         if isinstance(request, AutonomousLoopRequest):

@@ -129,6 +129,8 @@ class TaskCompletionRequest:
     critical_unexpected_modifications: tuple[str, ...] = ()
     evidence_complete: bool = True
     final_response: str | None = None
+    regression_required: bool = False
+    regression_protection: Any | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.task, str) or not self.task.strip():
@@ -234,6 +236,20 @@ class TaskCompletionVerifier:
             items.append(TaskCompletionItem(TaskCompletionCriterion("unexpected", "Unexpected modifications are explicitly surfaced.", True, "unexpected_changes"), CriterionStatus.UNVERIFIED, tuple(TaskCompletionEvidence("git", item, EvidenceStrength.INDIRECT) for item in request.unexpected_modifications), "unexpected modification requires review", True))
         if request.plan and request.plan.completeness.name != "COMPLETE":
             items.append(TaskCompletionItem(TaskCompletionCriterion("plan_completeness", "The execution plan is complete enough to verify.", True, "plan"), CriterionStatus.UNVERIFIED, (), "plan is incomplete or requires clarification", False))
+        if request.regression_required:
+            if request.regression_protection is None:
+                items.append(TaskCompletionItem(TaskCompletionCriterion("regression", "Required post-fix regression verification is complete.", True, "regression"), CriterionStatus.UNVERIFIED, (), "required regression verification is missing", True))
+            else:
+                status = getattr(getattr(request.regression_protection, "status", None), "value", str(getattr(request.regression_protection, "status", "UNKNOWN")))
+                comparison = getattr(request.regression_protection, "comparison", None)
+                message = getattr(comparison, "message", None) or f"regression protection returned {status}"
+                evidence = (TaskCompletionEvidence("regression_protection", message, EvidenceStrength.DIRECT, status),)
+                if status in {"REGRESSION_FREE", "PRE_EXISTING_FAILURES_ONLY"}:
+                    items.append(TaskCompletionItem(TaskCompletionCriterion("regression", "Required post-fix regression verification is complete.", True, "regression"), CriterionStatus.SATISFIED, evidence, message))
+                elif status in {"REGRESSION_DETECTED", "VERIFICATION_BLOCKED", "BUDGET_EXHAUSTED", "VERIFICATION_FAILED"}:
+                    items.append(TaskCompletionItem(TaskCompletionCriterion("regression", "Required post-fix regression verification is complete.", True, "regression"), CriterionStatus.BLOCKED, evidence, message, True))
+                else:
+                    items.append(TaskCompletionItem(TaskCompletionCriterion("regression", "Required post-fix regression verification is complete.", True, "regression"), CriterionStatus.UNVERIFIED, evidence, message, True))
         return items
 
     @staticmethod

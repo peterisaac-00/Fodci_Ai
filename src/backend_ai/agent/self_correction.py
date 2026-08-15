@@ -23,6 +23,7 @@ from backend_ai.agent.automatic_testing import (
 )
 from backend_ai.agent.execution_budget import ExecutionBudget, ExecutionBudgetLedger, ExecutionBudgetSnapshot
 from backend_ai.agent.root_cause_analysis import RootCauseAnalysis, RootCauseAnalyzer, RootCauseAnalysisRequest, RootCauseAnalysisStatus
+from backend_ai.agent.regression_protection import RegressionBaseline, RegressionProtection, RegressionProtectionConfig, RegressionProtectionRequest, RegressionProtectionResult, RegressionStatus, RegressionTestScope
 from backend_ai.agent.test_failure_analysis import TestFailureAnalysis, TestFailureAnalysisRequest, TestFailureAnalyzer
 from backend_ai.agent.stop_conditions import StopConditionRequest, StopEvaluation, StopConditionEvaluator
 from backend_ai.tools.safe_editing import SafeEditPolicy
@@ -40,6 +41,11 @@ class SelfCorrectionStatus(str, Enum):
     NO_PROGRESS = "NO_PROGRESS"
     BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
     USER_INTERVENTION_REQUIRED = "USER_INTERVENTION_REQUIRED"
+    REGRESSION_FREE = "REGRESSION_FREE"
+    PRE_EXISTING_FAILURES_ONLY = "PRE_EXISTING_FAILURES_ONLY"
+    REGRESSION_DETECTED = "REGRESSION_DETECTED"
+    REGRESSION_INCOMPLETE = "REGRESSION_INCOMPLETE"
+    REGRESSION_BLOCKED = "REGRESSION_BLOCKED"
 
 
 class SelfCorrectionStep(str, Enum):
@@ -59,10 +65,11 @@ class SelfCorrectionConfig:
     max_attempts: int = 3
     max_history: int = 16
     max_fingerprint_length: int = 512
+    require_regression_protection: bool = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.enabled, bool):
-            raise ValueError("enabled must be boolean")
+        if not isinstance(self.enabled, bool) or not isinstance(self.require_regression_protection, bool):
+            raise ValueError("enabled and require_regression_protection must be boolean")
         for name in ("max_attempts", "max_history", "max_fingerprint_length"):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -112,6 +119,10 @@ class SelfCorrectionRequest:
     fix_config: AutomaticFixConfig = field(default_factory=AutomaticFixConfig)
     config: SelfCorrectionConfig = field(default_factory=SelfCorrectionConfig)
     budget_ledger: ExecutionBudgetLedger | None = None
+    regression_baseline: RegressionBaseline | None = None
+    regression_test_request: AutomaticTestRequest | None = None
+    regression_scope: RegressionTestScope = RegressionTestScope.PROJECT_SUITE
+    regression_config: RegressionProtectionConfig = field(default_factory=RegressionProtectionConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,12 +135,13 @@ class SelfCorrectionResult:
     final_failure_analysis: TestFailureAnalysis | None = None
     final_root_cause: RootCauseAnalysis | None = None
     final_fix_result: AutomaticFixResult | None = None
+    regression_protection: RegressionProtectionResult | None = None
     execution_budget: ExecutionBudgetSnapshot | None = None
     warnings: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        return {"status": self.status.value, "decision": self.decision.to_dict(), "attempts": [item.to_dict() for item in self.attempts], "final_test_result": self.final_test_result.to_dict() if self.final_test_result else None, "final_parsed_result": self.final_parsed_result.to_dict() if self.final_parsed_result else None, "final_failure_analysis": self.final_failure_analysis.to_dict() if self.final_failure_analysis else None, "final_root_cause": self.final_root_cause.to_dict() if self.final_root_cause else None, "final_fix_result": self.final_fix_result.to_dict() if self.final_fix_result else None, "execution_budget": self.execution_budget.to_dict() if self.execution_budget else None, "warnings": list(self.warnings), "errors": list(self.errors)}
+        return {"status": self.status.value, "decision": self.decision.to_dict(), "attempts": [item.to_dict() for item in self.attempts], "final_test_result": self.final_test_result.to_dict() if self.final_test_result else None, "final_parsed_result": self.final_parsed_result.to_dict() if self.final_parsed_result else None, "final_failure_analysis": self.final_failure_analysis.to_dict() if self.final_failure_analysis else None, "final_root_cause": self.final_root_cause.to_dict() if self.final_root_cause else None, "final_fix_result": self.final_fix_result.to_dict() if self.final_fix_result else None, "regression_protection": self.regression_protection.to_dict() if self.regression_protection else None, "execution_budget": self.execution_budget.to_dict() if self.execution_budget else None, "warnings": list(self.warnings), "errors": list(self.errors)}
 
 
 class BoundedSelfCorrectionLoop:
@@ -142,6 +154,7 @@ class BoundedSelfCorrectionLoop:
         self.root_cause_analyzer = root_cause_analyzer or RootCauseAnalyzer()
         self.fix_applier = fix_applier or apply_automatic_fix
         self.stop_evaluator = StopConditionEvaluator()
+        self.regression_protection = RegressionProtection(test_orchestrator=self.test_orchestrator)
 
     def run(self, request: SelfCorrectionRequest) -> SelfCorrectionResult:
         if not isinstance(request, SelfCorrectionRequest):
@@ -153,6 +166,7 @@ class BoundedSelfCorrectionLoop:
         attempts: list[SelfCorrectionAttempt] = []
         seen_actions: set[str] = set()
         final_test = final_parsed = final_failure = final_rca = final_fix = None
+        final_regression: RegressionProtectionResult | None = None
         for number in range(1, request.config.max_attempts + 1):
             test_result = self.test_orchestrator.run(test_request)
             final_test = test_result
@@ -169,6 +183,19 @@ class BoundedSelfCorrectionLoop:
             if parsed.overall_status is TestParseStatus.PASS:
                 steps.append(SelfCorrectionStep.PASS)
                 attempts.append(self._attempt(number, steps, test_result, parsed, None, None, None, None, "COMPLETE"))
+                if request.config.require_regression_protection:
+                    final_regression = self.regression_protection.run(RegressionProtectionRequest(request.regression_baseline, request.regression_test_request, request.regression_scope, request.regression_config, ledger))
+                    if final_regression.status is RegressionStatus.REGRESSION_FREE:
+                        return self._finish(SelfCorrectionStatus.REGRESSION_FREE, "targeted tests and regression scope passed with no new failures", attempts, request, ledger, final_test=test_result, final_parsed=parsed, final_failure=final_failure, final_rca=final_rca, final_fix=final_fix, regression_protection=final_regression)
+                    if final_regression.status is RegressionStatus.PRE_EXISTING_FAILURES_ONLY:
+                        return self._finish(SelfCorrectionStatus.PRE_EXISTING_FAILURES_ONLY, final_regression.comparison.message if final_regression.comparison else "only baseline failures remain", attempts, request, ledger, final_test=test_result, final_parsed=parsed, final_failure=final_failure, final_rca=final_rca, final_fix=final_fix, regression_protection=final_regression)
+                    if final_regression.status is RegressionStatus.REGRESSION_DETECTED:
+                        return self._finish(SelfCorrectionStatus.REGRESSION_DETECTED, final_regression.comparison.message if final_regression.comparison else "new regression detected after modification", attempts, request, ledger, final_test=test_result, final_parsed=parsed, final_failure=final_failure, final_rca=final_rca, final_fix=final_fix, regression_protection=final_regression)
+                    if final_regression.status is RegressionStatus.BUDGET_EXHAUSTED:
+                        return self._finish(SelfCorrectionStatus.BUDGET_EXHAUSTED, "regression verification exhausted the shared execution budget", attempts, request, ledger, final_test=test_result, final_parsed=parsed, final_failure=final_failure, final_rca=final_rca, final_fix=final_fix, regression_protection=final_regression)
+                    if final_regression.status is RegressionStatus.VERIFICATION_BLOCKED:
+                        return self._finish(SelfCorrectionStatus.REGRESSION_BLOCKED, "regression verification was blocked by policy or capability", attempts, request, ledger, final_test=test_result, final_parsed=parsed, final_failure=final_failure, final_rca=final_rca, final_fix=final_fix, regression_protection=final_regression)
+                    return self._finish(SelfCorrectionStatus.REGRESSION_INCOMPLETE, "regression verification was incomplete; DONE is not allowed", attempts, request, ledger, final_test=test_result, final_parsed=parsed, final_failure=final_failure, final_rca=final_rca, final_fix=final_fix, regression_protection=final_regression)
                 return self._finish(SelfCorrectionStatus.PASSED, "tests passed; loop stopped before any fix or retry", attempts, request, ledger, final_test=test_result, final_parsed=parsed, final_failure=final_failure, final_rca=final_rca, final_fix=final_fix)
             failure = self.failure_analyzer.analyze(TestFailureAnalysisRequest(test_result.test_run_result, parsed))
             final_failure = failure
@@ -210,9 +237,9 @@ class BoundedSelfCorrectionLoop:
         return SelfCorrectionAttempt(number, tuple((*steps, SelfCorrectionStep.RECORD_ATTEMPT)), test_result.decision.status.value, parsed.overall_status.value if parsed else None, len(failure.findings) if failure else 0, failure.primary_failure_id if failure else None, rca.status.value if rca else None, rca.hypotheses[0].classification.value if rca and rca.hypotheses else None, fix.status.value if fix else None, bool(fix and fix.verified), _fingerprint(_failure_material(failure), 512) if failure else None, action_signature, next_action)
 
     @staticmethod
-    def _finish(status: SelfCorrectionStatus, reason: str, attempts: list[SelfCorrectionAttempt], request: SelfCorrectionRequest, ledger: ExecutionBudgetLedger | None, *, stop_evaluation: StopEvaluation | None = None, final_test=None, final_parsed=None, final_failure=None, final_rca=None, final_fix=None) -> SelfCorrectionResult:
+    def _finish(status: SelfCorrectionStatus, reason: str, attempts: list[SelfCorrectionAttempt], request: SelfCorrectionRequest, ledger: ExecutionBudgetLedger | None, *, stop_evaluation: StopEvaluation | None = None, final_test=None, final_parsed=None, final_failure=None, final_rca=None, final_fix=None, regression_protection=None) -> SelfCorrectionResult:
         decision = RetryDecision(status, reason, len(attempts), request.config.max_attempts, stop_evaluation)
-        return SelfCorrectionResult(status, decision, tuple(attempts[-request.config.max_history:]), final_test, final_parsed, final_failure, final_rca, final_fix, ledger.snapshot() if ledger else None)
+        return SelfCorrectionResult(status=status, decision=decision, attempts=tuple(attempts[-request.config.max_history:]), final_test_result=final_test, final_parsed_result=final_parsed, final_failure_analysis=final_failure, final_root_cause=final_rca, final_fix_result=final_fix, regression_protection=regression_protection, execution_budget=ledger.snapshot() if ledger else None)
 
 
 def run_self_correction(request: SelfCorrectionRequest) -> SelfCorrectionResult:

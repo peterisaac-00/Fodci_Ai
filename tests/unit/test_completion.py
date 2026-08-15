@@ -109,3 +109,22 @@ def test_tool_pass_without_task_criterion_is_not_automatically_enough() -> None:
 def test_evidence_is_bounded() -> None:
     evidence = TaskCompletionEvidence("tool", "x" * 5000)
     assert len(evidence.detail) <= 1024
+
+
+def test_required_regression_verification_missing_is_not_complete() -> None:
+    result = verify_task_completion(TaskCompletionRequest("task", _plan(_step("s1")), completed_step_ids=("s1",), evidence=(TaskCompletionEvidence("targeted", "targeted test passed", EvidenceStrength.DIRECT),), regression_required=True))
+    assert result.decision is CompletionDecision.VERIFICATION_UNAVAILABLE
+    assert "regression" in result.remaining_criteria
+
+
+def test_regression_detected_blocks_completion_even_after_targeted_pass() -> None:
+    regression = SimpleNamespace(status=SimpleNamespace(value="REGRESSION_DETECTED"), comparison=SimpleNamespace(message="new failure detected after modification"))
+    result = verify_task_completion(TaskCompletionRequest("task", _plan(_step("s1")), completed_step_ids=("s1",), evidence=(TaskCompletionEvidence("targeted", "targeted test passed", EvidenceStrength.DIRECT),), regression_required=True, regression_protection=regression))
+    assert result.decision is CompletionDecision.BLOCKED
+    assert result.status is CompletionStatus.BLOCKED
+
+
+def test_regression_free_evidence_allows_completion() -> None:
+    regression = SimpleNamespace(status=SimpleNamespace(value="REGRESSION_FREE"), comparison=SimpleNamespace(message="no new failure detected"))
+    result = verify_task_completion(TaskCompletionRequest("task", _plan(_step("s1")), completed_step_ids=("s1",), evidence=(TaskCompletionEvidence("targeted", "targeted test passed", EvidenceStrength.DIRECT),), regression_required=True, regression_protection=regression))
+    assert result.decision is CompletionDecision.COMPLETE
