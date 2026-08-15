@@ -166,7 +166,7 @@ def test_missing_test_command_and_ambiguous_test_command_are_structured(tmp_path
     assert len(result.candidates) == 2
 
 
-def test_resolution_is_deterministic_and_does_not_create_parser_or_semantic_states(tmp_path: Path) -> None:
+def test_resolution_is_deterministic_and_test_runner_does_not_parse_semantic_states(tmp_path: Path) -> None:
     root = _root(tmp_path)
     (root / "pyproject.toml").write_text("[project]\ndependencies=['pytest']\n", encoding="utf-8")
     (root / "tests").mkdir()
@@ -179,7 +179,7 @@ def test_resolution_is_deterministic_and_does_not_create_parser_or_semantic_stat
     serialized = result.to_dict()
     assert serialized["status"] == "COMPLETED"
     assert all(value not in serialized["status"] for value in ("PASS", "FAIL", "ERROR"))
-    assert not (Path(__file__).parents[2] / "src/backend_ai/tools/test_result_parser.py").exists()
+    assert result.plan is not None and result.plan.framework == "pytest"
 
 
 def test_success_nonzero_stdout_stderr_and_invalid_utf8_are_raw_execution_facts(tmp_path: Path) -> None:

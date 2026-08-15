@@ -24,6 +24,7 @@ from backend_ai.tools import (
     CommandPolicy,
     RunApplicationTool,
     RunTestsTool,
+    TestResultParserTool,
 )
 
 
@@ -134,6 +135,18 @@ class ToolRegistry:
         """Create an explicit Phase 5.5 test execution registry."""
 
         return cls((*cls.default()._tool_instances(), RunTestsTool()))
+
+    @classmethod
+    def with_test_result_parsing(cls) -> "ToolRegistry":
+        """Create an explicit read-only Phase 5.6 result-parsing registry."""
+
+        return cls((*cls.default()._tool_instances(), TestResultParserTool()))
+
+    @classmethod
+    def with_test_parsing(cls) -> "ToolRegistry":
+        """Compatibility alias for the explicit Phase 5.6 parser registry."""
+
+        return cls.with_test_result_parsing()
 
     def _tool_instances(self) -> tuple[Tool, ...]:
         """Return registered concrete tools for controlled registry composition."""

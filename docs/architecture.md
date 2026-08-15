@@ -837,6 +837,29 @@ Explicit argv mode accepts a sequence only and never constructs a shell string. 
 
 `RunTestsTool` is exposed only through `ToolRegistry.with_test_execution()`. The default registry and `AgentLoop` remain read-only and do not gain automatic test execution, automatic tool calling, or autonomous test/fix loops.
 
+## Phase 5.6 test-result parser
+
+Phase 5.6 is the final Phase 5 layer. It consumes one existing raw `TestRunResult` and performs no execution or project access:
+
+```text
+TestRunner
+      ↓ raw bounded TestRunResult
+TestResultParser
+      ↓ bounded framework-aware interpretation
+TestParseResult
+      ↓
+PASS / FAIL / ERROR / NO_TESTS / TIMEOUT / OUTPUT_LIMIT /
+EXECUTION_ERROR / UNKNOWN
+```
+
+`TestResultParser` never calls `ProcessManager`, `TestRunner`, `ApplicationRunner`, `subprocess`, the network, a target-project import, or a filesystem scanner. `parse_test_result()` and `TestResultParserTool` accept only the already-captured result; `ToolRegistry.with_test_result_parsing()` is opt-in. `ToolRegistry.default()` and `AgentLoop` remain unchanged, and parser execution cannot cause retries, reruns, debugging, file modification, or corrective actions.
+
+The parser applies a documented precedence order. Technical execution facts come first: timeout maps to `TIMEOUT`, captured-output truncation maps to `OUTPUT_LIMIT`, and process/policy/start/resolution errors map to `EXECUTION_ERROR`. Strong framework collection/runtime errors then map to `ERROR`; recognized assertion/test failures map to `FAIL`; complete successful summaries with no failures/errors map to `PASS`; an explicit zero-test result maps to `NO_TESTS`. A non-zero exit code without strong semantic evidence is `UNKNOWN`, not an automatic `FAIL`. Contradictory or multi-framework evidence adds warnings and returns `UNKNOWN`/partial rather than trusting a weak token such as `PASS`, `FAIL`, `TEST`, or `ERROR` by itself.
+
+Phase 5.6 supports bounded text formats for pytest, unittest, Jest, Vitest, and package scripts when one framework format is strongly identifiable. `TestParseResult` preserves execution status and exit code and adds counts, bounded failure/error records, failed/error test names, bounded stdout/stderr summaries, framework/format, confidence, warnings, truncation, parse completeness, and reliable duration when present. `TestParseLimits` bounds input bytes, record counts, names, messages, and excerpts. Sensitive key/token/password-like values in extracted structured text are redacted; no unbounded output is copied into a result. The parser is deterministic, uses no timestamps or randomness, and treats output as untrusted data.
+
+Phase 5.6 is semantic interpretation only. It does not diagnose root causes and does not implement a debugger, self-correction, autonomous AgentLoop, planning, memory, RAG, shell, network, package installation, Git mutation, background processes, retries, or Phase 6.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -845,8 +868,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, and opt-in `RunTestsTool`/`TestRunner` with structured raw execution results, bounded resolution, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution | Test-result parsing, semantic PASS/FAIL/ERROR interpretation, automatic debugging/fixing/retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, command execution, policy-wrapped execution, ProcessManager, ApplicationRunner, or TestRunner by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, RunCommandTool, PolicyRunCommandTool, ProcessManager, RunApplicationTool, or RunTestsTool | Agent modification loops, automatic command/application/test execution, test-result parsing, automatic debugging/fixing/retries, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, and opt-in read-only `TestResultParserTool`/`parse_test_result` with structured raw/semantic results, bounded resolution/parsing, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution/parsing | Automatic debugging/fixing/retries, autonomous AgentLoop, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, command execution, policy-wrapped execution, ProcessManager, ApplicationRunner, TestRunner, or TestResultParser by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, RunCommandTool, PolicyRunCommandTool, ProcessManager, RunApplicationTool, RunTestsTool, or TestResultParserTool | Agent modification loops, automatic command/application/test execution, automatic result parsing/debugging/fixing/retries, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
