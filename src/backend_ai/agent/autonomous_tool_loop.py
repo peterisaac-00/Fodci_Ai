@@ -48,6 +48,7 @@ from backend_ai.agent.registry import ToolRegistry, ToolRegistryError, UnknownTo
 from backend_ai.agent.automatic_testing import AutomaticTestRequest, AutomaticTestResult, AutomaticTestOrchestrator
 from backend_ai.agent.test_failure_analysis import FailureAnalysisConfig, TestFailureAnalysis, TestFailureAnalysisRequest, TestFailureAnalyzer
 from backend_ai.agent.root_cause_analysis import RootCauseAnalysis, RootCauseAnalysisConfig, RootCauseAnalysisRequest, RootCauseAnalyzer
+from backend_ai.agent.automatic_fix import AutomaticFixRequest, AutomaticFixResult, apply_automatic_fix
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.stop_conditions import (
@@ -865,6 +866,12 @@ class AutonomousToolLoop:
         """Build bounded causal hypotheses from existing failure analysis only."""
         active = config or RootCauseAnalysisConfig()
         return RootCauseAnalyzer(config=active).analyze(RootCauseAnalysisRequest(failure_analysis, project_context, tuple(evidence), active))
+
+    def apply_automatic_fix(self, request: AutomaticFixRequest) -> AutomaticFixResult:
+        """Apply one explicit, validated fix request through existing mutation safeguards."""
+        if not isinstance(request, AutomaticFixRequest):
+            raise TypeError("request must be AutomaticFixRequest")
+        return apply_automatic_fix(request)
 
     def _coerce_request(self, request: AutonomousLoopRequest | str, project_root: Path | str | None) -> AutonomousLoopRequest:
         if isinstance(request, AutonomousLoopRequest):

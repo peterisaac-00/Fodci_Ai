@@ -1085,6 +1085,32 @@ Every hypothesis carries supporting evidence and can carry contradicting evidenc
 
 `max_causal_depth`, hypothesis/alternative/evidence limits, message limits, context limits, and chain limits are validated. Reaching the causal depth sets `causal_chain_truncated`; analysis and evidence completeness are serialized. The optional `ProjectContext` contributes only existing structured project type, stack, dependency/configuration/database metadata and never triggers a new scan. `AutonomousToolLoop.analyze_root_cause()` exposes the result as explicit diagnostic context only. Phase 7.4 automatic fixing, Phase 7.5 retries, Phase 7.6 regression protection, and Phase 7.7 final verification remain unimplemented.
 
+## Phase 7.4 automatic fix
+
+`AutomaticFixPlanner` and `AutomaticFixOrchestrator` are explicit, bounded orchestration layers above the Phase 4 mutation infrastructure. Their boundary is:
+
+```text
+RootCauseAnalysis
+        ↓
+AutomaticFixPlanner
+        ↓
+FixDecision / FixPlan
+        ↓
+ModificationTransaction
+        ↓
+SafeEditSession / SafeEditPolicy
+        ↓
+ModificationVerifier
+        ↓
+AutomaticFixResult
+```
+
+A `FixPlan` is structured data, not free-form authorization. It must identify one project-relative target file, an exact evidence-backed location, one supported `FixChangeType`, intended change, expected post-state, old/new UTF-8 content, evidence, risk, confidence, selected hypothesis ID, and affected failure IDs. Planner validation rejects absent/non-`ANALYZED` RCA, unknown or non-actionable hypotheses, low confidence, missing or ambiguous locations, unsupported risk, malformed content, empty evidence, sensitive paths, traversal/absolute paths, and policy-denied edit capability. The default `ToolRegistry` and normal CLI remain unchanged; the helper is explicit opt-in.
+
+`AutomaticFixOrchestrator` checks `ExecutionBudgetLedger` action-step and mutation dimensions before mutation. A denied budget returns `BLOCKED` with `operation_started=false`. An accepted plan performs exactly one edit through the existing `ModificationTransaction` and `SafeEditPolicy`; the fix layer contains no raw filesystem mutation. Existing snapshots, backups, atomic edit, path/symlink protections, concurrent-change detection, recovery semantics, and `ModificationVerifier` remain authoritative. User changes are preserved rather than forcibly overwritten.
+
+Results distinguish proposed/accepted from attempted/succeeded/verified/rejected/failed/blocked/recovery-required states. `FIX_VERIFIED` means the explicit target post-state and transaction verification succeeded; it never means tests passed. `AutomaticFixResult` exposes the transaction, change summary, budget decision/snapshot, `tests_rerun=false`, and `retries=0`. Phase 7.4 intentionally performs no test rerun, no retry, no recursive fix loop, no diagnosis, no package installation, no network, no Git mutation, no secrets or `.env` access, no shell/background execution, and no broad refactoring. Phase 7.5+ remains unimplemented.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -1093,8 +1119,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, explicit opt-in `AutonomousToolLoop` models, pure `StopConditionEvaluator`/`StopEvaluation` models, pure `ErrorClassifier`/`RecoverabilityPolicy` models, pure `TaskCompletionVerifier`/`TaskCompletionResult` models, explicit `AutomaticTestOrchestrator` models over `run_tests`, pure `TestFailureAnalyzer` models over `TestParseResult`, and pure `RootCauseAnalyzer` models over `TestFailureAnalysis` | Phase 7.4+ automatic fixing/retries, regression protection, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, explicitly constructed `AutonomousToolLoop`, pure stop-condition APIs, execution budgets, explicit recovery APIs, explicit task-completion verification APIs, explicit automatic-test orchestration, explicit failure-analysis observation, and explicit root-cause analysis observation without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 7.4+ root-cause fixing/retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, explicit opt-in `AutonomousToolLoop` models, pure `StopConditionEvaluator`/`StopEvaluation` models, pure `ErrorClassifier`/`RecoverabilityPolicy` models, pure `TaskCompletionVerifier`/`TaskCompletionResult` models, explicit `AutomaticTestOrchestrator` models over `run_tests`, pure `TestFailureAnalyzer` models over `TestParseResult`, pure `RootCauseAnalyzer` models over `TestFailureAnalysis`, and explicit `AutomaticFixPlanner`/`AutomaticFixOrchestrator` models over `ModificationTransaction` | Phase 7.5+ retries, regression protection, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, explicitly constructed `AutonomousToolLoop`, pure stop-condition APIs, execution budgets, explicit recovery APIs, explicit task-completion verification APIs, explicit automatic-test orchestration, explicit failure-analysis observation, explicit root-cause analysis observation, and explicit automatic-fix helper without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 7.5+ retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
