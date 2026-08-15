@@ -49,6 +49,7 @@ from backend_ai.agent.automatic_testing import AutomaticTestRequest, AutomaticTe
 from backend_ai.agent.test_failure_analysis import FailureAnalysisConfig, TestFailureAnalysis, TestFailureAnalysisRequest, TestFailureAnalyzer
 from backend_ai.agent.root_cause_analysis import RootCauseAnalysis, RootCauseAnalysisConfig, RootCauseAnalysisRequest, RootCauseAnalyzer
 from backend_ai.agent.automatic_fix import AutomaticFixRequest, AutomaticFixResult, apply_automatic_fix
+from backend_ai.agent.self_correction import SelfCorrectionRequest, SelfCorrectionResult, run_self_correction
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.stop_conditions import (
@@ -872,6 +873,12 @@ class AutonomousToolLoop:
         if not isinstance(request, AutomaticFixRequest):
             raise TypeError("request must be AutomaticFixRequest")
         return apply_automatic_fix(request)
+
+    def run_self_correction(self, request: SelfCorrectionRequest) -> SelfCorrectionResult:
+        """Run one explicit bounded test/analyze/fix/retest invocation."""
+        if not isinstance(request, SelfCorrectionRequest):
+            raise TypeError("request must be SelfCorrectionRequest")
+        return run_self_correction(request)
 
     def _coerce_request(self, request: AutonomousLoopRequest | str, project_root: Path | str | None) -> AutonomousLoopRequest:
         if isinstance(request, AutonomousLoopRequest):

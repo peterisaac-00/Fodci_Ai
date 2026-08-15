@@ -66,6 +66,17 @@ from backend_ai.agent.execution_budget import (
     ExecutionBudgetSnapshot,
     ExecutionUsage,
 )
+from backend_ai.agent.self_correction import (
+    BoundedSelfCorrectionLoop,
+    RetryDecision,
+    SelfCorrectionAttempt,
+    SelfCorrectionConfig,
+    SelfCorrectionRequest,
+    SelfCorrectionResult,
+    SelfCorrectionStatus,
+    SelfCorrectionStep,
+    run_self_correction,
+)
 from backend_ai.agent.automatic_fix import (
     AutomaticFixConfig,
     AutomaticFixOrchestrator,
@@ -250,6 +261,15 @@ __all__ = [
     "ExecutionBudgetLedger",
     "ExecutionBudgetSnapshot",
     "ExecutionUsage",
+    "BoundedSelfCorrectionLoop",
+    "RetryDecision",
+    "SelfCorrectionAttempt",
+    "SelfCorrectionConfig",
+    "SelfCorrectionRequest",
+    "SelfCorrectionResult",
+    "SelfCorrectionStatus",
+    "SelfCorrectionStep",
+    "run_self_correction",
     "AutomaticFixConfig",
     "AutomaticFixOrchestrator",
     "AutomaticFixPlanner",
