@@ -47,6 +47,7 @@ from backend_ai.agent.planner import (
 from backend_ai.agent.registry import ToolRegistry, ToolRegistryError, UnknownToolError
 from backend_ai.agent.automatic_testing import AutomaticTestRequest, AutomaticTestResult, AutomaticTestOrchestrator
 from backend_ai.agent.test_failure_analysis import FailureAnalysisConfig, TestFailureAnalysis, TestFailureAnalysisRequest, TestFailureAnalyzer
+from backend_ai.agent.root_cause_analysis import RootCauseAnalysis, RootCauseAnalysisConfig, RootCauseAnalysisRequest, RootCauseAnalyzer
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.stop_conditions import (
@@ -859,6 +860,11 @@ class AutonomousToolLoop:
     def analyze_test_failure(self, test_result, parsed_result, *, config: FailureAnalysisConfig | None = None) -> TestFailureAnalysis:
         """Analyze existing test evidence without executing, mutating, or repairing anything."""
         return TestFailureAnalyzer(config=config).analyze(TestFailureAnalysisRequest(test_result, parsed_result, config or FailureAnalysisConfig()))
+
+    def analyze_root_cause(self, failure_analysis: TestFailureAnalysis, *, project_context=None, evidence=(), config: RootCauseAnalysisConfig | None = None) -> RootCauseAnalysis:
+        """Build bounded causal hypotheses from existing failure analysis only."""
+        active = config or RootCauseAnalysisConfig()
+        return RootCauseAnalyzer(config=active).analyze(RootCauseAnalysisRequest(failure_analysis, project_context, tuple(evidence), active))
 
     def _coerce_request(self, request: AutonomousLoopRequest | str, project_root: Path | str | None) -> AutonomousLoopRequest:
         if isinstance(request, AutonomousLoopRequest):
