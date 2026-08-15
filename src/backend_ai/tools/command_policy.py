@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 from backend_ai.tools.base import ToolError, ToolErrorCode, ToolMetadata
 from backend_ai.tools.command import CommandRequest, CommandResult, run_command
+from backend_ai.tools.process_manager import ProcessManager
 
 
 class CommandRiskLevel(str, Enum):
@@ -221,7 +222,7 @@ class PolicyRunCommandTool:
         decision = self.policy.evaluate(request)
         if not decision.allowed:
             raise ToolError(decision.error_code or ToolErrorCode.COMMAND_DENIED, decision.reason)
-        return PolicyCommandResult(decision, run_command(request))
+        return PolicyCommandResult(decision, ProcessManager().execute(request))
 
 
 def _deny(argv: tuple[str, ...], rule: str, reason: str, code: ToolErrorCode) -> CommandDecision:

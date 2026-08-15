@@ -73,6 +73,12 @@ class CommandResult:
     error_code: str | None
     error_message: str | None
     warnings: tuple[str, ...]
+    process_state: str | None = None
+    lifecycle_history: tuple[str, ...] = ()
+    termination_attempted: bool = False
+    killed: bool = False
+    stdout_bytes: int = 0
+    stderr_bytes: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -96,6 +102,12 @@ class CommandResult:
             "error_code": self.error_code,
             "error_message": self.error_message,
             "warnings": list(self.warnings),
+            "process_state": self.process_state,
+            "lifecycle_history": list(self.lifecycle_history),
+            "termination_attempted": self.termination_attempted,
+            "killed": self.killed,
+            "stdout_bytes": self.stdout_bytes,
+            "stderr_bytes": self.stderr_bytes,
         }
 
 

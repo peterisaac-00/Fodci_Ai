@@ -19,6 +19,13 @@ from backend_ai.tools.edit_file import (
     EditFileTool,
     edit_file,
 )
+from backend_ai.tools.process_manager import (
+    DEFAULT_TERMINATION_GRACE_SECONDS,
+    ProcessLifecycle,
+    ProcessManager,
+    ProcessState,
+    ProcessTermination,
+)
 from backend_ai.tools.command_policy import (
     CommandDecision,
     CommandPolicy,
@@ -184,6 +191,11 @@ __all__ = [
     "edit_file",
     "DeleteFileResult",
     "DeleteFileTool",
+    "DEFAULT_TERMINATION_GRACE_SECONDS",
+    "ProcessLifecycle",
+    "ProcessManager",
+    "ProcessState",
+    "ProcessTermination",
     "CommandDecision",
     "CommandPolicy",
     "CommandRiskLevel",

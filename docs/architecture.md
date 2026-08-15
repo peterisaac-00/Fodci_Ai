@@ -757,9 +757,35 @@ CommandPolicy.evaluate()
 
 Evaluation precedence rejects malformed argv, shell interpreters and emulation patterns, dangerous executable families, destructive/privileged/package/network/system/Git mutation categories, suspicious arguments, unsafe absolute/traversal/Windows/UNC paths, symlink-escaping working directories, unknown executable paths, and disallowed environment variables before any process is started. Environment inheritance is disabled by default in policy-wrapped requests; explicit environment variables use an allowlist, and values never enter decisions or error messages.
 
-`PolicyRunCommandTool` is an opt-in wrapper that calls `run_command` only after an allowed decision. Denials raise shared structured errors such as `COMMAND_NOT_ALLOWED`, `SHELL_BYPASS_ATTEMPT`, `UNSAFE_ARGUMENT`, `UNSAFE_WORKING_DIRECTORY`, `UNSAFE_EXECUTABLE`, `ENVIRONMENT_NOT_ALLOWED`, `GIT_MUTATION_DENIED`, `NETWORK_COMMAND_DENIED`, or `PACKAGE_OPERATION_DENIED`. The policy never invokes a shell, parses shell syntax, calls the AgentLoop, mutates files/Git, accesses the network, or installs packages. `ToolRegistry.with_command_policy()` is explicit; `ToolRegistry.default()` and the low-level `with_command_execution()` registry remain unchanged.
+`PolicyRunCommandTool` is an opt-in wrapper that calls the process-management layer only after an allowed decision. Denials raise shared structured errors such as `COMMAND_NOT_ALLOWED`, `SHELL_BYPASS_ATTEMPT`, `UNSAFE_ARGUMENT`, `UNSAFE_WORKING_DIRECTORY`, `UNSAFE_EXECUTABLE`, `ENVIRONMENT_NOT_ALLOWED`, `GIT_MUTATION_DENIED`, `NETWORK_COMMAND_DENIED`, or `PACKAGE_OPERATION_DENIED`. The policy never invokes a shell, parses shell syntax, calls the AgentLoop, mutates files/Git, accesses the network, or installs packages. `ToolRegistry.with_command_policy()` is explicit; `ToolRegistry.default()` and the low-level `with_command_execution()` registry remain unchanged.
 
 > **Command Safety Policy is a security boundary, not a guarantee that arbitrary developer commands are safe.**
+
+## Phase 5.3 process management
+
+Phase 5.3 introduces a reusable `ProcessManager` for one already-approved `CommandRequest`. It deliberately does not make security decisions:
+
+```text
+CommandRequest
+      ↓
+CommandPolicy.evaluate()
+      ↓ allowed
+ProcessManager
+      ↓
+Popen(shell=False, stdin=DEVNULL, explicit cwd)
+      ↓
+ProcessLifecycle + bounded capture + termination/reaping
+      ↓
+CommandResult
+```
+
+`ProcessLifecycle` is an immutable state-history object. Valid transitions include `REQUESTED → VALIDATING → STARTING → RUNNING → COMPLETED → CLEANED_UP`, `RUNNING → TIMED_OUT → TERMINATING → TERMINATED → CLEANED_UP`, and output-limit paths through `OUTPUT_LIMIT_REACHED`. Start failures pass through `FAILED_TO_START` and still reach cleanup. Invalid transitions raise `PROCESS_INVALID_STATE`; no singleton or global active-process registry is used.
+
+`ProcessManager` validates the technical request and builds the controlled environment, but it does not duplicate or override `CommandPolicy`. It starts a direct process with shell disabled, stdin detached, explicit root-contained cwd, and POSIX process-group/session isolation where supported. stdout/stderr are collected separately through bounded selector reads. When a stream exceeds its limit, excess bytes are drained and discarded while the retained prefix and truncation flag remain bounded and deterministic. This avoids leaving a writing child blocked on a full pipe.
+
+On timeout, the manager records `TIMED_OUT`, attempts graceful process-group/session termination where supported, waits for a bounded grace period, escalates to forced kill if necessary, waits for reaping, then closes the pipes. The result distinguishes `started`, `completed`, `succeeded`, `exit_code`, `timed_out`, `termination_attempted`, `killed`, lifecycle state/history, retained output byte counts, and structured process failure codes. Direct-child cleanup is bounded; descendant cleanup and signal semantics differ across POSIX and Windows and are not claimed to be identical.
+
+`PolicyRunCommandTool` uses `ProcessManager` only after `CommandPolicy.evaluate()` allows the request. `ProcessManager` itself is not registered in `ToolRegistry.default()` and does not enable AgentLoop execution. Phase 5.4 Application Runner, Phase 5.5 Test Runner, Phase 5.6 Test Result Parser, shell/pipeline/network/package/Git mutation, background queues, retries, scheduling, and autonomous execution are absent.
 
 ## Present implementation
 
@@ -769,8 +795,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, and opt-in `PolicyRunCommandTool`/`CommandPolicy` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution | Git mutation, terminal execution beyond explicit policy boundary, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, command execution, or policy-wrapped execution by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, RunCommandTool, or PolicyRunCommandTool | Agent modification loops, automatic command execution, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, and reusable `ProcessManager` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution | Application/test runner, test-result parsing, Git mutation, terminal execution beyond explicit policy/process boundaries, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, command execution, policy-wrapped execution, or ProcessManager by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, RunCommandTool, PolicyRunCommandTool, or ProcessManager | Agent modification loops, automatic command execution, application/test runners, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
