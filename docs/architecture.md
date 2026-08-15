@@ -984,6 +984,34 @@ Budget exhaustion is represented by `BudgetExhaustion` and takes precedence over
 
 Phase 6.6 does not implement generic retries, automatic code fixes, self-correction, autonomous debugging, memory, RAG, network, package installation, Git mutation, shell execution, background agents, scheduling, daemon processes, unrestricted command/file modification, or automatic CLI autonomy. Phase 7 remains unimplemented.
 
+## Phase 6.7 task completion verification
+
+`TaskCompletionVerifier` is a pure, deterministic evaluator over an explicit `TaskCompletionRequest`. It does not call the model, execute tools, inspect paths, read secrets, run tests, mutate files/Git, use subprocesses, or access the network. It aggregates existing `ExecutionPlan`, completed/skipped steps, bounded `ToolResult` history, `VerificationEvidence`, `RecoveryResult`, `ExecutionBudgetSnapshot`, explicit criteria/evidence, and surfaced unexpected modifications.
+
+The immutable completion model is:
+
+```text
+TaskCompletionRequest
+        ↓
+TaskCompletionVerifier.verify()
+        ↓
+TaskCompletionResult
+  ├── COMPLETE
+  ├── INCOMPLETE
+  ├── BLOCKED
+  ├── FAILED
+  ├── VERIFICATION_UNAVAILABLE
+  └── INSUFFICIENT_EVIDENCE
+```
+
+A successful action is not task completion, a passing unrelated test is not sufficient proof, and `ACTION: FINAL` is only a model claim. Required plan steps, explicit criteria, relevant verification/test evidence, recovery state, budget state, and safety boundaries are evaluated independently. Pending or unavailable required verification cannot silently become `DONE`; critical unexpected modifications block completion, while non-critical unexpected changes remain explicitly unverified. Investigation/documentation plans are not forced to have mutation or test criteria that the plan does not require.
+
+`AutonomousToolLoop` runs the verifier when it receives `ACTION: FINAL` and exposes `TaskCompletionResult` in both `AutonomousLoopResult` and `AutonomousLoopState`. A non-complete completion result is passed into the existing `StopConditionEvaluator` through `completion_decision`; the stop evaluator remains authoritative for `DONE`, `CONTINUE`, `BLOCKED`, and `FAILED`. Budget exhaustion and safety/policy blocks retain higher precedence. Recovery consumes completion evidence but remains responsible for recovery decisions; the completion verifier never performs recovery itself.
+
+Evidence and history are bounded by criteria, evidence, tool-result, text, plan-step, and unexpected-modification limits. Completion confidence is `HIGH`, `MEDIUM`, `LOW`, or `UNKNOWN`, and each criterion reports satisfied, unsatisfied, blocked, unverified, or not-applicable status plus expected/observed evidence. The layer is intentionally conservative: insufficient evidence produces continuation or verification-unavailable semantics instead of a false positive.
+
+Phase 6.7 does not implement Phase 7, memory, RAG, dataset collection, model training, fine-tuning, network access, package installation, Git mutation, shell bypasses, background agents, unrestricted autonomy, or automatic CLI autonomy.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -992,8 +1020,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, explicit opt-in `AutonomousToolLoop` models, pure `StopConditionEvaluator`/`StopEvaluation` models, and pure `ErrorClassifier`/`RecoverabilityPolicy` models with bounded recovery evidence/history | Phase 7 automatic debugging/fixing, generic retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, explicitly constructed `AutonomousToolLoop`, pure stop-condition APIs, execution budgets, and explicit recovery APIs as separate APIs without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 7 automatic debugging/fixing/retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, explicit opt-in `AutonomousToolLoop` models, pure `StopConditionEvaluator`/`StopEvaluation` models, pure `ErrorClassifier`/`RecoverabilityPolicy` models, and pure `TaskCompletionVerifier`/`TaskCompletionResult` models with bounded completion evidence | Phase 7 automatic debugging/fixing, generic retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, explicitly constructed `AutonomousToolLoop`, pure stop-condition APIs, execution budgets, explicit recovery APIs, and explicit task-completion verification APIs as separate APIs without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 7 automatic debugging/fixing/retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

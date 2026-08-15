@@ -40,6 +40,10 @@ class StopReason(str, Enum):
     TOOL_UNAVAILABLE = "TOOL_UNAVAILABLE"
     VERIFICATION_FAILED = "VERIFICATION_FAILED"
     BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
+    TASK_COMPLETION_INCOMPLETE = "TASK_COMPLETION_INCOMPLETE"
+    TASK_COMPLETION_BLOCKED = "TASK_COMPLETION_BLOCKED"
+    TASK_COMPLETION_FAILED = "TASK_COMPLETION_FAILED"
+    VERIFICATION_UNAVAILABLE = "VERIFICATION_UNAVAILABLE"
 
 
 class VerificationState(str, Enum):
@@ -126,6 +130,7 @@ class StopConditionRequest:
     emergency_bound_reached: bool = False
     fatal_error: str | None = None
     budget_decision: BudgetDecision | None = None
+    completion_decision: str | None = None
     warning_messages: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -163,6 +168,7 @@ class StopConditionRequest:
             "emergency_bound_reached": self.emergency_bound_reached,
             "fatal_error": _bounded(self.fatal_error or "", 1_024) if self.fatal_error is not None else None,
             "budget_decision": self.budget_decision.to_dict() if self.budget_decision else None,
+            "completion_decision": self.completion_decision,
             "warning_messages": list(self.warning_messages),
         }
 
@@ -227,6 +233,10 @@ class StopConditionEvaluator:
 
         if request.budget_decision is not None and not request.budget_decision.allowed:
             return self._result(StopDecision.BUDGET_EXHAUSTED, StopReason.BUDGET_EXHAUSTED, request, evidence + [request.budget_decision.message], remaining, "BUDGET_EXHAUSTED", "HIGH", warnings, blocking=[request.budget_decision.exhaustion.value if request.budget_decision.exhaustion else "budget limit reached"])
+        if request.completion_decision in {"BLOCKED", "FAILED", "VERIFICATION_UNAVAILABLE", "INSUFFICIENT_EVIDENCE", "INCOMPLETE", "CONTINUE"}:
+            decision = StopDecision.BLOCKED if request.completion_decision == "BLOCKED" else StopDecision.FAILED if request.completion_decision == "FAILED" else StopDecision.CONTINUE
+            reason = StopReason.TASK_COMPLETION_BLOCKED if request.completion_decision == "BLOCKED" else StopReason.TASK_COMPLETION_FAILED if request.completion_decision == "FAILED" else StopReason.VERIFICATION_UNAVAILABLE if request.completion_decision == "VERIFICATION_UNAVAILABLE" else StopReason.TASK_COMPLETION_INCOMPLETE
+            return self._result(decision, reason, request, evidence + [f"task completion verifier returned {request.completion_decision}"], remaining, "TASK_COMPLETION", "HIGH", warnings, blocking=("task completion criteria are not satisfied",) if decision is StopDecision.BLOCKED else ())
         if request.fatal_error:
             return self._result(StopDecision.FAILED, StopReason.INTERNAL_ERROR, request, evidence + [request.fatal_error], remaining, "FATAL_ERROR", "HIGH", warnings)
         if request.invalid_action:
