@@ -22,6 +22,7 @@ from backend_ai.tools import (
     RunCommandTool,
     PolicyRunCommandTool,
     CommandPolicy,
+    RunApplicationTool,
 )
 
 
@@ -120,6 +121,12 @@ class ToolRegistry:
         """Create an explicit Phase 5.2 policy-wrapped execution registry."""
 
         return cls((*cls.default()._tool_instances(), PolicyRunCommandTool(policy)))
+
+    @classmethod
+    def with_application_execution(cls) -> "ToolRegistry":
+        """Create an explicit Phase 5.4 application execution registry."""
+
+        return cls((*cls.default()._tool_instances(), RunApplicationTool()))
 
     def _tool_instances(self) -> tuple[Tool, ...]:
         """Return registered concrete tools for controlled registry composition."""

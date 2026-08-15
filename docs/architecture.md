@@ -785,7 +785,31 @@ CommandResult
 
 On timeout, the manager records `TIMED_OUT`, attempts graceful process-group/session termination where supported, waits for a bounded grace period, escalates to forced kill if necessary, waits for reaping, then closes the pipes. The result distinguishes `started`, `completed`, `succeeded`, `exit_code`, `timed_out`, `termination_attempted`, `killed`, lifecycle state/history, retained output byte counts, and structured process failure codes. Direct-child cleanup is bounded; descendant cleanup and signal semantics differ across POSIX and Windows and are not claimed to be identical.
 
-`PolicyRunCommandTool` uses `ProcessManager` only after `CommandPolicy.evaluate()` allows the request. `ProcessManager` itself is not registered in `ToolRegistry.default()` and does not enable AgentLoop execution. Phase 5.4 Application Runner, Phase 5.5 Test Runner, Phase 5.6 Test Result Parser, shell/pipeline/network/package/Git mutation, background queues, retries, scheduling, and autonomous execution are absent.
+`PolicyRunCommandTool` uses `ProcessManager` only after `CommandPolicy.evaluate()` allows the request. `ProcessManager` itself is not registered in `ToolRegistry.default()` and does not enable AgentLoop execution.
+
+## Phase 5.4 application runner
+
+Phase 5.4 adds one bounded application-launch layer without creating a second command, policy, process, or project-scanning system:
+
+```text
+ApplicationRunRequest
+          ↓
+ProjectContextBuilder / bounded ProjectStructure evidence
+          ↓
+ApplicationCommandResolver
+          ↓ ApplicationRunPlan or unresolved/ambiguous result
+CommandPolicy.evaluate()
+          ↓ allowed
+ProcessManager
+          ↓
+ApplicationRunResult
+```
+
+`ApplicationCommandResolver` uses the existing `ProjectContext` and its underlying `ProjectStructure` evidence. It does not import target projects, execute project code to discover launch behavior, inspect `.env`/credential/private-key content, install dependencies, or access the network. Automatic resolution is deliberately small: Python `main.py`/`app.py`/`server.py` only with a supported entry-point marker, Django `manage.py` only with detected Django evidence, and Node `package.json` `scripts.start`/`main` only for an existing exact `node <target>` script. Existing target paths must be safe, bounded, and supported. Mixed projects or multiple candidates produce deterministic `AMBIGUOUS_ENTRYPOINT`; insufficient evidence produces `NO_APPLICATION_ENTRYPOINT`, `UNSUPPORTED_PROJECT`, or `RESOLUTION_FAILED` rather than an invented command.
+
+Explicit argv mode does not reinterpret or modify the caller’s argv. It still constructs a `CommandRequest` and passes through `CommandPolicy`; shell strings, shell wrappers, chaining, redirects, package/network/Git/system operations, unsafe paths, and unknown executable paths remain rejected before ProcessManager. Plans expose safe normalized argv, relative working directory, evidence/source, project type, confidence, explicit-vs-automatic mode, and warnings. Results preserve safe ProcessManager output/lifecycle metadata and add application status/failure classification without environment values or sensitive file contents.
+
+Long-running applications are bounded by the request timeout. The runner does not detach, daemonize, queue, retry, schedule, or register background processes. When the timeout expires, ProcessManager terminates/reaps/cleans the process and the runner returns `TIMED_OUT`; no unmanaged application is intentionally left alive. `RunApplicationTool` is available only through `ToolRegistry.with_application_execution()`. `ToolRegistry.default()` and `AgentLoop` remain unchanged. Phase 5.5 Test Runner and Phase 5.6 Test Result Parser are intentionally absent.
 
 ## Present implementation
 
@@ -795,8 +819,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, and reusable `ProcessManager` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution | Application/test runner, test-result parsing, Git mutation, terminal execution beyond explicit policy/process boundaries, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, command execution, policy-wrapped execution, or ProcessManager by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, RunCommandTool, PolicyRunCommandTool, or ProcessManager | Agent modification loops, automatic command execution, application/test runners, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, and opt-in `RunApplicationTool`/`ApplicationRunner` with structured results, snapshots, bounded internal diffs, optional backups, verification, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution | Test runner, test-result parsing, Git mutation, terminal execution beyond explicit policy/process/application boundaries, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, command execution, policy-wrapped execution, ProcessManager, or ApplicationRunner by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, RunCommandTool, PolicyRunCommandTool, ProcessManager, or RunApplicationTool | Agent modification loops, automatic command/application execution, test runner, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
