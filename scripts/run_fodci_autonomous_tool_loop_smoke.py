@@ -33,14 +33,16 @@ def main() -> None:
     engine = SmokeEngine()
     loop = AutonomousToolLoop(engine, registry=ToolRegistry.default())
     result = loop.run(AutonomousLoopRequest("Investigate this project", root))
-    assert result.status is LoopStatus.COMPLETED
-    assert result.final_answer == "read-only smoke complete"
+    assert result.status is LoopStatus.BLOCKED
+    assert result.stop_evaluation is not None
+    assert result.stop_evaluation.decision.value == "BLOCKED"
+    assert result.stop_evaluation.reason.value == "MISSING_CAPABILITY"
     assert [call.name for call in result.tool_calls] == ["project_context", "search_code"]
     assert all(tool_result.success for tool_result in result.tool_results)
     assert result.steps[0].selected_tool == "project_context"
     assert result.steps[-1].selected_tool is None
     assert len(engine.prompts) == 2
-    print("Phase 6.3 autonomous tool-loop smoke passed")
+    print("Phase 6.4 autonomous stop-condition smoke passed")
 
 
 if __name__ == "__main__":

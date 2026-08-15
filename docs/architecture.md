@@ -942,7 +942,35 @@ After every successful tool execution, the loop stores a bounded structured obse
 
 A private fixed bound of eight tool executions per invocation prevents infinite development loops. This emergency bound is explicit, deterministic, and not model-overridable, but it is not the configurable Phase 6.5 max-iterations feature. Plan steps with `NO_SUITABLE_TOOL` may be recorded as bounded non-executable skips; unavailable or ambiguous required capabilities produce structured failure. Mutation requires an explicitly supplied mutation registry and remains behind `SafeEditSession`/`SafeEditPolicy`; command/application/test actions remain behind `CommandPolicy`/`ProcessManager`.
 
-Phase 6.3 is the first autonomous execution phase, but it intentionally does not implement Phase 6.4 stop conditions, Phase 6.5 configurable iteration limits, Phase 6.6 error recovery, retries, self-correction, autonomous debugging, memory, RAG, network, package installation, Git mutation, shell execution, background agents, scheduling, daemon processes, unrestricted command/file modification, or automatic CLI autonomy.
+Phase 6.3 is the first autonomous execution phase. Phase 6.4 adds semantic stop evaluation without adding another planner, registry, executor, or recovery mechanism.
+
+## Phase 6.4 stop conditions
+
+`StopConditionEvaluator` is a pure deterministic layer over explicitly supplied `ExecutionPlan`, completed/skipped/blocked step IDs, `ToolResult`, verification evidence, action validity, capability availability, context completeness, and emergency-bound state. It does not call the LLM, inspect the filesystem, dispatch tools, execute subprocesses, use the network, or modify files/Git.
+
+The immutable public model is:
+
+```text
+StopConditionRequest
+        ↓
+StopConditionEvaluator.evaluate()
+        ↓
+StopEvaluation
+  ├── DONE
+  ├── CONTINUE
+  ├── FAILED
+  └── BLOCKED
+```
+
+`StopReason` distinguishes final response, task completion, verification passed, remaining plan work, follow-up evidence, verification required/failed, tool failure, invalid action, missing capability, safety/policy block, emergency bound, incomplete context, unresolved state, and internal error. `VerificationEvidence` records `NOT_REQUIRED`, `REQUIRED`, `PENDING`, `PASSED`, `FAILED`, `UNAVAILABLE`, or `INCOMPLETE` without serializing source contents or secrets.
+
+A valid `ACTION: FINAL` is not automatically completion proof. It is `DONE` only if the current plan has no remaining required steps, context is sufficient, and no verification obligation is pending. If required steps remain, the evaluator returns `CONTINUE`; if the context/capability/safety boundary prevents progress, it returns `BLOCKED`. A successful mutation sets verification to `PENDING`, while `verify_modification` success with complete explicit evidence or `parse_test_result` with semantic `PASS` can produce `VerificationEvidence.PASSED` and allow `DONE` when no required work remains. Test failures remain non-DONE; they produce structured verification failure/continuation evidence rather than automatic recovery.
+
+Tool failures are classified without recovery: policy denial, unavailable tools, permission/safety boundaries, and missing capabilities are `BLOCKED`; fatal infrastructure/invariant failures are `FAILED`; a failure explicitly marked recoverable can be represented as `CONTINUE` for a later bounded action, but this phase does not retry or repair it. The fixed eight-tool emergency bound remains a safety backstop and yields non-DONE `BLOCKED` evaluation with `EMERGENCY_BOUND_REACHED`; it is not configurable max iterations.
+
+`AutonomousLoopResult.stop_evaluation` carries the structured decision, reason, bounded evidence, blocking conditions, remaining required steps, verification state, tool state, confidence, warnings, and emergency-bound metadata. The existing legacy `LoopStatus` values remain available for backward compatibility, while Phase 6.4 semantic stop state is authoritative for completion decisions. The autonomous loop remains explicit opt-in and the default CLI/`AgentLoop` behavior remains unchanged.
+
+Phase 6.4 intentionally does not implement Phase 6.5 configurable iteration limits, Phase 6.6 error recovery, retries, self-correction, autonomous debugging, memory, RAG, network, package installation, Git mutation, shell execution, background agents, scheduling, daemon processes, unrestricted command/file modification, or automatic CLI autonomy.
 
 ## Present implementation
 
@@ -952,8 +980,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, and explicit opt-in `AutonomousToolLoop` models with structured raw/semantic/plan/selection/loop results, bounded resolution/parsing/planning/selection/execution, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution/parsing | Phase 6.4+ stop/recovery systems, automatic debugging/fixing/retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, and explicitly constructed `AutonomousToolLoop` as separate APIs without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 6.4+ stop/recovery systems, automatic result parsing/debugging/fixing/retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, explicit opt-in `AutonomousToolLoop` models, and pure `StopConditionEvaluator`/`StopEvaluation` models with structured raw/semantic/plan/selection/loop/stop results and bounded verification evidence | Phase 6.5+ max/recovery systems, automatic debugging/fixing/retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, explicitly constructed `AutonomousToolLoop`, and pure stop-condition APIs as separate APIs without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 6.5+ max/recovery systems, automatic debugging/fixing/retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |

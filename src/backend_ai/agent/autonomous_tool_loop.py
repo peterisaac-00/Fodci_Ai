@@ -37,6 +37,15 @@ from backend_ai.agent.planner import (
     PlannerTaskType,
 )
 from backend_ai.agent.registry import ToolRegistry, ToolRegistryError, UnknownToolError
+from backend_ai.agent.stop_conditions import (
+    StopConditionRequest,
+    StopDecision,
+    StopEvaluation,
+    StopReason,
+    VerificationEvidence,
+    VerificationState,
+    evaluate_stop_condition,
+)
 from backend_ai.agent.tool_selection import (
     ToolSelectionDecision,
     ToolSelectionRequest,
@@ -68,6 +77,7 @@ class LoopLifecycleState(str, Enum):
     REQUESTING_NEXT_ACTION = "REQUESTING_NEXT_ACTION"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    BLOCKED = "BLOCKED"
 
 
 class LoopActionType(str, Enum):
@@ -84,6 +94,8 @@ class LoopStatus(str, Enum):
     CONTEXT_LIMIT_REACHED = "CONTEXT_LIMIT_REACHED"
     LOOP_BOUND_REACHED = "LOOP_BOUND_REACHED"
     EXECUTION_ABORTED = "EXECUTION_ABORTED"
+    CONTINUE = "CONTINUE"
+    BLOCKED = "BLOCKED"
 
 
 class LoopFailureCode(str, Enum):
@@ -294,6 +306,7 @@ class AutonomousLoopResult:
     usage: AgentUsage
     warnings: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
+    stop_evaluation: StopEvaluation | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -309,20 +322,22 @@ class AutonomousLoopResult:
             "usage": self.usage.to_dict(),
             "warnings": list(self.warnings),
             "errors": list(self.errors),
+            "stop_evaluation": self.stop_evaluation.to_dict() if self.stop_evaluation else None,
         }
 
 
 _ALLOWED_TRANSITIONS: dict[LoopLifecycleState, frozenset[LoopLifecycleState]] = {
     LoopLifecycleState.CREATED: frozenset({LoopLifecycleState.PLANNING, LoopLifecycleState.FAILED}),
     LoopLifecycleState.PLANNING: frozenset({LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.FAILED}),
-    LoopLifecycleState.SELECTING_TOOL: frozenset({LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.REQUESTING_NEXT_ACTION, LoopLifecycleState.FAILED, LoopLifecycleState.COMPLETED}),
-    LoopLifecycleState.VALIDATING_ACTION: frozenset({LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.COMPLETED, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.SELECTING_TOOL: frozenset({LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.REQUESTING_NEXT_ACTION, LoopLifecycleState.FAILED, LoopLifecycleState.BLOCKED, LoopLifecycleState.COMPLETED}),
+    LoopLifecycleState.VALIDATING_ACTION: frozenset({LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.REQUESTING_NEXT_ACTION, LoopLifecycleState.COMPLETED, LoopLifecycleState.FAILED, LoopLifecycleState.BLOCKED}),
     LoopLifecycleState.EXECUTING_TOOL: frozenset({LoopLifecycleState.OBSERVING_RESULT, LoopLifecycleState.FAILED}),
-    LoopLifecycleState.OBSERVING_RESULT: frozenset({LoopLifecycleState.UPDATING_CONTEXT, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.OBSERVING_RESULT: frozenset({LoopLifecycleState.UPDATING_CONTEXT, LoopLifecycleState.FAILED, LoopLifecycleState.BLOCKED}),
     LoopLifecycleState.UPDATING_CONTEXT: frozenset({LoopLifecycleState.REQUESTING_NEXT_ACTION, LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.FAILED}),
-    LoopLifecycleState.REQUESTING_NEXT_ACTION: frozenset({LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.COMPLETED, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.REQUESTING_NEXT_ACTION: frozenset({LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.COMPLETED, LoopLifecycleState.FAILED, LoopLifecycleState.BLOCKED}),
     LoopLifecycleState.COMPLETED: frozenset(),
     LoopLifecycleState.FAILED: frozenset(),
+    LoopLifecycleState.BLOCKED: frozenset(),
 }
 
 
@@ -340,6 +355,9 @@ class LoopStateMachine:
 
     def fail(self) -> LoopLifecycleState:
         return self.transition(LoopLifecycleState.FAILED)
+
+    def block(self) -> LoopLifecycleState:
+        return self.transition(LoopLifecycleState.BLOCKED)
 
 
 def parse_loop_action(text: str) -> LoopAction:
@@ -444,9 +462,41 @@ class AutonomousToolLoop:
         context_truncated = False
         truncation_reason: str | None = None
         preserved_sections: tuple[str, ...] = ("task", "plan", "current_step", "tool_observation")
+        completed_step_ids: list[str] = []
+        skipped_step_ids: list[str] = []
+        pending_verification_steps: list[str] = []
+        completion_evidence: list[str] = []
+        verification = VerificationEvidence.not_required()
+        blocked_capabilities: list[str] = []
+        safety_blocked = False
+        context_complete = context is not None
+        stop_evaluation: StopEvaluation | None = None
 
         def snapshot() -> AutonomousLoopState:
             return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage)
+
+        def finish(_request: AutonomousLoopRequest, status: LoopStatus, answer: str, finish_plan: ExecutionPlan | None, finish_context: ProjectContext | None, finish_state: AutonomousLoopState, finish_steps: Sequence[AutonomousLoopStep], finish_calls: Sequence[ToolCall], finish_results: Sequence[ToolResult], finish_usage: AgentUsage, finish_warnings: Sequence[str], finish_errors: Sequence[str]) -> AutonomousLoopResult:
+            nonlocal stop_evaluation
+            if stop_evaluation is None:
+                stop_evaluation = evaluate_stop_condition(StopConditionRequest(
+                    plan=finish_plan,
+                    completed_step_ids=tuple(completed_step_ids),
+                    skipped_step_ids=tuple(skipped_step_ids),
+                    current_step_id=current_step_id,
+                    final_action_valid=status in {LoopStatus.COMPLETED, LoopStatus.CONTINUE, LoopStatus.BLOCKED},
+                    invalid_action=status in {LoopStatus.INVALID_ACTION},
+                    last_tool_result=last_result,
+                    last_tool_name=last_call.name if last_call else None,
+                    missing_capabilities=tuple(blocked_capabilities),
+                    safety_blocked=safety_blocked,
+                    context_complete=context_complete,
+                    completion_evidence=tuple(completion_evidence),
+                    verification=verification,
+                    emergency_bound_reached=status is LoopStatus.LOOP_BOUND_REACHED,
+                    fatal_error=finish_errors[-1] if status is LoopStatus.FAILED and finish_errors else None,
+                    warning_messages=tuple(finish_warnings),
+                ))
+            return self._finalize(_request, status, answer, finish_plan, finish_context, finish_state, finish_steps, finish_calls, finish_results, finish_usage, finish_warnings, finish_errors, stop_evaluation=stop_evaluation)
 
         try:
             machine.transition(LoopLifecycleState.PLANNING)
@@ -454,7 +504,7 @@ class AutonomousToolLoop:
                 bootstrap = self._bootstrap_context(request.task)
                 bootstrap_selection = self.selector.select(ToolSelectionRequest(bootstrap, registry=self.registry))
                 if not bootstrap_selection.decisions or bootstrap_selection.decisions[0].selected_tool != "project_context":
-                    return self._finalize(request, LoopStatus.TOOL_UNAVAILABLE, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors + ("project_context is unavailable for initial bounded context construction",))
+                    return finish(request, LoopStatus.TOOL_UNAVAILABLE, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors + ("project_context is unavailable for initial bounded context construction",))
                 bootstrap_decision = bootstrap_selection.decisions[0]
                 machine.transition(LoopLifecycleState.SELECTING_TOOL)
                 machine.transition(LoopLifecycleState.VALIDATING_ACTION)
@@ -472,8 +522,9 @@ class AutonomousToolLoop:
                     errors.append(message)
                     steps.append(AutonomousLoopStep(0, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.FAILED, "context-1", bootstrap_call.name, bootstrap_call.arguments, bootstrap_result.error_code, bootstrap_result.error_code, "", False, False, errors=(message,)))
                     machine.fail()
-                    return self._finalize(request, LoopStatus.TOOL_EXECUTION_FAILED, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.TOOL_EXECUTION_FAILED, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors)
                 context = bootstrap_result.data
+                context_complete = True
                 machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
                 history.append(AgentMessage(AgentMessageRole.TOOL, bootstrap_observation, name=bootstrap_call.name, call_id=bootstrap_call.call_id))
                 steps.append(AutonomousLoopStep(0, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, "context-1", bootstrap_call.name, bootstrap_call.arguments, "SUCCESS", None, "", False, False))
@@ -482,19 +533,32 @@ class AutonomousToolLoop:
             plan_result = self.planner.plan(PlannerRequest(request.task, context))
             if plan_result.plan is None:
                 errors.extend(plan_result.errors or plan_result.warnings)
-                return self._finalize(request, LoopStatus.FAILED, "", plan_result.plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                return finish(request, LoopStatus.FAILED, "", plan_result.plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
             plan = plan_result.plan
             warnings.extend(plan_result.warnings)
             if not plan.steps:
-                return self._finalize(request, LoopStatus.FAILED, "", plan, context, snapshot(), steps, calls, results, usage, warnings, errors + ["Planner returned no executable plan steps"])
+                return finish(request, LoopStatus.FAILED, "", plan, context, snapshot(), steps, calls, results, usage, warnings, errors + ["Planner returned no executable plan steps"])
 
             plan_index = 0
             cycle_index = 0
             while True:
                 if len(calls) >= _EMERGENCY_TOOL_EXECUTION_BOUND:
                     errors.append("The fixed Phase 6.3 emergency tool-execution bound was reached.")
-                    machine.fail()
-                    return self._finalize(request, LoopStatus.LOOP_BOUND_REACHED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    stop_evaluation = evaluate_stop_condition(StopConditionRequest(
+                        plan=plan,
+                        completed_step_ids=tuple(completed_step_ids),
+                        skipped_step_ids=tuple(skipped_step_ids),
+                        current_step_id=current_step_id,
+                        last_tool_result=last_result,
+                        last_tool_name=last_call.name if last_call else None,
+                        completion_evidence=tuple(completion_evidence),
+                        verification=verification,
+                        context_complete=context_complete,
+                        emergency_bound_reached=True,
+                        warning_messages=tuple(warnings),
+                    ))
+                    machine.block()
+                    return finish(request, LoopStatus.LOOP_BOUND_REACHED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
 
                 plan_step = plan.steps[plan_index] if plan_index < len(plan.steps) else None
                 current_step_id = plan_step.step_id if plan_step else (plan.steps[-1].step_id if plan.steps else None)
@@ -510,12 +574,14 @@ class AutonomousToolLoop:
                         if selection_result.status is ToolSelectionStatus.NO_SUITABLE_TOOL:
                             message = current_selection.selection_reason if current_selection else "Declarative plan step requires no registered tool."
                             warnings.append(f"Skipped non-executable plan step {plan_step.step_id}: {message}")
+                            skipped_step_ids.append(plan_step.step_id)
                             steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.REQUESTING_NEXT_ACTION, plan_step.step_id, None, {}, None, None, "", False, False, warnings=(message,)))
                             plan_index += 1
                             cycle_index += 1
                             machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
                             continue
                         selection_failure = True
+                        blocked_capabilities.extend(selection_result.errors or ("required capability is unavailable in the supplied registry",))
 
                 machine.transition(LoopLifecycleState.VALIDATING_ACTION)
                 try:
@@ -538,51 +604,76 @@ class AutonomousToolLoop:
                 except ContextBudgetError as exc:
                     errors.append(str(exc))
                     machine.fail()
-                    return self._finalize(request, LoopStatus.CONTEXT_LIMIT_REACHED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.CONTEXT_LIMIT_REACHED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
                 except LoopActionParseError as exc:
                     errors.append(exc.message)
                     steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, None, {}, None, exc.code, model_response, context_truncated, False, errors=(exc.message,)))
                     machine.fail()
-                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
                 except Exception as exc:
                     errors.append(str(exc))
                     machine.fail()
-                    return self._finalize(request, LoopStatus.FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
 
                 if action.action_type is LoopActionType.FINAL:
-                    machine.transition(LoopLifecycleState.COMPLETED)
                     final_answer = action.message or ""
-                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.COMPLETED, current_step_id, None, {}, None, None, model_response, context_truncated, False))
-                    return self._finalize(request, LoopStatus.COMPLETED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    stop_evaluation = evaluate_stop_condition(StopConditionRequest(
+                        plan=plan,
+                        completed_step_ids=tuple(completed_step_ids),
+                        skipped_step_ids=tuple(skipped_step_ids),
+                        current_step_id=current_step_id,
+                        final_action_valid=True,
+                        last_tool_result=last_result,
+                        last_tool_name=last_call.name if last_call else None,
+                        missing_capabilities=tuple(blocked_capabilities),
+                        safety_blocked=safety_blocked,
+                        context_complete=context_complete,
+                        completion_evidence=tuple(completion_evidence),
+                        verification=verification,
+                        emergency_bound_reached=False,
+                        warning_messages=tuple(warnings),
+                    ))
+                    if stop_evaluation.decision is StopDecision.DONE:
+                        machine.transition(LoopLifecycleState.COMPLETED)
+                        terminal_status = LoopStatus.COMPLETED
+                    elif stop_evaluation.decision is StopDecision.BLOCKED:
+                        machine.block()
+                        terminal_status = LoopStatus.BLOCKED
+                        errors.extend(stop_evaluation.blocking_conditions)
+                    else:
+                        machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
+                        terminal_status = LoopStatus.CONTINUE
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, machine.state, current_step_id, None, {}, None, None, model_response, context_truncated, False))
+                    return finish(request, terminal_status, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
 
                 if selection_failure:
                     message = "The selected capability is unavailable or invalid for this plan step. Only FINAL is accepted now."
                     errors.append(message)
                     steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.TOOL_UNAVAILABLE.value, model_response, context_truncated, False, errors=(message,)))
                     machine.fail()
-                    return self._finalize(request, _loop_status_for_selection(selection_result.status if selection_result else ToolSelectionStatus.TOOL_UNAVAILABLE), final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, _loop_status_for_selection(selection_result.status if selection_result else ToolSelectionStatus.TOOL_UNAVAILABLE), final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
                 if current_selection is None or plan_step is None:
                     message = "A TOOL action is not allowed after all planned tool steps have been consumed. Return FINAL."
                     errors.append(message)
                     steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, False, errors=(message,)))
                     machine.fail()
-                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
                 if action.tool_name != current_selection.selected_tool:
                     message = "Model-selected tool does not match the ToolSelector decision for the current plan step."
                     errors.append(message)
                     steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, False, errors=(message,)))
                     machine.fail()
-                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
                 if action.tool_name not in self.registry.names():
                     message = f"Tool is not available in the supplied ToolRegistry: {action.tool_name}."
                     errors.append(message)
                     machine.fail()
-                    return self._finalize(request, LoopStatus.TOOL_UNAVAILABLE, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.TOOL_UNAVAILABLE, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
                 if _contains_shell_payload(action.arguments):
                     message = "Shell-like or implicit command payloads are not accepted by the autonomous action boundary."
                     errors.append(message)
                     machine.fail()
-                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
 
                 call_id = f"call-{len(calls) + 1:04d}"
                 try:
@@ -592,7 +683,7 @@ class AutonomousToolLoop:
                     errors.append(message)
                     steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, errors=(message,)))
                     machine.fail()
-                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
 
                 machine.transition(LoopLifecycleState.EXECUTING_TOOL)
                 tool_result = self._dispatch(call)
@@ -605,9 +696,44 @@ class AutonomousToolLoop:
                 if not tool_result.success:
                     message = tool_result.message or "Tool execution failed."
                     errors.append(message)
-                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.FAILED, current_step_id, call.name, call.arguments, tool_result.error_code, tool_result.error_code, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, errors=(message,)))
-                    machine.fail()
-                    return self._finalize(request, LoopStatus.TOOL_EXECUTION_FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                    safety_blocked = _is_safety_error(tool_result.error_code)
+                    stop_evaluation = evaluate_stop_condition(StopConditionRequest(
+                        plan=plan,
+                        completed_step_ids=tuple(completed_step_ids),
+                        skipped_step_ids=tuple(skipped_step_ids),
+                        current_step_id=current_step_id,
+                        last_tool_result=tool_result,
+                        last_tool_name=call.name,
+                        safety_blocked=safety_blocked,
+                        completion_evidence=tuple(completion_evidence),
+                        verification=verification,
+                        context_complete=context_complete,
+                        warning_messages=tuple(warnings),
+                    ))
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.BLOCKED if stop_evaluation.decision is StopDecision.BLOCKED else LoopLifecycleState.FAILED, current_step_id, call.name, call.arguments, tool_result.error_code, tool_result.error_code, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, errors=(message,)))
+                    if stop_evaluation.decision is StopDecision.BLOCKED:
+                        machine.block()
+                    else:
+                        machine.fail()
+                    return finish(request, LoopStatus.TOOL_EXECUTION_FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                result_verification = _verification_from_tool_result(call.name, tool_result)
+                if result_verification is not None:
+                    verification = result_verification
+                    if verification.state is VerificationState.PASSED:
+                        completed_step_ids.extend(pending_verification_steps)
+                        pending_verification_steps.clear()
+                        if current_step_id:
+                            completed_step_ids.append(current_step_id)
+                        completion_evidence.extend(verification.evidence or (verification.message or "verification passed",))
+                    elif current_step_id:
+                        pending_verification_steps.append(current_step_id)
+                elif _tool_requires_verification(call.name, plan_step):
+                    if current_step_id:
+                        pending_verification_steps.append(current_step_id)
+                    verification = VerificationEvidence.pending(call.name, "A post-operation verification step is still required.")
+                elif current_step_id:
+                    completed_step_ids.append(current_step_id)
+                    completion_evidence.append(f"{call.name} returned a structured successful observation")
                 machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
                 history.append(AgentMessage(AgentMessageRole.ASSISTANT, _sanitize_text(_bounded_text(model_response, _MAX_TEXT_CHARS)), call_id=call.call_id))
                 history.append(AgentMessage(AgentMessageRole.TOOL, bounded_observation, name=call.name, call_id=call.call_id))
@@ -619,7 +745,7 @@ class AutonomousToolLoop:
         except LoopStateError as exc:
             errors.append(str(exc))
             machine.fail()
-            return self._finalize(request, LoopStatus.FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+            return finish(request, LoopStatus.FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
 
     def _coerce_request(self, request: AutonomousLoopRequest | str, project_root: Path | str | None) -> AutonomousLoopRequest:
         if isinstance(request, AutonomousLoopRequest):
@@ -692,8 +818,8 @@ class AutonomousToolLoop:
         payload = _safe_value(result.to_dict())
         return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
-    def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str]) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors))
+    def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None) -> AutonomousLoopResult:
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str) -> AutonomousLoopResult:
         state = AutonomousLoopState(LoopLifecycleState.FAILED, task, None, None, None, None, "", (), False, None, (), (), (message,), AgentUsage())
@@ -704,6 +830,41 @@ def create_autonomous_tool_loop(engine: Any, *, registry: ToolRegistry | None = 
     """Create an explicitly opt-in autonomous loop; defaults remain read-only."""
 
     return AutonomousToolLoop(engine, registry=registry, config=config)
+
+
+def _tool_requires_verification(tool_name: str, plan_step: PlanStep | None) -> bool:
+    if tool_name in {"write_file", "edit_file", "delete_file", "run_tests", "run_command_with_policy", "run_command", "run_application"}:
+        return True
+    if plan_step is not None and plan_step.verification_required and tool_name in {"write_file", "edit_file", "delete_file", "run_tests", "parse_test_result"}:
+        return True
+    return False
+
+
+def _verification_from_tool_result(tool_name: str, result: ToolResult) -> VerificationEvidence | None:
+    data = result.data
+    if tool_name == "verify_modification":
+        success = bool(getattr(data, "success", data.get("success", False) if isinstance(data, Mapping) else False))
+        complete = bool(getattr(data, "complete", data.get("complete", False) if isinstance(data, Mapping) else False))
+        if success and complete:
+            return VerificationEvidence.passed("verify_modification", "Modification targets and bounded baseline verification passed.", "all explicit targets verified")
+        if not complete:
+            return VerificationEvidence.pending("verify_modification", "Verification evidence is incomplete or bounded listing was truncated.")
+        return VerificationEvidence.failed("verify_modification", "Modification verification did not pass.")
+    if tool_name == "parse_test_result":
+        status = getattr(getattr(data, "overall_status", None), "value", getattr(data, "overall_status", None))
+        if status is None and isinstance(data, Mapping):
+            status = data.get("overall_status")
+        if status == "PASS":
+            return VerificationEvidence.passed("parse_test_result", "Structured test result status is PASS.", "test parser reported PASS")
+        if status in {"UNKNOWN", "NO_TESTS"}:
+            return VerificationEvidence.pending("parse_test_result", f"Test parser status is {status}; completion is not proven.")
+        return VerificationEvidence.failed("parse_test_result", f"Test parser status is {status or 'unavailable'}.")
+    return None
+
+
+def _is_safety_error(code: str | None) -> bool:
+    normalized = (code or "").upper()
+    return any(marker in normalized for marker in ("POLICY", "DENIED", "NOT_ALLOWED", "PATH_OUTSIDE_ROOT", "SAFETY", "PERMISSION"))
 
 
 def _loop_status_for_selection(status: ToolSelectionStatus) -> LoopStatus:

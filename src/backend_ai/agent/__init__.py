@@ -57,6 +57,16 @@ from backend_ai.agent.tool_selection import (
     ToolSelector,
     create_tool_selection,
 )
+from backend_ai.agent.stop_conditions import (
+    StopConditionEvaluator,
+    StopConditionRequest,
+    StopDecision,
+    StopEvaluation,
+    StopReason,
+    VerificationEvidence,
+    VerificationState,
+    evaluate_stop_condition,
+)
 from backend_ai.agent.autonomous_tool_loop import (
     AutonomousLoopConfig,
     AutonomousLoopRequest,
@@ -130,6 +140,14 @@ __all__ = [
     "ToolSelectionValidator",
     "ToolSelector",
     "create_tool_selection",
+    "StopConditionEvaluator",
+    "StopConditionRequest",
+    "StopDecision",
+    "StopEvaluation",
+    "StopReason",
+    "VerificationEvidence",
+    "VerificationState",
+    "evaluate_stop_condition",
     "AutonomousLoopConfig",
     "AutonomousLoopRequest",
     "AutonomousLoopResult",

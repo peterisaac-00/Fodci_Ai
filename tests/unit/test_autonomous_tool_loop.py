@@ -25,6 +25,7 @@ from backend_ai.agent import (
     PlannerConfidence,
     PlannerTaskType,
     ToolRegistry,
+    ToolSelectionStatus,
     parse_loop_action,
 )
 from backend_ai.agent.planner import PlannerResultStatus
@@ -132,6 +133,23 @@ def _loop(root: Path, outputs: list[str], tools: tuple[RecordingTool, ...], plan
     return AutonomousToolLoop(FakeEngine(outputs), registry=registry, planner=StaticPlanner(plan), config=config), registry
 
 
+class StaticSelector:
+    def __init__(self, mapping: dict[str, str]) -> None:
+        self.mapping = mapping
+
+    def select(self, request):
+        step_id = request.selected_step_ids[0]
+        tool_name = self.mapping[step_id]
+        decision = SimpleNamespace(
+            selected_tool=tool_name,
+            selection_reason="fixture capability mapping",
+            risk_level=SimpleNamespace(value="LOW"),
+            prerequisites=(),
+            expected_output="structured evidence",
+        )
+        return SimpleNamespace(status=ToolSelectionStatus.SELECTED, decisions=(decision,), errors=())
+
+
 def test_action_protocol_requires_explicit_json_and_rejects_prose() -> None:
     final = parse_loop_action('ACTION: FINAL\nARGS: {"message":"done"}')
     assert final.action_type is LoopActionType.FINAL
@@ -205,7 +223,9 @@ def test_final_action_terminates_without_tool_execution(tmp_path: Path) -> None:
     plan = _plan(_step("s1", "Inspect project structure"))
     loop, _ = _loop(root, ['ACTION: FINAL\nARGS: {"message":"nothing to do"}'], (tool,), plan)
     result = loop.run(AutonomousLoopRequest("Inspect", root, _context(root)))
-    assert result.status is LoopStatus.COMPLETED
+    assert result.status is LoopStatus.CONTINUE
+    assert result.stop_evaluation is not None
+    assert result.stop_evaluation.decision.value == "CONTINUE"
     assert result.tool_calls == ()
     assert tool.calls == []
 
@@ -245,7 +265,9 @@ def test_mutation_is_unavailable_in_read_only_registry_and_opt_in_when_supplied(
     writer = RecordingTool("write_file", schema={"type": "object", "required": ["project_root", "path", "content"], "properties": {"project_root": {}, "path": {}, "content": {}}})
     write_loop, _ = _loop(root, ['ACTION: TOOL\nARGS: {"tool":"write_file","arguments":{"path":"new.txt","content":"x"}}', 'ACTION: FINAL\nARGS: {"message":"created"}'], (writer,), plan)
     created = write_loop.run(AutonomousLoopRequest("Create a new file", root, _context(root)))
-    assert created.status is LoopStatus.COMPLETED
+    assert created.status is LoopStatus.CONTINUE
+    assert created.stop_evaluation is not None
+    assert created.stop_evaluation.reason.value == "VERIFICATION_REQUIRED"
     assert writer.calls[0]["project_root"] == str(root)
     assert created.steps[0].mutated_project
 
@@ -366,3 +388,27 @@ def test_explicitly_tiny_context_budget_fails_structured_without_dispatch(tmp_pa
     result = loop.run(AutonomousLoopRequest("x" * 500, root, _context(root)))
     assert result.status is LoopStatus.CONTEXT_LIMIT_REACHED
     assert tool.calls == []
+
+
+def test_mutation_plus_structured_verification_reaches_done(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    writer = RecordingTool("write_file", schema={"type": "object", "required": ["project_root", "path", "content"], "properties": {"project_root": {}, "path": {}, "content": {}}})
+    verifier = RecordingTool("verify_modification", result=SimpleNamespace(success=True, complete=True))
+    plan = _plan(_step("s1", "Create a new file"), _step("s2", "Verify the modification", dependencies=("s1",)))
+    loop = AutonomousToolLoop(
+        FakeEngine([
+            'ACTION: TOOL\nARGS: {"tool":"write_file","arguments":{"path":"new.txt","content":"x"}}',
+            'ACTION: TOOL\nARGS: {"tool":"verify_modification","arguments":{}}',
+            'ACTION: FINAL\nARGS: {"message":"created and verified"}',
+        ]),
+        registry=ToolRegistry((writer, verifier)),
+        planner=StaticPlanner(plan),
+        selector=StaticSelector({"s1": "write_file", "s2": "verify_modification"}),
+    )
+    result = loop.run(AutonomousLoopRequest("Create and verify a new file", root, _context(root)))
+    assert result.status is LoopStatus.COMPLETED
+    assert result.stop_evaluation is not None
+    assert result.stop_evaluation.decision.value == "DONE"
+    assert result.stop_evaluation.reason.value == "VERIFICATION_PASSED"
+    assert len(result.tool_calls) == 2
