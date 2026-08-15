@@ -1,0 +1,785 @@
+"""Bounded opt-in autonomous tool execution loop for Phase 6.3.
+
+The loop is deliberately separate from the Phase 3.6 read-only ``AgentLoop``.
+It consumes explicit registry capabilities, uses the Planner and ToolSelector,
+and dispatches only through ``ToolRegistry``. It has one fixed emergency bound;
+configurable stop conditions, retries, and recovery belong to later phases.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from enum import Enum
+import json
+from pathlib import Path
+from types import MappingProxyType
+import re
+from typing import Any
+
+from backend_ai.agent.budget import ContextBudget, ContextBudgetError
+from backend_ai.agent.models import (
+    AgentConfig,
+    AgentMessage,
+    AgentMessageRole,
+    AgentUsage,
+    ToolCall,
+    ToolResult,
+)
+from backend_ai.agent.planner import (
+    ExecutionPlan,
+    PlanCompleteness,
+    PlanRiskLevel,
+    PlanStep,
+    Planner,
+    PlannerConfidence,
+    PlannerRequest,
+    PlannerTaskType,
+)
+from backend_ai.agent.registry import ToolRegistry, ToolRegistryError, UnknownToolError
+from backend_ai.agent.tool_selection import (
+    ToolSelectionDecision,
+    ToolSelectionRequest,
+    ToolSelectionResult,
+    ToolSelectionStatus,
+    ToolSelector,
+)
+from backend_ai.tools.base import ToolError, ToolErrorCode
+from backend_ai.tools.project_context import ProjectContext
+
+
+# This is intentionally a private, fixed safety boundary. Phase 6.5 will define
+# a separate configurable iteration/budget feature; the model cannot override it.
+_EMERGENCY_TOOL_EXECUTION_BOUND = 8
+_MAX_TEXT_CHARS = 4_096
+_SECRET_KEY_RE = re.compile(r"(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|credential)", re.IGNORECASE)
+_SECRET_TEXT_RE = re.compile(r'''((?:"|')?(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|credential)(?:"|')?\s*(?:=|:)\s*)(?:"[^"]*"|'[^']*'|[^,\s}\]]+)''', re.IGNORECASE)
+_SHELL_TEXT_RE = re.compile(r"(?:\b(?:bash|sh|cmd|powershell|pwsh)\s+-c\b|[;&|`$()]|\bshell\s*=)", re.IGNORECASE)
+
+
+class LoopLifecycleState(str, Enum):
+    CREATED = "CREATED"
+    PLANNING = "PLANNING"
+    SELECTING_TOOL = "SELECTING_TOOL"
+    VALIDATING_ACTION = "VALIDATING_ACTION"
+    EXECUTING_TOOL = "EXECUTING_TOOL"
+    OBSERVING_RESULT = "OBSERVING_RESULT"
+    UPDATING_CONTEXT = "UPDATING_CONTEXT"
+    REQUESTING_NEXT_ACTION = "REQUESTING_NEXT_ACTION"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class LoopActionType(str, Enum):
+    TOOL = "TOOL"
+    FINAL = "FINAL"
+
+
+class LoopStatus(str, Enum):
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    INVALID_ACTION = "INVALID_ACTION"
+    TOOL_UNAVAILABLE = "TOOL_UNAVAILABLE"
+    TOOL_EXECUTION_FAILED = "TOOL_EXECUTION_FAILED"
+    CONTEXT_LIMIT_REACHED = "CONTEXT_LIMIT_REACHED"
+    LOOP_BOUND_REACHED = "LOOP_BOUND_REACHED"
+    EXECUTION_ABORTED = "EXECUTION_ABORTED"
+
+
+class LoopFailureCode(str, Enum):
+    INVALID_ACTION = "INVALID_ACTION"
+    INVALID_TOOL_CALL = "INVALID_TOOL_CALL"
+    TOOL_UNAVAILABLE = "TOOL_UNAVAILABLE"
+    TOOL_ARGUMENT_ERROR = "TOOL_ARGUMENT_ERROR"
+    TOOL_EXECUTION_FAILED = "TOOL_EXECUTION_FAILED"
+    CONTEXT_LIMIT_REACHED = "CONTEXT_LIMIT_REACHED"
+    LOOP_BOUND_REACHED = "LOOP_BOUND_REACHED"
+    INVALID_STATE = "INVALID_STATE"
+    MODEL_OUTPUT_INVALID = "MODEL_OUTPUT_INVALID"
+    EXECUTION_ABORTED = "EXECUTION_ABORTED"
+
+
+class LoopActionParseError(ValueError):
+    """A model response did not use the strict Phase 6.3 action protocol."""
+
+    def __init__(self, code: LoopFailureCode | str, message: str) -> None:
+        self.code = code.value if isinstance(code, LoopFailureCode) else str(code)
+        self.message = message
+        super().__init__(message)
+
+
+class LoopStateError(RuntimeError):
+    """An invalid lifecycle transition was requested."""
+
+    def __init__(self, state: LoopLifecycleState, target: LoopLifecycleState) -> None:
+        self.state = state
+        self.target = target
+        super().__init__(f"Invalid autonomous-loop transition: {state.value} -> {target.value}.")
+
+
+@dataclass(frozen=True, slots=True)
+class LoopAction:
+    """Strict parsed action; never contains a free-form executable command."""
+
+    action_type: LoopActionType
+    tool_name: str | None = None
+    arguments: Mapping[str, Any] = field(default_factory=dict)
+    message: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.action_type, LoopActionType):
+            raise ValueError("action_type must be LoopActionType")
+        if self.tool_name is not None and (not isinstance(self.tool_name, str) or not self.tool_name.strip()):
+            raise ValueError("tool_name must be non-empty when present")
+        if not isinstance(self.arguments, Mapping):
+            raise ValueError("arguments must be a mapping")
+        if self.action_type is LoopActionType.TOOL and not self.tool_name:
+            raise ValueError("TOOL action requires tool_name")
+        if self.action_type is LoopActionType.FINAL and self.message is None:
+            raise ValueError("FINAL action requires message")
+        object.__setattr__(self, "arguments", MappingProxyType(dict(self.arguments)))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "action_type": self.action_type.value,
+            "tool_name": self.tool_name,
+            "arguments": _safe_value(dict(self.arguments)),
+            "message": _sanitize_text(_bounded_text(self.message or "", _MAX_TEXT_CHARS)) if self.message is not None else None,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AutonomousLoopConfig:
+    """Bounded context/history settings; no user-configurable iteration count."""
+
+    max_context_tokens: int = 2_048
+    reserve_response_tokens: int = 32
+    max_tool_result_chars: int = 4_000
+    max_history_items: int = 8
+    max_task_prompt_chars: int = 2_048
+    system_prompt: str = (
+        "Fodci autonomous tool loop. Return exactly ACTION: TOOL with ARGS JSON "
+        "or ACTION: FINAL with ARGS {\"message\": \"...\"}. Never emit prose commands."
+    )
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "max_context_tokens",
+            "reserve_response_tokens",
+            "max_tool_result_chars",
+            "max_history_items",
+            "max_task_prompt_chars",
+        ):
+            value = getattr(self, field_name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{field_name} must be a positive integer")
+        if self.max_context_tokens <= self.reserve_response_tokens:
+            raise ValueError("max_context_tokens must exceed reserve_response_tokens")
+        if self.max_tool_result_chars > 64_000 or self.max_history_items > 128 or self.max_task_prompt_chars > 16_384:
+            raise ValueError("Autonomous loop budget exceeds the safety ceiling")
+        if not isinstance(self.system_prompt, str) or not self.system_prompt.strip():
+            raise ValueError("system_prompt must contain text")
+
+
+@dataclass(frozen=True, slots=True)
+class AutonomousLoopRequest:
+    """Explicit inputs for one opt-in autonomous loop invocation."""
+
+    task: str
+    project_root: Path | str
+    project_context: ProjectContext | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.task, str) or not self.task.strip():
+            raise ValueError("task must contain text")
+        root = Path(self.project_root).expanduser().resolve(strict=False)
+        object.__setattr__(self, "project_root", root)
+        if self.project_context is not None and self.project_context.root != root:
+            raise ValueError("project_context.root must equal the explicit project_root")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None}
+
+
+@dataclass(frozen=True, slots=True)
+class AutonomousLoopStep:
+    """Bounded chronological record of one loop decision/execution attempt."""
+
+    index: int
+    state_before: LoopLifecycleState
+    state_after: LoopLifecycleState
+    plan_step_id: str | None
+    selected_tool: str | None
+    sanitized_arguments: Mapping[str, Any]
+    tool_result_status: str | None
+    tool_result_error: str | None
+    model_response: str
+    context_truncated: bool
+    mutated_project: bool
+    warnings: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "sanitized_arguments", MappingProxyType(_safe_value(dict(self.sanitized_arguments))))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "state_before": self.state_before.value,
+            "state_after": self.state_after.value,
+            "plan_step_id": self.plan_step_id,
+            "selected_tool": self.selected_tool,
+            "sanitized_arguments": dict(self.sanitized_arguments),
+            "tool_result_status": self.tool_result_status,
+            "tool_result_error": self.tool_result_error,
+            "model_response": _sanitize_text(_bounded_text(self.model_response, _MAX_TEXT_CHARS)),
+            "context_truncated": self.context_truncated,
+            "mutated_project": self.mutated_project,
+            "warnings": list(self.warnings),
+            "errors": list(self.errors),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AutonomousLoopState:
+    """Immutable snapshot of the loop lifecycle and bounded working context."""
+
+    lifecycle: LoopLifecycleState
+    task: str
+    plan_step_id: str | None
+    selection: ToolSelectionDecision | None
+    last_tool_call: ToolCall | None
+    last_tool_result: ToolResult | None
+    model_response: str
+    history: tuple[AgentMessage, ...]
+    context_truncated: bool
+    truncation_reason: str | None
+    preserved_sections: tuple[str, ...]
+    warnings: tuple[str, ...]
+    errors: tuple[str, ...]
+    usage: AgentUsage
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "lifecycle": self.lifecycle.value,
+            "task": _bounded_text(self.task, _MAX_TEXT_CHARS),
+            "plan_step_id": self.plan_step_id,
+            "selection": self.selection.to_dict() if self.selection else None,
+            "last_tool_call": _safe_value(self.last_tool_call.to_dict()) if self.last_tool_call else None,
+            "last_tool_result": _safe_value(self.last_tool_result.to_dict()) if self.last_tool_result else None,
+            "model_response": _sanitize_text(_bounded_text(self.model_response, _MAX_TEXT_CHARS)),
+            "history": [_safe_value(message.to_dict()) | {"content": _sanitize_text(message.content)} for message in self.history],
+            "context_truncated": self.context_truncated,
+            "truncation_reason": self.truncation_reason,
+            "preserved_sections": list(self.preserved_sections),
+            "warnings": list(self.warnings),
+            "errors": list(self.errors),
+            "usage": self.usage.to_dict(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AutonomousLoopResult:
+    """Complete bounded outcome of one autonomous loop invocation."""
+
+    task: str
+    status: LoopStatus
+    final_answer: str
+    plan: ExecutionPlan | None
+    project_context: ProjectContext | None
+    state: AutonomousLoopState
+    steps: tuple[AutonomousLoopStep, ...]
+    tool_calls: tuple[ToolCall, ...]
+    tool_results: tuple[ToolResult, ...]
+    usage: AgentUsage
+    warnings: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task": self.task,
+            "status": self.status.value,
+            "final_answer": _sanitize_text(_bounded_text(self.final_answer, _MAX_TEXT_CHARS)),
+            "plan": self.plan.to_dict() if self.plan else None,
+            "project_context": self.project_context.to_dict() if self.project_context else None,
+            "state": self.state.to_dict(),
+            "steps": [step.to_dict() for step in self.steps],
+            "tool_calls": [_safe_value(call.to_dict()) for call in self.tool_calls],
+            "tool_results": [_safe_value(result.to_dict()) for result in self.tool_results],
+            "usage": self.usage.to_dict(),
+            "warnings": list(self.warnings),
+            "errors": list(self.errors),
+        }
+
+
+_ALLOWED_TRANSITIONS: dict[LoopLifecycleState, frozenset[LoopLifecycleState]] = {
+    LoopLifecycleState.CREATED: frozenset({LoopLifecycleState.PLANNING, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.PLANNING: frozenset({LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.SELECTING_TOOL: frozenset({LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.REQUESTING_NEXT_ACTION, LoopLifecycleState.FAILED, LoopLifecycleState.COMPLETED}),
+    LoopLifecycleState.VALIDATING_ACTION: frozenset({LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.COMPLETED, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.EXECUTING_TOOL: frozenset({LoopLifecycleState.OBSERVING_RESULT, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.OBSERVING_RESULT: frozenset({LoopLifecycleState.UPDATING_CONTEXT, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.UPDATING_CONTEXT: frozenset({LoopLifecycleState.REQUESTING_NEXT_ACTION, LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.REQUESTING_NEXT_ACTION: frozenset({LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.COMPLETED, LoopLifecycleState.FAILED}),
+    LoopLifecycleState.COMPLETED: frozenset(),
+    LoopLifecycleState.FAILED: frozenset(),
+}
+
+
+class LoopStateMachine:
+    """Explicit transition validator used by AutonomousToolLoop."""
+
+    def __init__(self) -> None:
+        self.state = LoopLifecycleState.CREATED
+
+    def transition(self, target: LoopLifecycleState) -> LoopLifecycleState:
+        if target not in _ALLOWED_TRANSITIONS[self.state]:
+            raise LoopStateError(self.state, target)
+        self.state = target
+        return self.state
+
+    def fail(self) -> LoopLifecycleState:
+        return self.transition(LoopLifecycleState.FAILED)
+
+
+def parse_loop_action(text: str) -> LoopAction:
+    """Parse only explicit ``ACTION``/``ARGS`` protocol; prose is rejected."""
+
+    if not isinstance(text, str) or not text.strip():
+        raise LoopActionParseError(LoopFailureCode.MODEL_OUTPUT_INVALID, "Model output must contain an explicit action.")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    first = lines[0]
+    if first.upper().startswith("FINAL:"):
+        message = first[len("FINAL:"):].strip()
+        if len(lines) > 1:
+            message = "\n".join([message, *lines[1:]]).strip()
+        return LoopAction(LoopActionType.FINAL, message=message)
+    if not first.upper().startswith("ACTION:"):
+        raise LoopActionParseError(LoopFailureCode.INVALID_ACTION, "Model output must begin with ACTION: TOOL or ACTION: FINAL.")
+    action_name = first[len("ACTION:"):].strip()
+    if action_name.upper() not in {"TOOL", "FINAL"} and not _valid_name(action_name):
+        raise LoopActionParseError(LoopFailureCode.INVALID_ACTION, "ACTION must be TOOL, FINAL, or one valid registered tool name.")
+    if len(lines) != 2 or not lines[1].upper().startswith("ARGS:"):
+        raise LoopActionParseError(LoopFailureCode.INVALID_ACTION, "An explicit ACTION must be followed by exactly one ARGS JSON object.")
+    raw = lines[1][len("ARGS:"):].strip()
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise LoopActionParseError(LoopFailureCode.INVALID_ACTION, f"ARGS is not valid JSON: {exc.msg}.") from exc
+    if not isinstance(payload, dict):
+        raise LoopActionParseError(LoopFailureCode.INVALID_ACTION, "ARGS must decode to a JSON object.")
+    if action_name.upper() == "FINAL":
+        message = payload.get("message")
+        if not isinstance(message, str):
+            raise LoopActionParseError(LoopFailureCode.INVALID_ACTION, "FINAL ARGS requires a string message.")
+        return LoopAction(LoopActionType.FINAL, message=message)
+    if action_name.upper() == "TOOL":
+        tool_name = payload.get("tool")
+        arguments = payload.get("arguments")
+        if not isinstance(tool_name, str) or not _valid_name(tool_name):
+            raise LoopActionParseError(LoopFailureCode.INVALID_TOOL_CALL, "TOOL ARGS requires one valid tool name.")
+        if not isinstance(arguments, dict):
+            raise LoopActionParseError(LoopFailureCode.INVALID_TOOL_CALL, "TOOL ARGS requires an arguments JSON object.")
+        return LoopAction(LoopActionType.TOOL, tool_name=tool_name, arguments=arguments)
+    return LoopAction(LoopActionType.TOOL, tool_name=action_name, arguments=payload)
+
+
+class AutonomousToolLoop:
+    """Explicitly opt-in bounded loop integrating planner, selector, and registry."""
+
+    def __init__(
+        self,
+        engine: Any,
+        *,
+        registry: ToolRegistry | None = None,
+        planner: Planner | None = None,
+        selector: ToolSelector | None = None,
+        config: AutonomousLoopConfig | None = None,
+    ) -> None:
+        if not callable(getattr(engine, "generate", None)):
+            raise TypeError("AutonomousToolLoop requires an inference engine with generate().")
+        tokenizer = getattr(engine, "tokenizer", None)
+        if not callable(getattr(tokenizer, "encode", None)):
+            raise TypeError("AutonomousToolLoop requires an inference engine exposing tokenizer.encode().")
+        self.engine = engine
+        self.registry = registry or ToolRegistry.default()
+        self.planner = planner or Planner()
+        self.selector = selector or ToolSelector()
+        self.config = config or AutonomousLoopConfig()
+        budget_config = AgentConfig(
+            max_steps=_EMERGENCY_TOOL_EXECUTION_BOUND + 2,
+            max_tool_calls=_EMERGENCY_TOOL_EXECUTION_BOUND + 1,
+            max_context_tokens=self.config.max_context_tokens,
+            reserve_response_tokens=self.config.reserve_response_tokens,
+            max_tool_result_chars=self.config.max_tool_result_chars,
+            max_history_items=self.config.max_history_items,
+            system_prompt=self.config.system_prompt,
+        )
+        self._budget = ContextBudget(tokenizer, budget_config)
+
+    def run(self, request: AutonomousLoopRequest | str, project_root: Path | str | None = None) -> AutonomousLoopResult:
+        """Run one bounded task; no retry or automatic recovery is performed."""
+
+        try:
+            request = self._coerce_request(request, project_root)
+        except (TypeError, ValueError) as exc:
+            return self._failure_result(str(exc), LoopStatus.FAILED, LoopFailureCode.INVALID_ACTION.value, task="")
+
+        machine = LoopStateMachine()
+        steps: list[AutonomousLoopStep] = []
+        calls: list[ToolCall] = []
+        results: list[ToolResult] = []
+        history: list[AgentMessage] = []
+        warnings: list[str] = []
+        errors: list[str] = []
+        usage = AgentUsage()
+        context = request.project_context
+        plan: ExecutionPlan | None = None
+        current_selection: ToolSelectionDecision | None = None
+        current_step_id: str | None = None
+        last_call: ToolCall | None = None
+        last_result: ToolResult | None = None
+        model_response = ""
+        final_answer = ""
+        context_truncated = False
+        truncation_reason: str | None = None
+        preserved_sections: tuple[str, ...] = ("task", "plan", "current_step", "tool_observation")
+
+        def snapshot() -> AutonomousLoopState:
+            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage)
+
+        try:
+            machine.transition(LoopLifecycleState.PLANNING)
+            if context is None:
+                bootstrap = self._bootstrap_context(request.task)
+                bootstrap_selection = self.selector.select(ToolSelectionRequest(bootstrap, registry=self.registry))
+                if not bootstrap_selection.decisions or bootstrap_selection.decisions[0].selected_tool != "project_context":
+                    return self._finalize(request, LoopStatus.TOOL_UNAVAILABLE, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors + ("project_context is unavailable for initial bounded context construction",))
+                bootstrap_decision = bootstrap_selection.decisions[0]
+                machine.transition(LoopLifecycleState.SELECTING_TOOL)
+                machine.transition(LoopLifecycleState.VALIDATING_ACTION)
+                bootstrap_call = ToolCall("call-0001", "project_context", {"project_root": str(request.project_root)})
+                machine.transition(LoopLifecycleState.EXECUTING_TOOL)
+                bootstrap_result = self._dispatch(bootstrap_call)
+                calls.append(bootstrap_call)
+                results.append(bootstrap_result)
+                last_call, last_result = bootstrap_call, bootstrap_result
+                bootstrap_observation = self._safe_result_text(bootstrap_result)
+                usage = AgentUsage(1, 1, 0, len(bootstrap_observation), 0)
+                machine.transition(LoopLifecycleState.OBSERVING_RESULT)
+                if not bootstrap_result.success or not isinstance(bootstrap_result.data, ProjectContext):
+                    message = bootstrap_result.message or "project_context failed"
+                    errors.append(message)
+                    steps.append(AutonomousLoopStep(0, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.FAILED, "context-1", bootstrap_call.name, bootstrap_call.arguments, bootstrap_result.error_code, bootstrap_result.error_code, "", False, False, errors=(message,)))
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.TOOL_EXECUTION_FAILED, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors)
+                context = bootstrap_result.data
+                machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
+                history.append(AgentMessage(AgentMessageRole.TOOL, bootstrap_observation, name=bootstrap_call.name, call_id=bootstrap_call.call_id))
+                steps.append(AutonomousLoopStep(0, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, "context-1", bootstrap_call.name, bootstrap_call.arguments, "SUCCESS", None, "", False, False))
+                machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
+
+            plan_result = self.planner.plan(PlannerRequest(request.task, context))
+            if plan_result.plan is None:
+                errors.extend(plan_result.errors or plan_result.warnings)
+                return self._finalize(request, LoopStatus.FAILED, "", plan_result.plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+            plan = plan_result.plan
+            warnings.extend(plan_result.warnings)
+            if not plan.steps:
+                return self._finalize(request, LoopStatus.FAILED, "", plan, context, snapshot(), steps, calls, results, usage, warnings, errors + ["Planner returned no executable plan steps"])
+
+            plan_index = 0
+            cycle_index = 0
+            while True:
+                if len(calls) >= _EMERGENCY_TOOL_EXECUTION_BOUND:
+                    errors.append("The fixed Phase 6.3 emergency tool-execution bound was reached.")
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.LOOP_BOUND_REACHED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+                plan_step = plan.steps[plan_index] if plan_index < len(plan.steps) else None
+                current_step_id = plan_step.step_id if plan_step else (plan.steps[-1].step_id if plan.steps else None)
+                if machine.state is not LoopLifecycleState.SELECTING_TOOL:
+                    machine.transition(LoopLifecycleState.SELECTING_TOOL)
+                current_selection = None
+                selection_result = None
+                selection_failure = False
+                if plan_step is not None:
+                    selection_result = self.selector.select(ToolSelectionRequest(plan, registry=self.registry, project_context=context, selected_step_ids=(plan_step.step_id,)))
+                    current_selection = selection_result.decisions[0] if selection_result.decisions else None
+                    if current_selection is None or selection_result.status is not ToolSelectionStatus.SELECTED or current_selection.selected_tool is None:
+                        if selection_result.status is ToolSelectionStatus.NO_SUITABLE_TOOL:
+                            message = current_selection.selection_reason if current_selection else "Declarative plan step requires no registered tool."
+                            warnings.append(f"Skipped non-executable plan step {plan_step.step_id}: {message}")
+                            steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.REQUESTING_NEXT_ACTION, plan_step.step_id, None, {}, None, None, "", False, False, warnings=(message,)))
+                            plan_index += 1
+                            cycle_index += 1
+                            machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
+                            continue
+                        selection_failure = True
+
+                machine.transition(LoopLifecycleState.VALIDATING_ACTION)
+                try:
+                    if selection_failure and plan_step is not None and selection_result is not None:
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_selection_failure_prompt(request.task, plan_step, selection_result, context, tuple(history))
+                    elif plan_step is not None and current_selection is not None:
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_prompt(request.task, plan, plan_step, current_selection, context, tuple(history))
+                    else:
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_completion_prompt(request.task, plan, context, tuple(history))
+                    context_truncated = prompt_truncated
+                    if prompt_truncated:
+                        truncation_reason = "ContextBudget compacted optional plan/history/tool context."
+                    warnings.extend(prompt_warnings)
+                    usage = AgentUsage(usage.steps + 1, usage.tool_calls, usage.prompt_tokens + prompt_tokens, usage.tool_result_chars, usage.context_truncations + int(prompt_truncated))
+                    generated = self.engine.generate(prompt)
+                    model_response = getattr(generated, "generated_text", None)
+                    if not isinstance(model_response, str):
+                        raise LoopActionParseError(LoopFailureCode.MODEL_OUTPUT_INVALID, "Inference result did not contain generated_text.")
+                    action = parse_loop_action(model_response)
+                except ContextBudgetError as exc:
+                    errors.append(str(exc))
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.CONTEXT_LIMIT_REACHED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                except LoopActionParseError as exc:
+                    errors.append(exc.message)
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, None, {}, None, exc.code, model_response, context_truncated, False, errors=(exc.message,)))
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                except Exception as exc:
+                    errors.append(str(exc))
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+                if action.action_type is LoopActionType.FINAL:
+                    machine.transition(LoopLifecycleState.COMPLETED)
+                    final_answer = action.message or ""
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.COMPLETED, current_step_id, None, {}, None, None, model_response, context_truncated, False))
+                    return self._finalize(request, LoopStatus.COMPLETED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+                if selection_failure:
+                    message = "The selected capability is unavailable or invalid for this plan step. Only FINAL is accepted now."
+                    errors.append(message)
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.TOOL_UNAVAILABLE.value, model_response, context_truncated, False, errors=(message,)))
+                    machine.fail()
+                    return self._finalize(request, _loop_status_for_selection(selection_result.status if selection_result else ToolSelectionStatus.TOOL_UNAVAILABLE), final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                if current_selection is None or plan_step is None:
+                    message = "A TOOL action is not allowed after all planned tool steps have been consumed. Return FINAL."
+                    errors.append(message)
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, False, errors=(message,)))
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                if action.tool_name != current_selection.selected_tool:
+                    message = "Model-selected tool does not match the ToolSelector decision for the current plan step."
+                    errors.append(message)
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, False, errors=(message,)))
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                if action.tool_name not in self.registry.names():
+                    message = f"Tool is not available in the supplied ToolRegistry: {action.tool_name}."
+                    errors.append(message)
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.TOOL_UNAVAILABLE, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                if _contains_shell_payload(action.arguments):
+                    message = "Shell-like or implicit command payloads are not accepted by the autonomous action boundary."
+                    errors.append(message)
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+                call_id = f"call-{len(calls) + 1:04d}"
+                try:
+                    call = self._bind_project_root(ToolCall(call_id, action.tool_name, action.arguments), request.project_root)
+                except (ToolError, ValueError, TypeError) as exc:
+                    message = getattr(exc, "message", str(exc))
+                    errors.append(message)
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, errors=(message,)))
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+                machine.transition(LoopLifecycleState.EXECUTING_TOOL)
+                tool_result = self._dispatch(call)
+                calls.append(call)
+                results.append(tool_result)
+                last_call, last_result = call, tool_result
+                machine.transition(LoopLifecycleState.OBSERVING_RESULT)
+                bounded_observation = self._safe_result_text(tool_result)
+                usage = AgentUsage(usage.steps, usage.tool_calls + 1, usage.prompt_tokens, usage.tool_result_chars + len(bounded_observation), usage.context_truncations)
+                if not tool_result.success:
+                    message = tool_result.message or "Tool execution failed."
+                    errors.append(message)
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.FAILED, current_step_id, call.name, call.arguments, tool_result.error_code, tool_result.error_code, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, errors=(message,)))
+                    machine.fail()
+                    return self._finalize(request, LoopStatus.TOOL_EXECUTION_FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
+                history.append(AgentMessage(AgentMessageRole.ASSISTANT, _sanitize_text(_bounded_text(model_response, _MAX_TEXT_CHARS)), call_id=call.call_id))
+                history.append(AgentMessage(AgentMessageRole.TOOL, bounded_observation, name=call.name, call_id=call.call_id))
+                history = history[-self.config.max_history_items:]
+                steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, current_step_id, call.name, call.arguments, "SUCCESS", None, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}))
+                plan_index += 1
+                cycle_index += 1
+                machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
+        except LoopStateError as exc:
+            errors.append(str(exc))
+            machine.fail()
+            return self._finalize(request, LoopStatus.FAILED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+    def _coerce_request(self, request: AutonomousLoopRequest | str, project_root: Path | str | None) -> AutonomousLoopRequest:
+        if isinstance(request, AutonomousLoopRequest):
+            return request
+        if isinstance(request, str) and project_root is not None:
+            return AutonomousLoopRequest(request, project_root)
+        raise ValueError("run requires AutonomousLoopRequest or task plus project_root")
+
+    def _bootstrap_context(self, task: str) -> ExecutionPlan:
+        step = PlanStep("context-1", "Build canonical project context", "Build canonical project context before selecting implementation tools.", "Context is required for bounded loop prompts.", "A ProjectContext is available.", (), PlanRiskLevel.LOW)
+        return ExecutionPlan(task, task, "Build bounded project context.", PlannerTaskType.INVESTIGATION, (step,), (), ("project root is explicit",), (), (), ("context is available",), PlannerConfidence.MEDIUM, (), PlanCompleteness.PARTIAL)
+
+    def _render_prompt(self, task: str, plan: ExecutionPlan, step: PlanStep, selection: ToolSelectionDecision, context: ProjectContext, history: tuple[AgentMessage, ...]) -> tuple[str, int, bool, tuple[str, ...]]:
+        plan_fragment = json.dumps({"task": task, "step": step.to_dict(), "selected_tool": selection.selected_tool, "prerequisites": list(selection.prerequisites), "expected_output": selection.expected_output}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        instruction = _bounded_text(
+            f"Task: {task}\nCurrent plan step: {step.step_id}\nPlan step detail: {plan_fragment}\nSelected tool: {selection.selected_tool}\nReturn exactly ACTION: TOOL with ARGS {{\"tool\": \"{selection.selected_tool}\", \"arguments\": {{...}}}} or ACTION: FINAL with ARGS {{\"message\": \"...\"}}.",
+            self.config.max_task_prompt_chars,
+        )
+        budgeted = self._budget.render(instruction, context, history)
+        return budgeted.prompt, budgeted.token_count, budgeted.truncated, budgeted.warnings
+
+    def _render_selection_failure_prompt(self, task: str, step: PlanStep, selection: ToolSelectionResult, context: ProjectContext, history: tuple[AgentMessage, ...]) -> tuple[str, int, bool, tuple[str, ...]]:
+        reason = selection.errors[0] if selection.errors else "The required capability is unavailable in the supplied registry."
+        instruction = _bounded_text(
+            f"Task: {task}\nCurrent plan step: {step.step_id}\nSelection status: {selection.status.value}\nSelection reason: {reason}\nReturn exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request an unavailable tool.",
+            self.config.max_task_prompt_chars,
+        )
+        budgeted = self._budget.render(instruction, context, history)
+        return budgeted.prompt, budgeted.token_count, budgeted.truncated, budgeted.warnings
+
+    def _render_completion_prompt(self, task: str, plan: ExecutionPlan, context: ProjectContext, history: tuple[AgentMessage, ...]) -> tuple[str, int, bool, tuple[str, ...]]:
+        instruction = _bounded_text(
+            f"Task: {task}\nThe declarative plan steps have been observed. Return exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request another tool.",
+            self.config.max_task_prompt_chars,
+        )
+        budgeted = self._budget.render(instruction, context, history)
+        return budgeted.prompt, budgeted.token_count, budgeted.truncated, budgeted.warnings
+
+    def _bind_project_root(self, call: ToolCall, project_root: Path) -> ToolCall:
+        registered = self.registry.metadata_for(call.name)
+        arguments = dict(call.arguments)
+        schema = registered.input_schema
+        if isinstance(schema, Mapping):
+            properties = schema.get("properties", {})
+            required = schema.get("required", ())
+        else:
+            properties = {}
+            required = ()
+        if "project_root" in properties or "project_root" in required:
+            supplied_root = arguments.get("project_root")
+            if supplied_root is not None and Path(str(supplied_root)).expanduser().resolve(strict=False) != project_root:
+                raise ToolError(ToolErrorCode.PATH_OUTSIDE_ROOT, "Autonomous tool calls must remain inside the explicit project root.", path=project_root)
+            arguments["project_root"] = str(project_root)
+        return ToolCall(call.call_id, call.name, arguments)
+
+    def _dispatch(self, call: ToolCall) -> ToolResult:
+        try:
+            data = self.registry.dispatch(call.name, call.arguments)
+            return ToolResult(call.call_id, call.name, True, data=data, truncated=bool(getattr(data, "truncated", False)))
+        except UnknownToolError as exc:
+            return ToolResult(call.call_id, call.name, False, error_code=LoopFailureCode.TOOL_UNAVAILABLE.value, message=str(exc))
+        except ToolError as exc:
+            return ToolResult(call.call_id, call.name, False, error_code=exc.code.value, message=exc.message)
+        except (ToolRegistryError, ValueError, TypeError) as exc:
+            return ToolResult(call.call_id, call.name, False, error_code=LoopFailureCode.TOOL_ARGUMENT_ERROR.value, message=str(exc))
+        except Exception as exc:
+            return ToolResult(call.call_id, call.name, False, error_code=LoopFailureCode.TOOL_EXECUTION_FAILED.value, message=str(exc))
+
+    def _safe_result_text(self, result: ToolResult) -> str:
+        payload = _safe_value(result.to_dict())
+        return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
+
+    def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str]) -> AutonomousLoopResult:
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors))
+
+    def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str) -> AutonomousLoopResult:
+        state = AutonomousLoopState(LoopLifecycleState.FAILED, task, None, None, None, None, "", (), False, None, (), (), (message,), AgentUsage())
+        return AutonomousLoopResult(task, status, "", None, None, state, (), (), (), AgentUsage(), (), (message,))
+
+
+def create_autonomous_tool_loop(engine: Any, *, registry: ToolRegistry | None = None, config: AutonomousLoopConfig | None = None) -> AutonomousToolLoop:
+    """Create an explicitly opt-in autonomous loop; defaults remain read-only."""
+
+    return AutonomousToolLoop(engine, registry=registry, config=config)
+
+
+def _loop_status_for_selection(status: ToolSelectionStatus) -> LoopStatus:
+    return {
+        ToolSelectionStatus.TOOL_UNAVAILABLE: LoopStatus.TOOL_UNAVAILABLE,
+        ToolSelectionStatus.MISSING_PREREQUISITES: LoopStatus.FAILED,
+        ToolSelectionStatus.AMBIGUOUS_SELECTION: LoopStatus.FAILED,
+        ToolSelectionStatus.NO_SUITABLE_TOOL: LoopStatus.FAILED,
+    }.get(status, LoopStatus.FAILED)
+
+
+def _valid_name(name: str) -> bool:
+    return bool(name) and name[0].isalpha() and all(character.isalnum() or character == "_" for character in name)
+
+
+def _contains_shell_payload(value: Any, key: str = "") -> bool:
+    if isinstance(value, Mapping):
+        for name, item in value.items():
+            if str(name).casefold() in {"shell", "shell_command", "command_string"}:
+                return True
+            if _contains_shell_payload(item, str(name)):
+                return True
+        return False
+    if isinstance(value, (list, tuple)):
+        return any(_contains_shell_payload(item, key) for item in value)
+    if isinstance(value, str):
+        return bool(_SHELL_TEXT_RE.search(value)) if key.casefold() in {"command", "cmd", "script", "shell_command"} else False
+    return False
+
+
+def _safe_value(value: Any, *, key: str = "") -> Any:
+    if _SECRET_KEY_RE.search(key):
+        return "[REDACTED]"
+    if isinstance(value, Mapping):
+        return {str(name): _safe_value(item, key=str(name)) for name, item in sorted(value.items(), key=lambda item: str(item[0]))}
+    if isinstance(value, (list, tuple)):
+        return [_safe_value(item, key=key) for item in value[:64]]
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return _bounded_text(value, _MAX_TEXT_CHARS) if isinstance(value, str) else value
+    if hasattr(value, "to_dict"):
+        return _safe_value(value.to_dict(), key=key)
+    return _bounded_text(str(value), _MAX_TEXT_CHARS)
+
+
+def _sanitize_text(value: str) -> str:
+    return _SECRET_TEXT_RE.sub(r"\1[REDACTED]", value)
+
+
+def _bounded_text(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    marker = f"\n[truncated: kept_first_{limit}_chars]"
+    return value[: max(0, limit - len(marker))] + marker
+
+
+def _unique(values: Sequence[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(item for item in values if item))
+
+
+__all__ = [
+    "AutonomousLoopConfig",
+    "AutonomousLoopRequest",
+    "AutonomousLoopResult",
+    "AutonomousLoopState",
+    "AutonomousLoopStep",
+    "AutonomousToolLoop",
+    "LoopAction",
+    "LoopActionParseError",
+    "LoopActionType",
+    "LoopFailureCode",
+    "LoopLifecycleState",
+    "LoopStateError",
+    "LoopStateMachine",
+    "LoopStatus",
+    "create_autonomous_tool_loop",
+    "parse_loop_action",
+]

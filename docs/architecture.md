@@ -908,7 +908,41 @@ Selection is conservative and plan-driven. Discovery/context steps prefer `proje
 
 Prerequisites are declarative selection facts, such as a known target path for `read_file`, confirmed mutation intent for `edit_file`, an approved plan and `CommandPolicy` permission for execution, or an existing `TestRunResult` for parsing. Strict prerequisite mode can return `MISSING_PREREQUISITES`; normal selection may record missing prerequisites as warnings for a later phase. Risk and confidence expose selection uncertainty but never grant permission: mutation remains behind `SafeEditSession`/`SafeEditPolicy`, while command/application/test execution remains behind `CommandPolicy`/`ProcessManager`.
 
-`ToolSelectionValidator` rejects unknown plan-step IDs, unavailable selected tools, duplicate selections, duplicate/unavailable alternatives, invalid enums, mutation without mutation intent, execution without execution intent, and malformed decision structures. All candidate/alternative/step/warning collections are bounded and deterministically ordered. `ToolSelector` has no filesystem, subprocess, network, environment/secrets, Git mutation, tool dispatch, or AgentLoop calls. Phase 6.3 will eventually consume this declarative result, but its loop is not implemented here.
+`ToolSelectionValidator` rejects unknown plan-step IDs, unavailable selected tools, duplicate selections, duplicate/unavailable alternatives, invalid enums, mutation without mutation intent, execution without execution intent, and malformed decision structures. All candidate/alternative/step/warning collections are bounded and deterministically ordered. `ToolSelector` has no filesystem, subprocess, network, environment/secrets, Git mutation, tool dispatch, or AgentLoop calls.
+
+## Phase 6.3 autonomous tool loop
+
+Phase 6.3 introduces the first controlled autonomous execution boundary, explicitly separate from the original read-only `AgentLoop`:
+
+```text
+Task + explicit project root
+             ↓
+          Planner
+             ↓
+       ExecutionPlan
+             ↓
+       ToolSelector
+             ↓
+  strict ACTION/ARGS validation
+             ↓
+ supplied ToolRegistry.dispatch()
+             ↓
+ structured ToolResult observation
+             ↓
+ bounded ContextBudget history → next action
+```
+
+`AutonomousToolLoop` accepts an `AutonomousLoopRequest` and an explicitly supplied `ToolRegistry`. The loop may construct an initial `ProjectContext` only by selecting and dispatching the existing registered `project_context` tool when no context is supplied. It then calls the existing `Planner`, selects one current plan step with `ToolSelector`, asks the injected inference engine for one bounded action, validates that action against the current selection, and dispatches only through `ToolRegistry`. It never instantiates arbitrary tools, contains an alternative command executor, or enables mutation/execution capabilities automatically. The CLI and Phase 3.6 `AgentLoop` remain unchanged.
+
+The immutable/bounded API consists of `AutonomousLoopRequest`, `AutonomousLoopConfig`, `AutonomousLoopState`, `AutonomousLoopStep`, `AutonomousLoopResult`, `LoopAction`, and lifecycle/action/status/failure enums. The strict model contract is either `ACTION: TOOL` followed by one JSON object containing `tool` and `arguments`, or `ACTION: FINAL` followed by one JSON object containing `message`. Natural-language prose, malformed JSON, unknown action shapes, unknown tools, selection mismatches, shell-like payloads, and project-root escapes fail before tool dispatch. A final action is the only successful terminal signal in this phase.
+
+The explicit state machine uses `CREATED`, `PLANNING`, `SELECTING_TOOL`, `VALIDATING_ACTION`, `EXECUTING_TOOL`, `OBSERVING_RESULT`, `UPDATING_CONTEXT`, `REQUESTING_NEXT_ACTION`, `COMPLETED`, and `FAILED`. Invalid transitions raise structured `LoopStateError`; failed tools are recorded once and stop the invocation. There is no retry, rerun, argument rewriting, tool switching, debugging, self-correction, or recovery path.
+
+After every successful tool execution, the loop stores a bounded structured observation in `AgentMessage` history and re-renders the next model prompt through the existing `ContextBudget`. Truncation remains visible through `context_truncated`, `truncation_reason`, `preserved_sections`, warnings, and usage metadata. History and action arguments are sanitized for secret-like keys and bounded text; raw credentials, private keys, environment dumps, and unrestricted file/output contents are not copied into loop state.
+
+A private fixed bound of eight tool executions per invocation prevents infinite development loops. This emergency bound is explicit, deterministic, and not model-overridable, but it is not the configurable Phase 6.5 max-iterations feature. Plan steps with `NO_SUITABLE_TOOL` may be recorded as bounded non-executable skips; unavailable or ambiguous required capabilities produce structured failure. Mutation requires an explicitly supplied mutation registry and remains behind `SafeEditSession`/`SafeEditPolicy`; command/application/test actions remain behind `CommandPolicy`/`ProcessManager`.
+
+Phase 6.3 is the first autonomous execution phase, but it intentionally does not implement Phase 6.4 stop conditions, Phase 6.5 configurable iteration limits, Phase 6.6 error recovery, retries, self-correction, autonomous debugging, memory, RAG, network, package installation, Git mutation, shell execution, background agents, scheduling, daemon processes, unrestricted command/file modification, or automatic CLI autonomy.
 
 ## Present implementation
 
@@ -918,8 +952,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, and public side-effect-free `ToolSelector`/`ToolSelectionValidator` models with structured raw/semantic/plan/selection results, bounded resolution/parsing/planning/selection, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution/parsing | Tool loop, autonomous execution, automatic debugging/fixing/retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; expose Planner and ToolSelector as separate public planning/selection APIs without injecting them into the loop or enabling mutation, Git inspection, command execution, policy-wrapped execution, ProcessManager, ApplicationRunner, TestRunner, or TestResultParser by default | Tool loop, automatic command/application/test execution, automatic result parsing/debugging/fixing/retries, Agent planning/execution loops, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, public side-effect-free `Planner`/`PlanValidator` models, public side-effect-free `ToolSelector`/`ToolSelectionValidator` models, and explicit opt-in `AutonomousToolLoop` models with structured raw/semantic/plan/selection/loop results, bounded resolution/parsing/planning/selection/execution, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution/parsing | Phase 6.4+ stop/recovery systems, automatic debugging/fixing/retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, unrestricted autonomy, LLM tool-calling by default |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded read-only `AgentLoop` orchestration over the default registry; expose Planner, ToolSelector, and explicitly constructed `AutonomousToolLoop` as separate APIs without changing CLI/default AgentLoop behavior or auto-enabling mutation/execution capabilities | Phase 6.4+ stop/recovery systems, automatic result parsing/debugging/fixing/retries, automatic CLI autonomy, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
