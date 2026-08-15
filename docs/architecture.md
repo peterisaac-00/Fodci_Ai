@@ -860,6 +860,32 @@ Phase 5.6 supports bounded text formats for pytest, unittest, Jest, Vitest, and 
 
 Phase 5.6 is semantic interpretation only. It does not diagnose root causes and does not implement a debugger, self-correction, autonomous AgentLoop, planning, memory, RAG, shell, network, package installation, Git mutation, background processes, retries, or Phase 6.
 
+## Phase 6.1 planner
+
+Phase 6.1 introduces the first planning boundary above the existing read-only AgentLoop without activating autonomous execution:
+
+```text
+User task + optional supplied ProjectContext + PlannerConfig
+                         ↓
+                       Planner
+                         ↓
+              PlanValidator / safe immutable plan
+                         ↓
+                    ExecutionPlan
+                         ↓
+             STOP — future Phase 6.2 only
+```
+
+`Planner` accepts only caller-supplied task text, an optional existing `ProjectContext`, and explicit bounded configuration. It does not build context, scan files, read paths, import target code, select tools, call tools, execute commands/tests, run the parser, modify files/Git, access the network/environment/secrets, or invoke `AgentLoop`. The existing `AgentLoop` and all `ToolRegistry` defaults remain unchanged.
+
+The immutable schema consists of `PlannerRequest`, `PlannerConfig`, `PlanStep`, `PlanRisk`, `ExecutionPlan`, `PlanValidationResult`, and `PlannerResult`. `PlanStep` is declarative: it describes an objective, rationale, expected result, dependencies, risk, verification requirement, and status, but contains no executable tool call or command field. `ExecutionPlan` carries original/normalized task, goal, conservative task type, step DAG, assumptions, constraints, risks, expected change categories, verification strategy, confidence, warnings, and completeness. Missing or partial context is represented explicitly through lower confidence, assumptions, warnings, and partial completeness rather than silently treated as project facts.
+
+Task normalization collapses whitespace and preserves unsupported or ambiguous requirements. Conservative categories include feature, bug fix, refactor, test addition, configuration, documentation, dependency, investigation, and `UNKNOWN`. Short or underspecified tasks can remain `REQUIRES_CLARIFICATION`; the planner does not turn “Fix authentication” into an invented JWT design. Expected changes use bounded categories rather than fabricated filenames. Verification strategy describes future checks but is never executed by the Planner.
+
+`PlanValidator` checks required text and enum values, unique step IDs, valid dependency references, DAG acyclicity, configured step/collection/text budgets, and forbidden execution or mutation payloads disguised as prose. `PlannerConfig` makes truncation visible through warnings and incomplete/clarification status. Identical task/context/config inputs produce deterministic serialized plans; no time, randomness, network, filesystem discovery, hidden state, or external model is used.
+
+Phase 6.1 is planning infrastructure only. The Planner is not a Tool Selector, Tool Executor, code generator, debugger, self-correction engine, test runner, command executor, or autonomous AgentLoop. Phase 6.2 Tool Selection, Phase 6.3 Tool Loop, stop conditions, execution budgets, error recovery, task completion verification, memory, RAG, and all later autonomous behavior are intentionally absent.
+
 ## Present implementation
 
 The repository implements only these foundation pieces:
@@ -868,8 +894,8 @@ The repository implements only these foundation pieces:
 | --- | --- | --- |
 | Configuration | Resolve a configured root path and validate a log level | Agent-specific settings, secret loading, provider configuration |
 | LLM provider | Define typed messages, request/response, provider protocol, one provider error, and the local Fodci adapter | External APIs, network access, fallback models, tool calling |
-| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, and opt-in read-only `TestResultParserTool`/`parse_test_result` with structured raw/semantic results, bounded resolution/parsing, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution/parsing | Automatic debugging/fixing/retries, autonomous AgentLoop, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, LLM tool-calling |
-| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; allow explicit external registry injection without enabling create/edit/delete mutation, Git inspection, command execution, policy-wrapped execution, ProcessManager, ApplicationRunner, TestRunner, or TestResultParser by default; do not inject SafeEditSession, GitDiffTool, GitStatusTool, ModificationVerifier, ModificationTransaction, RunCommandTool, PolicyRunCommandTool, ProcessManager, RunApplicationTool, RunTestsTool, or TestResultParserTool | Agent modification loops, automatic command/application/test execution, automatic result parsing/debugging/fixing/retries, Git mutation, memory, RAG, autonomous/background loops |
+| Tool layer | Reuse the `Tool` protocol for read-only Phase 3 tools plus create-only `WriteFileTool`/`write_file`, exact existing-file `EditFileTool`/`edit_file`, regular-file-only `DeleteFileTool`/`delete_file`, additive `safe_editing` policy/session, read-only `GitDiffTool`/`git_diff` plus `GitStatusTool`/`git_status`, read-only `ModificationVerifier`/`verify_modification`, additive `ModificationTransaction`/recovery models, opt-in `RunCommandTool`/`run_command`, opt-in `PolicyRunCommandTool`/`CommandPolicy`, reusable `ProcessManager`, opt-in `RunApplicationTool`/`ApplicationRunner`, opt-in `RunTestsTool`/`TestRunner`, opt-in read-only `TestResultParserTool`/`parse_test_result`, and public side-effect-free `Planner`/`PlanValidator` models with structured raw/semantic/plan results, bounded resolution/parsing/planning, deterministic boundaries, symlink safety, revalidation, and opt-in mutation/inspection/execution/parsing | Tool selection, autonomous execution, automatic debugging/fixing/retries, Git mutation, terminal execution beyond explicit policy/process/application/test boundaries, LLM tool-calling |
+| Agent adapter | Keep `ProviderBackedAgent` compatibility and bounded `AgentLoop` orchestration over the default read-only registry; expose Planner as a separate public planning API without injecting it into the loop or enabling mutation, Git inspection, command execution, policy-wrapped execution, ProcessManager, ApplicationRunner, TestRunner, or TestResultParser by default | Tool selection, automatic command/application/test execution, automatic result parsing/debugging/fixing/retries, Agent planning/execution loops, Git mutation, memory, RAG, autonomous/background loops |
 | Model architecture | Implement a small decoder-only Transformer with local random weights and forward logits | Dataset, training, checkpoints, provider/CLI integration |
 | Training engine | Train the existing model with CPU batching, next-token cross-entropy, optional response-only masks, AdamW, clipping, validation, metrics, deterministic seeding, and resumable checkpoints | Architecture redesign, pretrained weights, downloads, generation, inference, CLI or Agent integration |
 | Tiny v1 experiment | Run a bounded from-scratch CPU experiment on a local backend corpus, record baseline/results, and verify an ignored checkpoint | External datasets, scraping, pretrained components, generation, inference, Agent or CLI integration |
