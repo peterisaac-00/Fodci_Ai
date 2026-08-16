@@ -1,8 +1,35 @@
-"""Phase 2.8 evaluation layer for Fodci."""
+"""Objective evaluation and Phase 8.1 declarative task models for Fodci."""
 
 from backend_ai.core.contracts import Evaluator
 from backend_ai.evaluation.config import EvaluationConfig
 from backend_ai.evaluation.evaluator import EvaluationComparison, EvaluationResult, FodciEvaluator
+from backend_ai.evaluation.task_model import (
+    AllowedScope,
+    ChangeType,
+    EvaluationConstraint,
+    EvaluationDifficulty,
+    EvaluationTask,
+    EvaluationTaskCategory,
+    EvaluationTaskValidationResult,
+    EvaluationTaskValidator,
+    EvaluationTestType,
+    ExpectedArea,
+    ExpectedAreaType,
+    ExpectedBehavior,
+    ForbiddenChange,
+    ForbiddenChangeType,
+    GroundTruth,
+    ProjectDefinition,
+    Requirement,
+    SuccessCriterion,
+    SuccessCriterionType,
+    TestDefinition,
+    ValidationIssue,
+    ValidationSeverity,
+    create_evaluation_task,
+    serialize_evaluation_task,
+    validate_evaluation_task,
+)
 
 __all__ = [
     "EvaluationComparison",
@@ -10,4 +37,29 @@ __all__ = [
     "EvaluationResult",
     "Evaluator",
     "FodciEvaluator",
+    "AllowedScope",
+    "ChangeType",
+    "EvaluationConstraint",
+    "EvaluationDifficulty",
+    "EvaluationTask",
+    "EvaluationTaskCategory",
+    "EvaluationTaskValidationResult",
+    "EvaluationTaskValidator",
+    "EvaluationTestType",
+    "ExpectedArea",
+    "ExpectedAreaType",
+    "ExpectedBehavior",
+    "ForbiddenChange",
+    "ForbiddenChangeType",
+    "GroundTruth",
+    "ProjectDefinition",
+    "Requirement",
+    "SuccessCriterion",
+    "SuccessCriterionType",
+    "TestDefinition",
+    "ValidationIssue",
+    "ValidationSeverity",
+    "create_evaluation_task",
+    "serialize_evaluation_task",
+    "validate_evaluation_task",
 ]
