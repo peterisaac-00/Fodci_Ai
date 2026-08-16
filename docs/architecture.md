@@ -1274,3 +1274,25 @@ Every dimension includes evidence identifiers and an explanation. Test execution
 Benchmark aggregation uses the arithmetic mean across all evaluated task scores in canonical task-id order. Failed, blocked, incomplete, and unavailable tasks remain in the denominator and are counted explicitly in `BenchmarkScore`; they cannot disappear from the result. Empty task collections produce a zero aggregate and zero evidence completeness. Serialization is canonical JSON with sorted keys and deterministic ordering.
 
 This phase intentionally excludes version-to-version comparison, historical regression analysis, trends, leaderboards, and model comparisons. Those capabilities are reserved for Phase 8.4.
+
+## Phase 8.4 — Evaluation Regression and Version Comparison
+
+Phase 8.4 is a read-only comparison boundary over completed evaluation artifacts:
+
+```text
+BenchmarkRunner → BenchmarkResult → BenchmarkScorer → EvaluationResult
+                                                        ↓
+                                             compare_evaluations()
+                                                        ↓
+                                            EvaluationComparisonResult
+```
+
+`EvaluationVersion` identifies the baseline or candidate explicitly through agent version, evaluation version, scoring-policy version, benchmark-definition version, optional commit SHA, and immutable metadata. `EvaluationSnapshot` binds that identity to one existing `EvaluationResult`; there is no implicit latest version and baseline/candidate are never swapped.
+
+`ComparisonConfig` provides a host-controlled epsilon, bounded evidence-reference count, and complete-evidence requirement. Compatibility is checked before scoring deltas: benchmark identity, evaluation version, scoring policy, benchmark-definition version, task-ID set, and scoring dimensions must match. Incompatibility returns `INCOMPARABLE` with reasons and no improvement claim. Missing or incomplete evidence returns `INCONCLUSIVE`; missing values are not converted to zero.
+
+Each common task receives overall and per-dimension comparisons for task success, tests, code quality, and efficiency. Deltas are classified as improved, regressed, unchanged, or inconclusive using epsilon. Explicit status transitions have priority over numeric deltas: PASS to FAIL, BLOCKED, INCOMPLETE, or UNAVAILABLE is a regression, while FAIL/BLOCKED/INCOMPLETE/UNAVAILABLE to PASS is an improvement. Aggregate score, task counts, and dimension scores are also compared, but aggregate improvement cannot hide task regressions. Such a result is `IMPROVED_WITH_REGRESSIONS`; a high-severity pass-to-failure transition remains `REGRESSED`.
+
+Regression severity is explicit and deterministic: `NONE`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`. A previous passing task that fails is `HIGH`; multiple or integrity-threatening findings can be escalated by the result policy. `REGRESSION_FREE` is returned only when compatible, complete evidence shows no task regression and no significant dimension regression. Every finding contains values, delta, classification, severity, bounded evidence IDs, and an explanation. `EvaluationComparisonResult.to_json()` emits canonical sorted-key JSON with stable task and finding order.
+
+The public API is explicit: callers invoke `compare_evaluations(baseline, candidate, config)` and may pass `EvaluationSnapshot` objects or completed `EvaluationResult` objects with explicit version identities. The normal CLI and agent loop do not automatically run two benchmarks. This phase adds no subprocess, network, package installation, Git mutation, background worker, mutable global state, duplicate scorer, or automatic benchmark execution. Phase 9 remains out of scope.

@@ -18,6 +18,13 @@ from backend_ai.evaluation.scoring import (
     EvaluationScorer, EvaluationStatus, EvaluationWeights, EvidenceStatus, ScoreDimension,
     ScoringPolicy, TaskEvaluation, TaskScore, evaluate_benchmark,
 )
+from backend_ai.evaluation.regression import (
+    AggregateComparison, ComparisonClassification, ComparisonConfig, ComparisonResult,
+    ComparisonStatus, DimensionComparison, EvaluationComparisonRequest,
+    EvaluationComparisonResult, EvaluationRegressionComparator, EvaluationSnapshot,
+    EvaluationVersion, RegressionFinding, RegressionSeverity, RegressionSummary,
+    TaskComparison, compare_evaluations,
+)
 from backend_ai.evaluation.task_model import (
     AllowedScope, ChangeType, EvaluationConstraint, EvaluationDifficulty,
     EvaluationTask, EvaluationTaskCategory, EvaluationTaskValidationResult,
@@ -35,6 +42,10 @@ __all__ = [
     "BenchmarkScorer", "BenchmarkScore", "CriterionEvaluation", "EvaluationResult",
     "EvaluationScorer", "EvaluationStatus", "EvaluationWeights", "EvidenceStatus", "ScoreDimension",
     "ScoringPolicy", "TaskEvaluation", "TaskScore", "evaluate_benchmark",
+    "AggregateComparison", "ComparisonClassification", "ComparisonConfig", "ComparisonResult",
+    "ComparisonStatus", "DimensionComparison", "EvaluationComparisonRequest", "EvaluationComparisonResult",
+    "EvaluationRegressionComparator", "EvaluationSnapshot", "EvaluationVersion", "RegressionFinding",
+    "RegressionSeverity", "RegressionSummary", "TaskComparison", "compare_evaluations",
     "EvaluationComparison", "ModelEvaluationResult", "EvaluationConfig", "Evaluator", "FodciEvaluator",
     "AllowedScope", "ChangeType", "EvaluationConstraint", "EvaluationDifficulty", "EvaluationTask",
     "EvaluationTaskCategory", "EvaluationTaskValidationResult", "EvaluationTaskValidator",

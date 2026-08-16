@@ -586,3 +586,7 @@ This project is distributed under the [MIT License](LICENSE).
 ### Phase 8.3 scoring
 
 Phase 8.3 adds deterministic evidence-driven scoring through `backend_ai.evaluation.BenchmarkScorer`. It consumes existing `BenchmarkResult` evidence and declared `EvaluationTask.success_criteria` only. The default immutable weights are task success 50%, tests 30%, code quality 10%, and efficiency 10%. Missing evidence is represented explicitly as unavailable or insufficient evidence, never as a pass. Failed, blocked, incomplete, and unavailable tasks remain in benchmark aggregation. Version comparison and trend analysis are intentionally deferred to Phase 8.4.
+
+### Phase 8.4 evaluation regression comparison
+
+Phase 8.4 adds an explicit, deterministic comparison layer through `backend_ai.evaluation.compare_evaluations`. It consumes completed Phase 8.3 `EvaluationResult` objects and explicit `EvaluationVersion` identities; it never reruns benchmarks or executes tests. Compatibility checks cover benchmark identity, evaluation version, scoring-policy version, benchmark-definition version, task IDs, and scoring dimensions. Results are classified as `IMPROVED`, `REGRESSED`, `EQUIVALENT`, `IMPROVED_WITH_REGRESSIONS`, `REGRESSION_FREE`, `INCONCLUSIVE`, or `INCOMPARABLE`, with bounded epsilon thresholds, task-level status-transition detection, dimension deltas, severity, and traceable evidence IDs. Phase 9 has not been started.
