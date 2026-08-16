@@ -590,3 +590,39 @@ Phase 8.3 adds deterministic evidence-driven scoring through `backend_ai.evaluat
 ### Phase 8.4 evaluation regression comparison
 
 Phase 8.4 adds an explicit, deterministic comparison layer through `backend_ai.evaluation.compare_evaluations`. It consumes completed Phase 8.3 `EvaluationResult` objects and explicit `EvaluationVersion` identities; it never reruns benchmarks or executes tests. Compatibility checks cover benchmark identity, evaluation version, scoring-policy version, benchmark-definition version, task IDs, and scoring dimensions. Results are classified as `IMPROVED`, `REGRESSED`, `EQUIVALENT`, `IMPROVED_WITH_REGRESSIONS`, `REGRESSION_FREE`, `INCONCLUSIVE`, or `INCOMPARABLE`, with bounded epsilon thresholds, task-level status-transition detection, dimension deltas, severity, and traceable evidence IDs. Phase 9 has not been started.
+
+## Phase 8.5 — Evaluation Metrics
+
+Phase 8.5 derives deterministic, evidence-backed metrics from completed benchmark results without executing tasks or changing agent behavior. The public APIs are `collect_metrics()` for task-level, category-level, and difficulty-level metrics and `collect_benchmark_metrics()` for aggregate benchmark snapshots. Metrics include task success, test pass, code quality, efficiency, reliability, regression-free rate, evidence completeness, score distributions, and bounded failure counts. Missing evidence is represented explicitly as `UNAVAILABLE` or `INCONCLUSIVE`; it is never silently converted into success. Dimension scores use the declared aggregate score when a dimension-level value is absent, preserving compatibility with evidence fixtures while keeping canonical ordering and immutable dataclasses.
+
+## Phase 8.6 — Evaluation Reports
+
+Phase 8.6 produces bounded human-readable and machine-readable reports from existing evaluation artifacts. `ReportInputs` accepts the completed evaluation, benchmark result, metrics collection, optional comparison, regression evaluation, validation result, and immutable model identity metadata. Reports contain summary scores, task/category/difficulty breakdowns, evidence references, warnings, comparison details, and truncation metadata. `EvaluationReport.to_json()` uses sorted-key canonical JSON, while `to_text()` provides a stable operator-facing report headed by `FODCI EVALUATION REPORT`.
+
+## Phase 8.7 — Version Metrics Comparison
+
+Phase 8.7 extends version comparison with aggregate, category, and difficulty deltas. `compare_evaluation_metrics()` compares compatible metric snapshots using the configured epsilon and returns explicit `IMPROVED`, `REGRESSED`, `UNCHANGED`, or `INCONCLUSIVE` classifications. Overall classification aggregates every available group and cannot hide a regression in one category or difficulty band behind an overall improvement. Incomplete or incompatible inputs remain explicit and do not produce false-positive improvement claims.
+
+## Phase 8.8 — Regression Evaluation
+
+Phase 8.8 evaluates host-defined regression gates over comparison results and metric comparisons. Gates cover overall score, efficiency, task-level rates, regression count, and severity. The evaluator returns a deterministic verdict such as `REGRESSION_PASSED`, `REGRESSION_FAILED`, or `REGRESSION_INCONCLUSIVE`, together with gate results, regression count, severity, evidence references, and warnings. A mixed improvement with task regressions is surfaced rather than flattened into a plain improvement; pure high-severity regressions remain blocking.
+
+## Phase 8.9 — Benchmark Validation
+
+Phase 8.9 validates benchmark definitions before execution. It checks task structure, identifiers, references, ground truth, criteria, scoring policy, category coverage, and fairness signals such as category dominance and one-task test dominance. Validation returns `VALID`, `WARNING`, `INVALID`, or `INCONCLUSIVE` with deterministic issue identifiers, health scoring, and explicit error/warning counts. Validation is read-only and does not execute tests, commands, or model inference.
+
+### Scoped verification
+
+The dedicated Phase 8.5–8.9 unit tests and the end-to-end integration pipeline are run together with:
+
+```bash
+python3 -m pytest -q \
+  tests/unit/test_phase85_metrics.py \
+  tests/unit/test_phase86_report.py \
+  tests/unit/test_phase87_version_comparison.py \
+  tests/unit/test_phase88_regression_evaluation.py \
+  tests/unit/test_phase89_benchmark_validation.py \
+  tests/integration/test_phase85_89_pipeline.py
+```
+
+The implementation is considered complete when this scoped suite passes. Tests for unrelated legacy, inference, and CLI components are outside this phase's acceptance gate.

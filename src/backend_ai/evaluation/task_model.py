@@ -418,7 +418,9 @@ class EvaluationTaskValidator:
             warnings.append(ValidationIssue("NO_REQUIREMENTS", "task has no requirements", "requirements", ValidationSeverity.WARNING))
         if not task.success_criteria:
             self._error(errors, "MISSING_CRITERIA", "at least one success criterion is required", "success_criteria")
-        if not task.ground_truth.required_outcomes and not task.ground_truth.required_interfaces and not task.ground_truth.required_invariants:
+        if not isinstance(task.ground_truth, GroundTruth):
+            self._error(errors, "MALFORMED_GROUND_TRUTH", "ground_truth must be a GroundTruth instance", "ground_truth")
+        elif not task.ground_truth.required_outcomes and not task.ground_truth.required_interfaces and not task.ground_truth.required_invariants:
             self._error(errors, "INVALID_GROUND_TRUTH", "ground truth must contain an outcome, interface, or invariant", "ground_truth")
         return EvaluationTaskValidationResult(not errors, tuple(errors), tuple(warnings))
 

@@ -25,6 +25,28 @@ from backend_ai.evaluation.regression import (
     EvaluationVersion, RegressionFinding, RegressionSeverity, RegressionSummary,
     TaskComparison, compare_evaluations,
 )
+from backend_ai.evaluation.metrics import (
+    BenchmarkMetrics, CategoryMetrics, DifficultyMetrics, MetricName, MetricStatus,
+    SingleMetric, TaskMetrics, TaskMetricsCollection, collect_benchmark_metrics,
+    collect_metrics,
+)
+from backend_ai.evaluation.report import (
+    EvaluationReport, ReportConfig, ReportInputs, ReportLimit, TruncationInfo,
+    generate_evaluation_report,
+)
+from backend_ai.evaluation.version_comparison import (
+    ComparisonClassification as VersionComparisonClassification, ComparisonDimension,
+    GroupMetricComparison, VersionMetricsComparison, compare_evaluation_metrics,
+    compare_evaluations_detailed,
+)
+from backend_ai.evaluation.regression_evaluation import (
+    RegressionEvaluator, RegressionGate, RegressionGateResult, RegressionType,
+    RegressionVerdict, RegressionEvaluationResult, evaluate_regression,
+)
+from backend_ai.evaluation.benchmark_validation import (
+    BenchmarkHealth, BenchmarkValidationResult, BenchmarkValidator, IssueLevel,
+    ValidationIssue as BenchmarkValidationIssue, ValidationStatus, validate_benchmark,
+)
 from backend_ai.evaluation.task_model import (
     AllowedScope, ChangeType, EvaluationConstraint, EvaluationDifficulty,
     EvaluationTask, EvaluationTaskCategory, EvaluationTaskValidationResult,
@@ -53,4 +75,15 @@ __all__ = [
     "ForbiddenChangeType", "GroundTruth", "ProjectDefinition", "Requirement", "SuccessCriterion",
     "SuccessCriterionType", "TestDefinition", "ValidationIssue", "ValidationSeverity",
     "create_evaluation_task", "serialize_evaluation_task", "validate_evaluation_task",
+    "BenchmarkMetrics", "CategoryMetrics", "DifficultyMetrics", "MetricName", "MetricStatus",
+    "SingleMetric", "TaskMetrics", "TaskMetricsCollection", "collect_benchmark_metrics",
+    "collect_metrics",
+    "EvaluationReport", "ReportConfig", "ReportInputs", "ReportLimit", "TruncationInfo",
+    "generate_evaluation_report",
+    "VersionComparisonClassification", "ComparisonDimension", "GroupMetricComparison",
+    "VersionMetricsComparison", "compare_evaluation_metrics", "compare_evaluations_detailed",
+    "RegressionEvaluator", "RegressionGate", "RegressionGateResult", "RegressionType",
+    "RegressionVerdict", "RegressionEvaluationResult", "evaluate_regression",
+    "BenchmarkHealth", "BenchmarkValidationResult", "BenchmarkValidator",
+    "BenchmarkValidationIssue", "IssueLevel", "ValidationStatus", "validate_benchmark",
 ]

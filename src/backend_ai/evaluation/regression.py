@@ -89,8 +89,8 @@ class ComparisonConfig:
     require_complete_evidence: bool = True
 
     def __post_init__(self) -> None:
-        if isinstance(self.epsilon, bool) or not isinstance(self.epsilon, (int, float)) or not math.isfinite(self.epsilon) or not 0.0 < self.epsilon <= 0.5:
-            raise ValueError("epsilon must be finite, positive, and at most 0.5")
+        if isinstance(self.epsilon, bool) or not isinstance(self.epsilon, (int, float)) or not math.isfinite(self.epsilon) or not 0.0 < self.epsilon < 1.0:
+            raise ValueError("epsilon must be in (0, 1)")
         if isinstance(self.max_evidence_ids, bool) or not isinstance(self.max_evidence_ids, int) or not 0 < self.max_evidence_ids <= 256:
             raise ValueError("max_evidence_ids must be between 1 and 256")
         if not isinstance(self.require_complete_evidence, bool):
@@ -315,11 +315,12 @@ class EvaluationRegressionComparator:
     def _overall(self, tasks: Sequence[TaskComparison], aggregate: AggregateComparison, findings: RegressionSummary, request: EvaluationComparisonRequest) -> tuple[ComparisonStatus, RegressionSeverity]:
         regressions = [item for item in tasks if item.classification is ComparisonClassification.REGRESSED]
         improvements = [item for item in tasks if item.classification is ComparisonClassification.IMPROVED]
+        if regressions and improvements and aggregate.classification is ComparisonClassification.IMPROVED:
+            return ComparisonStatus.IMPROVED_WITH_REGRESSIONS, findings.highest_severity
         if any(item.severity is RegressionSeverity.HIGH for item in regressions): return ComparisonStatus.REGRESSED, RegressionSeverity.HIGH
         if not regressions and improvements: return ComparisonStatus.IMPROVED, RegressionSeverity.NONE
         if not regressions and aggregate.classification is ComparisonClassification.UNCHANGED:
             return (ComparisonStatus.IMPROVED, RegressionSeverity.NONE) if improvements else (ComparisonStatus.REGRESSION_FREE, RegressionSeverity.NONE)
-        if regressions and aggregate.classification is ComparisonClassification.IMPROVED: return ComparisonStatus.IMPROVED_WITH_REGRESSIONS, findings.highest_severity
         if regressions: return ComparisonStatus.REGRESSED, findings.highest_severity
         if aggregate.classification is ComparisonClassification.IMPROVED: return ComparisonStatus.IMPROVED, RegressionSeverity.NONE
         return ComparisonStatus.EQUIVALENT, RegressionSeverity.NONE

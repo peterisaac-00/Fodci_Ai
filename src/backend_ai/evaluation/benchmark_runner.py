@@ -333,7 +333,7 @@ class BenchmarkRunner:
             termination = BenchmarkTerminationReason.MAX_TASKS
         if len(runs) < len(request.tasks) and termination is not BenchmarkTerminationReason.INVALID_REQUEST:
             runs.extend(_skipped_run(task, "benchmark terminated before task started") for task in request.tasks[len(runs):])
-        total_duration = time.monotonic() - started
+        total_duration = time.monotonic() - started if not config.deterministic_mode else sum(run.duration_seconds for run in runs)
         summary = _summary(runs)
         status = _benchmark_status(runs, len(request.tasks), termination)
         deterministic_metadata = {
@@ -368,7 +368,7 @@ class BenchmarkRunner:
         workspace: _Workspace | None = None
         before: Mapping[str, str] = {}
         task_started = time.monotonic()
-        start_metadata = task_started
+        start_metadata = float(index) if config.deterministic_mode else task_started
         try:
             workspace = _Workspace.create(index, task.task_id, request.project_root, config)
             before = _snapshot(workspace.path, config.max_evidence_bytes)
@@ -386,7 +386,7 @@ class BenchmarkRunner:
                 execution_started=True,
                 execution_completed=True,
                 execution_status=result.execution_status or result.status.value,
-                duration_seconds=end - task_started,
+                duration_seconds=end - task_started if not config.deterministic_mode else _deterministic_duration(result.budget_state, end - task_started),
                 termination_reason=result.termination_reason or result.status.value,
                 workspace_identity=workspace.identity,
                 project_definition_identity=_project_identity(task),
@@ -416,7 +416,9 @@ class BenchmarkRunner:
             final_status = result.status
             if forbidden or unexpected:
                 final_status = BenchmarkTaskStatus.INCOMPLETE_EVIDENCE
-            return BenchmarkTaskRun(task.task_id, task.version, _task_enum(task, "category"), _task_enum(task, "difficulty"), final_status, start_metadata, end, end - task_started, result, evidence, validation, failure, artifacts, evidence.warnings)
+            run_duration = end - task_started if not config.deterministic_mode else evidence.duration_seconds
+            end_point = end if not config.deterministic_mode else (float(index) + run_duration)
+            return BenchmarkTaskRun(task.task_id, task.version, _task_enum(task, "category"), _task_enum(task, "difficulty"), final_status, start_metadata, end_point, run_duration, result, evidence, validation, failure, artifacts, evidence.warnings)
         except TimeoutError as exc:
             end = time.monotonic()
             message = _redact(str(exc))
@@ -468,6 +470,17 @@ _TERMINAL_FAILURES = {
     BenchmarkTaskStatus.INFRASTRUCTURE_ERROR,
     BenchmarkTaskStatus.INCOMPLETE_EVIDENCE,
 }
+
+
+def _deterministic_duration(budget_state: Mapping[str, Any] | None, wall_duration: float) -> float:
+    """In deterministic mode, prefer the runtime-reported budget duration for stable evidence."""
+
+    if budget_state:
+        for key in ("duration_seconds", "elapsed_seconds"):
+            candidate = budget_state.get(key)
+            if isinstance(candidate, (int, float)) and not isinstance(candidate, bool):
+                return float(candidate)
+    return wall_duration
 
 
 def _skipped_run(task: EvaluationTask, reason: str) -> BenchmarkTaskRun:

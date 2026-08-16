@@ -1296,3 +1296,99 @@ Each common task receives overall and per-dimension comparisons for task success
 Regression severity is explicit and deterministic: `NONE`, `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`. A previous passing task that fails is `HIGH`; multiple or integrity-threatening findings can be escalated by the result policy. `REGRESSION_FREE` is returned only when compatible, complete evidence shows no task regression and no significant dimension regression. Every finding contains values, delta, classification, severity, bounded evidence IDs, and an explanation. `EvaluationComparisonResult.to_json()` emits canonical sorted-key JSON with stable task and finding order.
 
 The public API is explicit: callers invoke `compare_evaluations(baseline, candidate, config)` and may pass `EvaluationSnapshot` objects or completed `EvaluationResult` objects with explicit version identities. The normal CLI and agent loop do not automatically run two benchmarks. This phase adds no subprocess, network, package installation, Git mutation, background worker, mutable global state, duplicate scorer, or automatic benchmark execution. Phase 9 remains out of scope.
+
+## Phase 8.5 — deterministic metrics boundary
+
+Phase 8.5 is a pure observation layer over `BenchmarkResult` and `EvaluationResult`:
+
+```text
+BenchmarkResult + EvaluationResult + EvaluationTask definitions
+                              ↓
+                    collect_metrics()
+                              ↓
+              TaskMetricsCollection / BenchmarkMetrics
+```
+
+The metrics layer does not execute a task, invoke a runtime, mutate evidence, or alter scoring policy. It computes task, category, difficulty, aggregate, reliability, evidence-completeness, and bounded distribution metrics in canonical order. Evidence identifiers remain attached to metric records, and absent dimension scores fall back only to the already-declared aggregate score; absent evidence is never inferred as success. Frozen dataclasses and canonical JSON preserve immutability and reproducibility.
+
+## Phase 8.6 — bounded reporting boundary
+
+Reporting consumes completed artifacts only:
+
+```text
+EvaluationResult + BenchmarkResult + Metrics
+       + optional comparison/regression/validation
+                              ↓
+                    generate_evaluation_report()
+                              ↓
+            EvaluationReport.to_text() / to_json()
+```
+
+`ReportInputs` keeps comparison, regression evaluation, validation, and identity metadata as separate typed inputs. The report layer applies explicit bounds to task findings, evidence references, warnings, failure excerpts, artifacts, and comparison details. Text output is stable for operators, while JSON is sorted-key canonical output suitable for archival and comparison.
+
+## Phase 8.7 — version metrics comparison boundary
+
+Phase 8.7 compares metric snapshots without rerunning either benchmark:
+
+```text
+BenchmarkMetrics(baseline) ─┐
+                             ├─ compare_evaluation_metrics() ─→ VersionMetricsComparison
+BenchmarkMetrics(candidate) ─┘
+```
+
+Compatibility, sample sizes, epsilon, missing values, and evidence completeness are evaluated before improvement claims. Aggregate, category, and difficulty comparisons are classified independently. Overall classification is the conservative aggregation of all available groups, so a regression in a category or difficulty band cannot disappear behind an improved aggregate score.
+
+## Phase 8.8 — regression gate boundary
+
+Regression evaluation applies host-controlled gates to existing comparison artifacts:
+
+```text
+EvaluationComparisonResult + VersionMetricsComparison + RegressionGates
+                                      ↓
+                           evaluate_regression()
+                                      ↓
+                 RegressionEvaluationResult / verdict / gate results
+```
+
+The evaluator is deterministic and read-only. It distinguishes failed gates, high-severity findings, mixed improvement with regressions, incomplete evidence, and inconclusive comparisons. It records the source of every decision through bounded evidence references and never executes a second benchmark or silently changes the configured thresholds.
+
+## Phase 8.9 — pre-execution benchmark validation boundary
+
+Validation is a definition-only checkpoint placed before the runner:
+
+```text
+EvaluationTask definitions + ScoringPolicy
+                    ↓
+             validate_benchmark()
+                    ↓
+       status + health + deterministic issues
+                    ↓
+             BenchmarkRunner (host-controlled)
+```
+
+The validator checks structure, references, ground truth, criteria, policy weights, category coverage, and fairness indicators. Errors produce `INVALID`; warnings produce `WARNING`; valid definitions produce `VALID`. Validation never invokes tests, commands, model inference, network operations, or mutation tools. This ensures that fairness and structural defects are surfaced before execution while preserving the modular separation between definition, execution, scoring, reporting, and regression decisions.
+
+## Phase 8.5–8.9 integration path
+
+The implemented end-to-end path is intentionally linear and evidence-preserving:
+
+```text
+Task definitions
+      ↓
+validate_benchmark()
+      ↓
+BenchmarkRunner
+      ↓
+BenchmarkScorer
+      ↓
+collect_metrics() ───────────────┐
+      ↓                           │
+ generate_evaluation_report()     │
+                                  │
+ baseline metrics ─┐             │
+ candidate metrics ├→ compare_evaluation_metrics()
+ evaluation results┘             │
+                                  └→ evaluate_regression()
+```
+
+All outputs are immutable, bounded, and canonically serializable. The dedicated acceptance suite is `tests/unit/test_phase85_metrics.py`, `test_phase86_report.py`, `test_phase87_version_comparison.py`, `test_phase88_regression_evaluation.py`, `test_phase89_benchmark_validation.py`, and `tests/integration/test_phase85_89_pipeline.py`. These tests validate only the implemented evaluation infrastructure and do not make unrelated legacy or model tests part of the Phase 8.5–8.9 acceptance gate.
