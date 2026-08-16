@@ -582,3 +582,7 @@ The implementation is deterministic, immutable at the public result boundary, bo
 ## License
 
 This project is distributed under the [MIT License](LICENSE).
+
+### Phase 8.3 scoring
+
+Phase 8.3 adds deterministic evidence-driven scoring through `backend_ai.evaluation.BenchmarkScorer`. It consumes existing `BenchmarkResult` evidence and declared `EvaluationTask.success_criteria` only. The default immutable weights are task success 50%, tests 30%, code quality 10%, and efficiency 10%. Missing evidence is represented explicitly as unavailable or insufficient evidence, never as a pass. Failed, blocked, incomplete, and unavailable tasks remain in benchmark aggregation. Version comparison and trend analysis are intentionally deferred to Phase 8.4.

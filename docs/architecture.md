@@ -1260,3 +1260,17 @@ The repository implements only these foundation pieces:
 | Project context | Hold one validated absolute project root in core; expose an immutable structural `ProjectContext` and bounded `AgentLoop` consumption through the tools/agent layers | File mutation, Git/model metadata, planning, memory, RAG, autonomous execution |
 
 No package imports another component's future concrete implementation. Any future dependency that would create a cycle should be inverted through a contract in `core` or a deliberately owned boundary module.
+
+## Phase 8.3 — Success Criteria and Evaluation Scoring
+
+`BenchmarkRunner` remains the execution and evidence-collection boundary. Phase 8.3 adds `BenchmarkScorer`, which consumes `BenchmarkResult.task_runs` and the declarative `EvaluationTask.success_criteria`; it does not execute tests, mutate files, override `FinalVerification`, or alter stop-condition authority.
+
+The scorer produces four normalized dimensions: **task success (50%)**, **tests (30%)**, **code quality (10%)**, and **efficiency (10%)**. The immutable `EvaluationWeights` model validates finite, non-negative weights whose total is exactly `1.0`, and the host may provide another valid weighting. The model or agent output cannot change those weights. `ScoringPolicy` records the explicit evaluation version (`8.3`) and scoring-policy version (`1.0`).
+
+Criterion evaluation is driven by declared `SuccessCriterion` types and structured evidence. Required final-verification, completion, regression, test, file-scope, and forbidden-change signals are represented as `CriterionEvaluation` records with status, satisfaction, score, evidence identifiers, evidence strength, and an explanation. Missing required evidence becomes `INSUFFICIENT_EVIDENCE` or `UNAVAILABLE`; it is never treated as a pass. Full task-success credit requires authoritative verification and completion evidence and is gated by required-criterion failures, regressions, forbidden changes, and blocking task statuses.
+
+Every dimension includes evidence identifiers and an explanation. Test execution is distinguished from absence of observed failures, while quality uses only bounded objective signals such as unexpected modifications, forbidden changes, safety blocks, and regressions. Efficiency uses measurable budget data and is gated by correctness, so a fast failure cannot receive efficient-success credit.
+
+Benchmark aggregation uses the arithmetic mean across all evaluated task scores in canonical task-id order. Failed, blocked, incomplete, and unavailable tasks remain in the denominator and are counted explicitly in `BenchmarkScore`; they cannot disappear from the result. Empty task collections produce a zero aggregate and zero evidence completeness. Serialization is canonical JSON with sorted keys and deterministic ordering.
+
+This phase intentionally excludes version-to-version comparison, historical regression analysis, trends, leaderboards, and model comparisons. Those capabilities are reserved for Phase 8.4.
