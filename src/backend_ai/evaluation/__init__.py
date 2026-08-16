@@ -3,6 +3,19 @@
 from backend_ai.core.contracts import Evaluator
 from backend_ai.evaluation.config import EvaluationConfig
 from backend_ai.evaluation.evaluator import EvaluationComparison, EvaluationResult, FodciEvaluator
+from backend_ai.evaluation.benchmark_runner import (
+    BenchmarkConfig,
+    BenchmarkEvidence,
+    BenchmarkExecutionResult,
+    BenchmarkRequest,
+    BenchmarkResult,
+    BenchmarkRunSummary,
+    BenchmarkRunner,
+    BenchmarkStatus,
+    BenchmarkTaskRun,
+    BenchmarkTaskStatus,
+    BenchmarkTerminationReason,
+)
 from backend_ai.evaluation.task_model import (
     AllowedScope,
     ChangeType,
@@ -32,6 +45,17 @@ from backend_ai.evaluation.task_model import (
 )
 
 __all__ = [
+    "BenchmarkConfig",
+    "BenchmarkEvidence",
+    "BenchmarkExecutionResult",
+    "BenchmarkRequest",
+    "BenchmarkResult",
+    "BenchmarkRunSummary",
+    "BenchmarkRunner",
+    "BenchmarkStatus",
+    "BenchmarkTaskRun",
+    "BenchmarkTaskStatus",
+    "BenchmarkTerminationReason",
     "EvaluationComparison",
     "EvaluationConfig",
     "EvaluationResult",
