@@ -1761,3 +1761,38 @@ Future Dataset Release / Phase 10.4
 ```
 
 Dataset release/version management, train/validation/test splitting, leakage detection, semantic search, LLM evaluation, tokenization, training, fine-tuning, checkpoints, model updates, and automatic learning remain outside this phase.
+
+## Phase 10.4 — Dataset Splitting
+
+Phase 10.4 adds a dedicated `DatasetSplitter` after the Phase 10.3 quality boundary:
+
+```text
+Experience Records
+        ↓
+Dataset Extraction
+        ↓
+Dataset Schema
+        ↓
+Filtering & Quality Gates
+        ↓
+ACCEPTED DatasetRecord values
+        ↓
+DatasetSplitter
+        ├── train
+        ├── validation
+        └── test
+```
+
+The splitter accepts canonical `DatasetRecord` objects. `split_accepted(DatasetFilteringResult)` is the explicit preferred path: it passes only the filtering result's `accepted` records while preserving all assessment decisions as `quality_decisions` and excluding `REVIEW`/`REJECT` IDs in the result. The splitter never calls `DatasetQualityEvaluator` and never independently converts a record into `ACCEPT`, `REVIEW`, or `REJECT`. Direct `split(records)` is intentionally reserved for an already accepted canonical collection.
+
+`DatasetSplitPolicy` defines the splitting contract: default ratios `0.80/0.10/0.10`, bounded explicit seed `42`, split algorithm version `1.0`, grouping mode, minimum counts, optional non-empty partition requirement, and input bound. It rejects negative, non-finite, out-of-range, all-zero, or non-summing ratios, invalid seeds, unsupported grouping modes, and impossible count settings. Split version is distinct from Dataset Schema version and future dataset release version.
+
+The record-level algorithm first sorts records by canonical Phase 10.2 `record_id`, then uses a local `random.Random(seed)` instance for deterministic shuffling. Counts are allocated using largest remainder after reserving configured minimum counts: floors of the remaining ratio products are assigned first, then leftover records go to descending fractional remainders with stable partition-order tie breaking. Counts always sum exactly to the eligible record count.
+
+The default `record` grouping produces exact requested-count partitions. Optional `experience` grouping keeps the same `experience_id` together. Optional `project` grouping uses reliable `project_context.project_id`; records without a project identity are isolated by their own record ID. Groups are sorted canonically, shuffled with the explicit seed, and assigned without crossing partitions. Since groups are indivisible, grouped actual ratios may differ from requested ratios; the manifest exposes both values and the grouping policy. A grouped dataset with fewer groups than required non-empty partitions raises an explicit `DatasetSplitError` when that requirement is enabled.
+
+`DatasetSplitResult` is immutable and contains complete canonical records, not simplified strings or reconstructed payloads. `DatasetSplitManifest` is an in-memory audit structure containing split version, seed, policy, Dataset Schema version, total and partition counts, record IDs, group IDs, requested ratios, actual ratios, and diagnostics. It is never automatically persisted or published. `validate_split(result)` checks duplicate/overlap absence, manifest coverage and counts, valid metadata, and group isolation.
+
+Duplicate input record IDs raise `DuplicateDatasetRecordError`; malformed types raise `DatasetSplitError`. The splitter does not silently skip invalid records or deduplicate them. All source DatasetRecord objects remain semantically unchanged, including identity, provenance, task, trajectory, solution, verification, evaluation, and outcome. Excluded quality records remain historical and are represented only by decision metadata, not deleted.
+
+Phase 10.4 stops at reproducible in-memory partitioning. Dataset release management, artifact storage/publishing, automatic export, tokenization, embeddings, semantic retrieval, vector databases, RAG, LLM evaluation, test-set inspection, training, fine-tuning, checkpoints, model updates, and automatic learning remain outside this phase.

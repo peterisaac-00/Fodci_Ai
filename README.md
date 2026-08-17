@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 10.3 complete — deterministic Dataset Filtering & Quality Gates delivered; Phase 10.4+ not started.**
+> **Current status: Phase 10.4 complete — deterministic Dataset Splitting delivered; Phase 10.5+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -757,7 +757,7 @@ future model improvement
 
 That pipeline is not implemented in Phase 9.4. No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset.
 
-**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Phase 10.3 adds deterministic Dataset Filtering & Quality Gates with ACCEPT/REVIEW/REJECT decisions. Embeddings, semantic retrieval, vector databases, RAG, dataset release versioning, dataset splitting, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Phase 10.3 adds deterministic Dataset Filtering & Quality Gates with ACCEPT/REVIEW/REJECT decisions. Phase 10.4 adds deterministic train/validation/test partitioning for accepted canonical Dataset Records. Embeddings, semantic retrieval, vector databases, RAG, dataset release versioning, dataset artifact publishing, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
 
 ## Phase 9.5 — unified Memory Retrieval
 
@@ -942,3 +942,35 @@ Trajectory checks preserve the value of debugging recovery. Actions, observation
 Every assessment preserves `record_id`, `experience_id`, decision, score, checks, reasons, warnings, and provenance. Diagnostics are bounded and secret-safe. Schema-invalid and security-invalid inputs are rejected without leaking payloads. The evaluator reuses the canonical schema validation and existing redaction/security mechanisms; it does not call an LLM or external service.
 
 **Phase 10.3 does not implement** dataset release/version management, train/validation/test splitting, leakage detection, embeddings, vector databases, semantic similarity, RAG, LLM-based quality evaluation, tokenization, training examples, fine-tuning, checkpoints, model updates, automatic persistence, or automatic learning. Filtering is an eligibility decision, not historical deletion.
+
+## Phase 10.4 — Dataset Splitting
+
+Phase 10.4 adds `DatasetSplitter` as a deterministic partitioning layer after Phase 10.3. It operates on canonical `DatasetRecord` objects and produces in-memory `train`, `validation`, and `test` partitions for future evaluation and dataset processing.
+
+```text
+DatasetRecord
+      ↓
+Phase 10.3 Quality Gates
+      ↓
+Accepted Dataset Records
+      ↓
+DatasetSplitter
+      ↓
+Train / Validation / Test
+```
+
+The splitter does not re-evaluate quality. When `quality_assessments` or a `DatasetFilteringResult` is supplied, only assessments with decision `ACCEPT` are eligible; `REVIEW` and `REJECT` records are excluded and their decisions remain in `quality_decisions` and `excluded_record_ids`. `split_accepted(filtered)` is the explicit integration path from Phase 10.3. Direct `split(records)` is for callers that already possess an accepted canonical-record collection and does not silently invoke the quality evaluator.
+
+`DatasetSplitPolicy` is immutable and inspectable. Its defaults are `train=0.80`, `validation=0.10`, and `test=0.10`, with explicit `seed=42`, `split_version="1.0"`, record-level grouping, optional minimum counts, non-empty partition behavior, and a bounded maximum input size. Ratios must be finite, non-negative, within `[0,1]`, and sum to `1.0` within the named tolerance. Seeds are explicit bounded integers; no hidden system time, process ID, UUID, or uncontrolled global randomness is used.
+
+Before shuffling, records are sorted by the canonical Phase 10.2 `record_id`. A local seeded pseudo-random generator then shuffles that canonical sequence. Repeating the same records, policy, seed, and split version produces identical membership and manifest even when input order changes. Different seeds are deterministic independently and may produce different membership for sufficiently large datasets.
+
+Record-level counts use largest-remainder allocation. Minimum partition counts are reserved first, the remaining records are allocated by ratio using integer floors, and leftover records are assigned in descending fractional-remainder order with partition order `train`, `validation`, `test` as the deterministic tie-breaker. The final counts always sum to the eligible record count. Empty and very small record-level datasets use explicit best-effort allocation; configured minimums or `require_non_empty_partitions` raise `DatasetSplitError` when impossible.
+
+The splitter supports explicit grouping modes: `record`, `experience`, and `project`. `record` is the default and gives exact ratio counts. `experience` keeps records sharing an `experience_id` together. `project` keeps records sharing reliable `project_context.project_id` together; records without a project identity remain isolated by record ID rather than being assigned to an invented project. Grouped partitions may differ from requested ratios because groups are indivisible. The manifest reports requested ratios, actual ratios, grouping mode, group IDs, and diagnostics. If non-empty grouped partitions are required but fewer than three groups exist, the splitter raises an explicit error instead of pretending the evaluation split is valid.
+
+`DatasetSplitResult` contains complete immutable canonical `DatasetRecord` objects, an in-memory `DatasetSplitManifest`, excluded IDs, and quality decisions. The manifest includes split version, seed, policy, Dataset Schema version, counts, requested and actual ratios, record IDs per partition, group IDs per partition, and bounded diagnostics. `validate_split(result)` verifies partition names, no duplicate IDs, no overlap, manifest coverage/counts, and group isolation when grouping is enabled.
+
+Duplicate input `record_id` values raise `DuplicateDatasetRecordError`; the splitter never silently deduplicates. Invalid types or schema objects raise `DatasetSplitError`; the splitter relies on canonical `DatasetRecord` construction rather than duplicating the full Phase 10.2 validator. No source record, Experience Record, quality assessment, provenance, ID, task, trajectory, solution, verification, evaluation, or outcome is mutated.
+
+**Phase 10.4 does not implement** dataset release/version management, dataset artifact storage or publishing, automatic export, tokenization, embeddings, vector databases, semantic search, RAG, LLM evaluation, training, fine-tuning, checkpoints, model updates, test-set inspection, or automatic learning. `split_version` describes the split algorithm contract only and is not a dataset release version.

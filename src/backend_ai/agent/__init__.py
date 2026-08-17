@@ -227,6 +227,17 @@ from backend_ai.agent.memory_governance import (
     SecurityStatus,
     VerificationStatus,
 )
+from backend_ai.agent.dataset_split import (
+    DATASET_SPLIT_VERSION,
+    DatasetSplitError,
+    DatasetSplitGroup,
+    DatasetSplitManifest,
+    DatasetSplitPolicy,
+    DatasetSplitResult,
+    DatasetSplitter,
+    DuplicateDatasetRecordError,
+    validate_split,
+)
 from backend_ai.agent.dataset_quality import (
     DatasetFilteringResult,
     DatasetQualityError,
@@ -624,6 +635,15 @@ __all__ = [
     "QualityCheckStatus",
     "QualityDecision",
     "QualityScore",
+    "DATASET_SPLIT_VERSION",
+    "DatasetSplitError",
+    "DatasetSplitGroup",
+    "DatasetSplitManifest",
+    "DatasetSplitPolicy",
+    "DatasetSplitResult",
+    "DatasetSplitter",
+    "DuplicateDatasetRecordError",
+    "validate_split",
     "EXPERIENCE_RECORD_FORMAT",
     "EXPERIENCE_RECORD_SCHEMA_VERSION",
     "ExperienceAction",
