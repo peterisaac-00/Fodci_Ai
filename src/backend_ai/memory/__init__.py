@@ -5,6 +5,26 @@ Phase 9.1 adds a separate bounded working-memory implementation that does not
 persist or retrieve across tasks.
 """
 
+from backend_ai.agent.long_term_memory import (
+    LONG_TERM_MEMORY_FORMAT,
+    LONG_TERM_MEMORY_SCHEMA_VERSION,
+    LongTermMemory,
+    LongTermMemoryCategory,
+    LongTermMemoryClosedError,
+    LongTermMemoryConfidence,
+    LongTermMemoryConflictError,
+    LongTermMemoryEntry,
+    LongTermMemoryError,
+    LongTermMemoryLimits,
+    LongTermMemoryLoadResult,
+    LongTermMemoryLoadStatus,
+    LongTermMemorySnapshot,
+    LongTermMemorySource,
+    LongTermMemoryStatus,
+    LongTermMemoryStore,
+    LongTermMemoryValidationError,
+    default_long_term_memory_path,
+)
 from backend_ai.agent.project_memory import (
     PROJECT_MEMORY_FORMAT,
     PROJECT_MEMORY_SCHEMA_VERSION,
@@ -45,6 +65,24 @@ from backend_ai.core.contracts import Memory
 
 __all__ = [
     "Memory",
+    "LONG_TERM_MEMORY_FORMAT",
+    "LONG_TERM_MEMORY_SCHEMA_VERSION",
+    "LongTermMemory",
+    "LongTermMemoryCategory",
+    "LongTermMemoryClosedError",
+    "LongTermMemoryConfidence",
+    "LongTermMemoryConflictError",
+    "LongTermMemoryEntry",
+    "LongTermMemoryError",
+    "LongTermMemoryLimits",
+    "LongTermMemoryLoadResult",
+    "LongTermMemoryLoadStatus",
+    "LongTermMemorySnapshot",
+    "LongTermMemorySource",
+    "LongTermMemoryStatus",
+    "LongTermMemoryStore",
+    "LongTermMemoryValidationError",
+    "default_long_term_memory_path",
     "PROJECT_MEMORY_FORMAT",
     "PROJECT_MEMORY_SCHEMA_VERSION",
     "FactCategory",

@@ -1449,3 +1449,31 @@ Project Memory is bounded by host-controlled fact count, fact-value length, evid
 `AutonomousLoopRequest.project_memory` accepts an explicit Project Memory owner, while `AutonomousToolLoop` exposes a bounded project-memory snapshot independently from its closed short-term snapshot. Existing ProjectContext data can be converted to eligible project facts at the orchestration boundary, but the loop does not automatically persist the memory file. The caller-controlled `ProjectMemoryStore` remains responsible for loading and saving. Project Memory does not modify tools, policies, execution budgets, stop conditions, final verification, model weights, training, or Phase 9.1 lifecycle.
 
 **Phase 9.2 implements persistent project-scoped memory only. Long-Term Memory, experience records, retrieval, semantic search, embeddings, RAG, memory-quality systems, network storage, background agents, and cross-project memory are not implemented.**
+
+## Phase 9.3 — global persistent Long-Term Memory
+
+Phase 9.3 adds a bounded global `LongTermMemory` subsystem for reusable knowledge that can survive sessions, tasks, and projects. It remains independent from task-scoped `ShortTermMemory` and project-scoped `ProjectMemory`.
+
+```text
+validated explicit write
+        ↓
+LongTermMemoryEntry
+        ↓
+~/.fodci/long_term_memory.json
+        ↓
+query + optional category + limit
+        ↓
+deterministic lexical retrieval
+```
+
+Entries are typed with `LongTermMemoryCategory` (`knowledge`, `pattern`, `lesson`, `solution`, `preference`, `warning`), `LongTermMemorySource`, `LongTermMemoryConfidence`, `LongTermMemoryStatus`, timestamps, access count, metadata, and conflict references. The lifecycle is explicit: `add`, `get`, `update`, `delete`, `list`, and `search`; closing the owner rejects later writes. Normal retrieval updates only `last_accessed_at` and `access_count`, not semantic content.
+
+Persistence is independent at `~/.fodci/long_term_memory.json` with schema version `9.3`. `LongTermMemoryStore` uses canonical UTF-8 JSON, strict schema and unknown-field validation, explicit missing/corrupted/invalid/unavailable statuses, temporary-file `fsync`, atomic `os.replace`, and stale-write SHA-256 detection. It does not use `.fodci/project_memory.json` and does not infer global facts from a project automatically.
+
+Retrieval is deterministic lexical/rule-based ranking only. It tokenizes Unicode text, scores token overlap, exact query presence, confidence, access recency, and access count, then uses stable entry IDs as a final tie-break. There are no embeddings, semantic search, vector databases, RAG, external APIs, or machine learning in this layer.
+
+Long-Term Memory writes are explicit and controlled. The autonomous loop receives an optional memory owner and query in `AutonomousLoopRequest`, retrieves bounded entries, and exposes them as data-only context in prompt rendering and loop state/result. It never automatically persists observations, executes commands through memory, changes tool permissions, changes budgets, or converts Project Memory facts into global memory.
+
+Bounds cover memory count, content length, metadata size, and total serialized bytes. Values exceeding limits fail deterministically rather than being silently truncated. Redaction removes passwords, API keys, tokens, credentials, cookies, authorization values, private keys, and environment-style secret material before entry storage or serialization. Contradictory entries with the same explicit topic are preserved and marked `conflicted`; no memory is silently deleted.
+
+**Phase 9.3 implements global persistent reusable knowledge only. Experience records, semantic ranking, embeddings, RAG, vector databases, external storage, background agents, training, dataset generation, model-weight updates, and new execution permissions are not implemented.**
