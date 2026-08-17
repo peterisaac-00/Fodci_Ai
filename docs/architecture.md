@@ -1392,3 +1392,34 @@ collect_metrics() ───────────────┐
 ```
 
 All outputs are immutable, bounded, and canonically serializable. The dedicated acceptance suite is `tests/unit/test_phase85_metrics.py`, `test_phase86_report.py`, `test_phase87_version_comparison.py`, `test_phase88_regression_evaluation.py`, `test_phase89_benchmark_validation.py`, and `tests/integration/test_phase85_89_pipeline.py`. These tests validate only the implemented evaluation infrastructure and do not make unrelated legacy or model tests part of the Phase 8.5–8.9 acceptance gate.
+
+## Phase 9.1 — short-term memory boundary
+
+Phase 9.1 introduces one explicit `ShortTermMemory` owner for the currently active task. It is a bounded working-context layer, not a project store, retrieval engine, or long-term knowledge base.
+
+```text
+AutonomousLoopRequest
+  ├── task + explicit project root
+  └── optional ShortTermMemory owner
+              ↓
+       AutonomousToolLoop
+  ├── task objective / constraints
+  ├── bounded plan state
+  ├── tool observations and failures
+  ├── test and fix summaries
+  └── verification state
+              ↓
+   immutable MemorySnapshot
+              ↓
+           task close
+```
+
+`ShortTermMemory` lives in `backend_ai.agent.short_term_memory` and is re-exported from `backend_ai.agent` and `backend_ai.memory`. The existing `core.contracts.Memory` protocol remains a future retrieval/storage interface; Phase 9.1 intentionally does not implement `retrieve()` or `store()` and does not persist records. A caller can provide a memory owner explicitly in `AutonomousLoopRequest.short_term_memory`, or the opt-in autonomous loop creates one deterministic owner for that invocation. The read-only `AgentLoop` is not changed and does not gain memory, mutation, or execution capabilities.
+
+The owner accepts only controlled updates: `update_plan_state()`, `record_observation()`, `record_tool_result()`, `record_test_result()`, `record_failure()`, `record_fix()`, `record_verification()`, and `add_warning()`. It exposes `snapshot()` and canonical `to_json()` but no mutable collections. Snapshots use frozen dataclasses, tuples, recursively read-only metadata, deterministic sequence numbers, sorted JSON keys, UTF-8-preserving encoding, and explicit lifecycle states. When the autonomous loop returns, the memory is closed and the final snapshot is available through both `AutonomousLoopState.short_term_memory` and `AutonomousLoopResult.short_term_memory`.
+
+Bounds are host-controlled by `ShortTermMemoryLimits`. Each record category has a finite cap, the complete record set has a finite entry cap, every text field is truncated deterministically, and the serialized snapshot has a UTF-8 byte ceiling. Eviction uses an explainable deterministic policy: low-priority, low-importance, older records are removed first, while authoritative constraints, failures, fixes, tests, and verification records are retained preferentially. If a task closes, further writes raise `MemoryClosedError`; closure cannot silently reactivate the owner.
+
+Authoritative task intent is stored separately from derived observations. Derived hypotheses or proposed fixes cannot overwrite the objective, requirements, or constraints. Values are redacted before storage using key-based and text-based rules for passwords, tokens, API keys, authorization values, cookies, credentials, environment-style secret assignments, and private-key blocks. Memory records do not modify `ExecutionBudgetLedger`; they have local context bounds only, and failures in memory handling do not bypass tool policy, safety, budget, verification, or stop conditions.
+
+The boundary deliberately stops before Project Memory and later phases. Phase 9.2 may define project-scoped knowledge, while later phases may add long-term records or retrieval; none of those are present here. Phase 9.1 does not add embeddings, RAG, semantic ranking, external storage, network access, LLM summarization, training, model-weight changes, background agents, or cross-task contamination.
