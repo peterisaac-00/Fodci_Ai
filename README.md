@@ -1134,3 +1134,69 @@ The manifest records the dataset and schema versions, source Phase 10.6 fingerpr
 `TrainingDatasetLoader.load_for_training()` can load only `train.json`, `load_for_validation()` can load only `validation.json`, and `load_for_benchmark()` is the only purpose-aware path allowed to load `test.json`. A training or validation purpose requesting the test partition raises `TestSetAccessError`. Thus the test set remains isolated for the later benchmark phase and is not available through the training-purpose loader.
 
 The public implementation is in `src/backend_ai/agent/training_dataset.py`, with exports from `backend_ai.agent`. The pipeline is deliberately model-agnostic and is ready for Phase 11.3 to consume the train split through `TrainingDatasetLoader.load_for_training()` without coupling dataset preparation to a model or optimizer.
+
+
+## Phase 11.3 — Offline Fine-Tuning Pipeline
+
+Phase 11.3 adds an explicit offline fine-tuning workflow that consumes a validated Phase 11.2 artifact and an existing base checkpoint. It is not part of the `fodci` interactive Agent runtime. The normal command remains the Agent runtime; fine-tuning is started only through the reviewed developer script `scripts/run_phase113_fine_tuning.py` or the `backend_ai.training.fine_tune(...)` API.
+
+```text
+Phase 11.2 TrainingDatasetArtifact
+        ↓
+Strict train/validation/test isolation checks
+        ↓
+Base checkpoint + tokenizer identity gates
+        ↓
+Model adapter
+        ↓
+Existing FodciTrainer / AdamW / objective loss
+        ↓
+Training and validation metrics
+        ↓
+Run-linked initial/intermediate/final checkpoints
+        ↓
+Candidate model + immutable run.json + metrics.json
+```
+
+`FineTuningRunner` is model-agnostic at its orchestration boundary. It accepts a `FineTuningModelAdapter` protocol containing a model, tokenizer, reusable `ModelIdentity`, and `TokenizerIdentity`. `FodciModelAdapter` is the current implementation for `FodciModel`; a later model can supply another adapter without rewriting dataset validation, run identity, checkpoint lineage, or artifact persistence.
+
+The base model must be identifiable. `FodciModelAdapter.from_checkpoint()` reuses the Phase 11.1 `ModelIdentity` and checkpoint SHA-256 mechanism, validates checkpoint metadata and structure through `CheckpointManager`, verifies vocabulary/context compatibility, and enforces the project’s hard maximum of 20 million parameters. The tokenizer identity records format, version, vocabulary size, and a canonical fingerprint of special tokens and merge rules. A supplied tokenizer with a different vocabulary or incompatible version is rejected before training.
+
+The runner accepts only a loaded and verified `TrainingDatasetArtifact`. It records `dataset_version`, the final dataset fingerprint, schema version, train count, and validation count. Both train and validation must be non-empty and their example IDs must be disjoint; the test partition is never passed to `FodciTrainer`. The tokenizer converts the train and validation examples into bounded causal next-token samples with response targets and padding masks. Examples exceeding the base model context length fail explicitly rather than being silently truncated.
+
+`FineTuningConfig` records the complete effective configuration: run ID, candidate model version, epochs, maximum steps, batch size, gradient accumulation, learning rate, weight decay, maximum gradient norm, seed, device, checkpoint interval, validation interval, log interval, output directory, run directory, and checkpoint directory. Devices support `cpu`, `cuda`, `cuda:<index>`, and `auto` through the existing configuration contract; no CUDA model, cloud provider, or hardware is hard-coded. The existing `FodciTrainer` now supports bounded gradient accumulation while preserving its previous default behavior.
+
+A run is stored under an explicit run directory:
+
+```text
+artifacts/training_runs/<run_id>/
+├── run.json
+├── metrics.json
+└── checkpoints/
+    ├── initial.pt
+    ├── epoch-0001.pt
+    └── final.pt
+```
+
+Checkpoint metadata contains the existing model/config/optimizer/metric fields plus Phase 11.3 run metadata linking the checkpoint to run ID, base model fingerprint/version, dataset version/fingerprint/schema, tokenizer fingerprint/version, and candidate version. Checkpoint entries in `run.json` contain type, epoch, global step, SHA-256 fingerprint, path, and metrics. The final checkpoint is a candidate artifact only; no production promotion or acceptance decision is made in Phase 11.3.
+
+`run.json` records the base and candidate model identities, tokenizer identity, dataset identity, exact effective configuration, training and validation loss metrics, checkpoint lineage, resume source, Python/PyTorch software identity, platform/device/hardware information, UTC start/end timestamps, and explicit failure information. `metrics.json` is a compact metrics view. A run ID is immutable once `run.json` exists. Failures produce a `FAILED` run record with a bounded error instead of being reported as successful.
+
+Resume is supported only from a checkpoint carrying Phase 11.3 lineage metadata. The runner verifies base model fingerprint, dataset version/fingerprint/schema, tokenizer fingerprint, candidate version, checkpoint readability, and compatible model/tokenizer metadata before restoring model and optimizer state. A resumed run uses a new run ID, records `resumed_from`, and must extend the checkpoint epoch; it is never represented as an unrelated experiment. Corrupt, missing, legacy, leaked, or incompatible checkpoints fail clearly.
+
+A minimal developer invocation is:
+
+```text
+python scripts/run_phase113_fine_tuning.py \
+  --base-checkpoint artifacts/checkpoints/fodci-tiny-v1.pt \
+  --dataset-directory artifacts/training/dataset-v1 \
+  --run-id candidate-v1-smoke \
+  --candidate-model-version candidate-v1 \
+  --epochs 1 \
+  --max-steps 1 \
+  --batch-size 1 \
+  --device cpu \
+  --output-directory artifacts/training_runs
+```
+
+Phase 11.3 is an experiment-generation phase. It does not implement benchmark comparison, regression gates, model acceptance, production promotion, online learning, Agent self-training, cloud orchestration, distributed training, a new memory system, a new Agent tool, or a web interface. The resulting model is a traceable **candidate trained artifact**, not the official Fodci model.

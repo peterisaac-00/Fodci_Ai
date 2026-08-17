@@ -1957,3 +1957,48 @@ The Phase 11.2 default split uses the existing record-level `DatasetSplitPolicy`
 `TrainingDatasetArtifact.write()` writes UTF-8 canonical JSON to an explicit local directory using atomic replacement. `TrainingDatasetArtifact.load()` rejects symlinks, malformed headers, metadata drift, partition overlap, ID drift, and fingerprint mismatch. The purpose-aware `TrainingDatasetLoader` exposes separate training, validation, and benchmark accessors. Training can load only `train`; validation can load only `validation`; only the explicit benchmark purpose can load `test`. A training or validation request for test data raises `TestSetAccessError`, preserving the non-negotiable test-set isolation boundary.
 
 Phase 11.2 ends at the reproducible artifact and does not implement tokenization, batching, fine-tuning, a training loop, optimizer updates, gradient steps, model loading, checkpoint creation, model selection, test-based dataset optimization, or model-weight changes. Phase 11.3 can consume `TrainingDatasetLoader.load_for_training()` directly while retaining validation and benchmark partitions as separate artifacts.
+
+
+## Phase 11.3 — Offline Fine-Tuning Pipeline
+
+Phase 11.3 is an offline engineering workflow layered above the Phase 11.2 artifact. It is not reachable from `AgentLoop`, `fodci` interactive startup, command dispatch, or any autonomous tool registry:
+
+```text
+TrainingDatasetArtifact
+        ↓
+TrainingDatasetLoader.load_artifact
+        ↓
+FineTuningDatasetIdentity
+        ↓
+FineTuningModelAdapter
+        ├── model
+        ├── ModelIdentity
+        ├── tokenizer
+        └── TokenizerIdentity
+        ↓
+FineTuningConfig
+        ↓
+FineTuningRunner
+        ↓
+FodciTrainer
+        ↓
+run-linked CheckpointManager artifacts
+        ↓
+FineTuningRunResult / run.json / metrics.json
+```
+
+`FineTuningModelAdapter` is the model-agnostic boundary. The runner requires only a torch module, a tokenizer, the existing Phase 11.1 `ModelIdentity`, and a tokenizer identity. `FodciModelAdapter.from_checkpoint()` is the current adapter and instantiates `FodciModel` from the checkpoint’s validated structural metadata. It uses `CheckpointManager` for compatibility and weight loading, reuses `model_identity_from_checkpoint()` for file identity, and rejects missing, corrupted, incompatible, or over-limit models before training.
+
+`TokenizerIdentity` records the authoritative tokenizer format/version, vocabulary size, and canonical SHA-256 fingerprint of special tokens and merge rules. The current adapter uses `FodciTokenizer`; a tokenizer file is optional only when the base checkpoint’s vocabulary and tokenizer version are sufficient. A supplied tokenizer must match the checkpoint vocabulary and recorded tokenizer version. No alternate tokenizer system is introduced.
+
+`FineTuningDatasetIdentity` can be created only from a validated `TrainingDatasetArtifact`. It records dataset version, final dataset fingerprint, schema version, train count, and validation count. It requires non-empty train and validation partitions and checks that train, validation, and test example IDs do not overlap. The test tuple is retained inside the validated artifact for later benchmark use but is never converted or passed to `FodciTrainer`.
+
+`FineTuningConfig` is the only Phase 11.3 configuration contract. It validates run ID, candidate version, epochs, maximum steps, batch size, gradient accumulation, learning rate, weight decay, gradient clipping, seed, device, checkpoint interval, validation interval, log interval, and output directory. It produces the existing `TrainingConfig`, including the new `gradient_accumulation_steps` field. `FodciTrainer` performs optimizer updates after the configured number of batches, flushes a final partial accumulation group safely, and preserves the previous one-step-per-batch behavior when the value is one.
+
+`FineTuningRunner` performs no network or Agent operation. It tokenizes only the validated train and validation examples, creates bounded causal next-token samples, rejects context overflow instead of silently truncating, and delegates objective loss, validation loss, gradient clipping, and optimizer updates to the existing trainer. A hard 20-million-parameter limit is enforced at the adapter boundary. Device resolution remains CPU/GPU agnostic through the existing `TrainingConfig` contract.
+
+Each run writes an explicit local directory containing `run.json`, `metrics.json`, and `checkpoints/initial.pt`, intermediate epoch checkpoints when configured, and `final.pt`. Checkpoint metadata now has an optional structured `run_metadata` object for Phase 11.3 lineage. Each checkpoint is linked to run ID, base model fingerprint/version, dataset version/fingerprint/schema, tokenizer fingerprint/version, and candidate model version. `run.json` records model identities, dataset identity, complete effective configuration, epoch training/validation metrics, checkpoint fingerprints and progress, resume lineage, software/runtime identity, hardware information, UTC timestamps, and failure state.
+
+A run ID is immutable after `run.json` exists. A resume is accepted only when its checkpoint contains Phase 11.3 lineage and matches the current base model, dataset, tokenizer, candidate version, and checkpoint model structure. A resumed run requires a new run ID, records `resumed_from`, restores model/optimizer state through `FodciTrainer.resume()`, and must extend the checkpoint epoch. Legacy or anonymous checkpoints cannot silently become Phase 11.3 resume inputs.
+
+The developer entry point is `scripts/run_phase113_fine_tuning.py`. The existing `fodci` CLI remains the normal Agent runtime and is intentionally not modified with a training subcommand in this phase because its command dispatcher is an interactive session boundary rather than a developer workflow argument parser. Phase 11.3 therefore has no automatic training, online learning, dynamic checkpoint consumption, Agent mutation, model promotion, benchmark, regression, or acceptance behavior.

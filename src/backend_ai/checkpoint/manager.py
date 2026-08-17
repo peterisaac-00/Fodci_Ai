@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -60,6 +60,7 @@ class CheckpointMetadata:
     format: str = CHECKPOINT_FORMAT
     format_version: int = CHECKPOINT_FORMAT_VERSION
     created_at_utc: str = ""
+    run_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -102,6 +103,8 @@ class CheckpointMetadata:
             raise CheckpointFormatError("Checkpoint model_config must be an object.")
         if not isinstance(raw["training_config"], Mapping) or not isinstance(raw["metrics"], Mapping):
             raise CheckpointFormatError("Checkpoint training_config and metrics must be objects.")
+        if "run_metadata" in raw and not isinstance(raw["run_metadata"], Mapping):
+            raise CheckpointFormatError("Checkpoint run_metadata must be an object.")
         return cls(
             model_version=raw["model_version"],
             model_config=dict(raw["model_config"]),
@@ -116,6 +119,7 @@ class CheckpointMetadata:
             format=raw["format"],
             format_version=raw["format_version"],
             created_at_utc=raw["created_at_utc"],
+            run_metadata=dict(raw.get("run_metadata") or {}),
         )
 
 
@@ -179,6 +183,7 @@ class CheckpointManager:
         global_step: int,
         metrics: Mapping[str, Any] | None = None,
         path: Path | str | None = None,
+        run_metadata: Mapping[str, Any] | None = None,
     ) -> Path:
         """Atomically save weights, optimizer state, and inspectable metadata."""
 
@@ -196,6 +201,7 @@ class CheckpointManager:
             metrics=dict(metrics or {}),
             seed=config.seed,
             created_at_utc=datetime.now(timezone.utc).isoformat(),
+            run_metadata=dict(run_metadata or {}),
         )
         payload = {
             "metadata": metadata.to_dict(),

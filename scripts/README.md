@@ -16,3 +16,23 @@ python scripts/run_phase112_training_dataset.py \
 ```
 
 The command reports the source/accepted/rejected/duplicate counts, train/validation/test counts, version, and final fingerprint. The output contains `manifest.json`, `metadata.json`, `train.json`, `validation.json`, and `test.json`.
+
+
+## Phase 11.3 offline fine-tuning
+
+`run_phase113_fine_tuning.py` is a developer-only workflow. It is intentionally separate from the normal `fodci` Agent runtime and consumes only an existing Phase 11.2 artifact plus a compatible local base checkpoint.
+
+```text
+python scripts/run_phase113_fine_tuning.py \
+  --base-checkpoint artifacts/checkpoints/fodci-tiny-v1.pt \
+  --dataset-directory artifacts/training/dataset-v1 \
+  --run-id candidate-v1-smoke \
+  --candidate-model-version candidate-v1 \
+  --epochs 1 \
+  --max-steps 1 \
+  --batch-size 1 \
+  --device cpu \
+  --output-directory artifacts/training_runs
+```
+
+The run writes `run.json`, `metrics.json`, and run-linked `initial.pt`, intermediate, and `final.pt` checkpoints under `artifacts/training_runs/<run_id>/`. A compatible Phase 11.3 checkpoint can be resumed with `--resume-checkpoint`; resume requires a new run ID and preserves `resumed_from` lineage. The output is a candidate trained artifact only and is not production acceptance.

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import random
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import TypeAlias
 
@@ -32,6 +32,7 @@ class FodciTrainer:
         validation_dataset: ExampleSource | None = None,
         config: TrainingConfig | None = None,
         model_version: str = "fodci-tiny-v1",
+        checkpoint_run_metadata: Mapping[str, object] | None = None,
     ) -> None:
         self.config = config or TrainingConfig()
         self.device = self.config.resolve_device()
@@ -42,6 +43,7 @@ class FodciTrainer:
             self.config.output_dir,
             model_version=model_version,
         )
+        self._checkpoint_run_metadata = dict(checkpoint_run_metadata or {})
         self.train_dataset = train_dataset
         self.validation_dataset = validation_dataset
         self.optimizer = torch.optim.AdamW(
@@ -90,6 +92,7 @@ class FodciTrainer:
             if self.config.checkpoint_interval and epoch % self.config.checkpoint_interval == 0:
                 self._last_checkpoint = self.save_checkpoint(
                     self.config.output_dir / f"epoch-{epoch:04d}.pt",
+                    run_metadata=self._checkpoint_run_metadata,
                 )
             logger.info(
                 "Epoch %d/%d train_loss=%.6f val_loss=%s lr=%.6g steps=%d tokens=%d",
@@ -122,7 +125,7 @@ class FodciTrainer:
         self._last_checkpoint = Path(checkpoint_path)
         return state
 
-    def save_checkpoint(self, path: Path | str | None = None) -> Path:
+    def save_checkpoint(self, path: Path | str | None = None, *, run_metadata: dict[str, object] | None = None) -> Path:
         """Save the current state, defaulting to a manual checkpoint path."""
 
         checkpoint_path = Path(path) if path is not None else self.config.output_dir / "latest.pt"
@@ -136,35 +139,39 @@ class FodciTrainer:
             global_step=self.global_step,
             metrics=latest_metrics,
             path=checkpoint_path,
+            run_metadata=run_metadata,
         )
 
     def _train_epoch(self, epoch: int) -> tuple[float, int, int]:
         total_loss = 0.0
         total_tokens = 0
         steps = 0
+        pending_batches = 0
+        self.optimizer.zero_grad(set_to_none=True)
         for batch in _iter_batches(self.train_dataset, self.config.batch_size):
             if self.config.max_steps is not None and self.global_step >= self.config.max_steps:
                 break
             input_ids, target_ids, loss_mask = self._batch_to_tensors(batch)
-            self.optimizer.zero_grad(set_to_none=True)
             logits = self.model(input_ids)
             loss = _cross_entropy(logits, target_ids, loss_mask)
             if not torch.isfinite(loss):
                 raise FloatingPointError(f"Non-finite training loss at epoch {epoch}.")
-            loss.backward()
-            if self.config.max_grad_norm is not None:
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.max_grad_norm,
-                )
-            self.optimizer.step()
-            steps += 1
-            self.global_step += 1
+            (loss / self.config.gradient_accumulation_steps).backward()
+            pending_batches += 1
             token_count = int(loss_mask.sum().item())
             total_loss += float(loss.detach().item()) * token_count
             total_tokens += token_count
-            if self.config.log_interval and self.global_step % self.config.log_interval == 0:
-                logger.info("step=%d train_loss=%.6f", self.global_step, loss.item())
+            if pending_batches >= self.config.gradient_accumulation_steps:
+                self._optimizer_step()
+                pending_batches = 0
+                steps += 1
+                self.global_step += 1
+                if self.config.log_interval and self.global_step % self.config.log_interval == 0:
+                    logger.info("step=%d train_loss=%.6f", self.global_step, loss.item())
+        if pending_batches:
+            self._optimizer_step()
+            steps += 1
+            self.global_step += 1
         if steps == 0 or total_tokens == 0:
             raise ValueError("Training dataset produced no examples.")
         return total_loss / total_tokens, steps, total_tokens
@@ -232,6 +239,15 @@ class FodciTrainer:
         self._validate_token_range(input_ids, "input_ids")
         self._validate_token_range(target_ids, "target_ids")
         return input_ids, target_ids, loss_mask
+
+    def _optimizer_step(self) -> None:
+        if self.config.max_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(),
+                self.config.max_grad_norm,
+            )
+        self.optimizer.step()
+        self.optimizer.zero_grad(set_to_none=True)
 
     def _validate_model_contract(self) -> None:
         config = getattr(self.model, "config", None)

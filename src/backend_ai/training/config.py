@@ -16,6 +16,7 @@ class TrainingConfig:
     epochs: int = 1
     max_steps: int | None = None
     batch_size: int = 2
+    gradient_accumulation_steps: int = 1
     learning_rate: float = 3e-4
     weight_decay: float = 0.01
     max_grad_norm: float | None = 1.0
@@ -33,6 +34,8 @@ class TrainingConfig:
             raise ValueError("max_steps must be positive or None.")
         if self.batch_size <= 0:
             raise ValueError("batch_size must be positive.")
+        if self.gradient_accumulation_steps <= 0:
+            raise ValueError("gradient_accumulation_steps must be positive.")
         if self.learning_rate <= 0.0:
             raise ValueError("learning_rate must be positive.")
         if self.weight_decay < 0.0:

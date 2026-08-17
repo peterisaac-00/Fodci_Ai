@@ -9,6 +9,28 @@ from backend_ai.training.checkpoint import (
 from backend_ai.training.config import TrainingConfig
 from backend_ai.training.metrics import EpochMetrics, TrainingResult, perplexity
 from backend_ai.training.trainer import FodciTrainer, seed_everything
+from backend_ai.training.fine_tuning import (
+    CANDIDATE_MODEL_VERSION_PATTERN,
+    FINE_TUNING_FORMAT,
+    FINE_TUNING_PROTOCOL_VERSION,
+    FINE_TUNING_SCHEMA_VERSION,
+    FineTuningCheckpointError,
+    FineTuningConfigurationError,
+    FineTuningConfig,
+    FineTuningDatasetError,
+    FineTuningDatasetIdentity,
+    FineTuningError,
+    FineTuningModelAdapter,
+    FineTuningModelError,
+    FineTuningRunConflictError,
+    FineTuningRunResult,
+    FineTuningRunner,
+    FineTuningStatus,
+    FodciModelAdapter,
+    TokenizerIdentity,
+    fine_tune,
+    load_run_result,
+)
 
 __all__ = [
     "CHECKPOINT_FORMAT_VERSION",
@@ -21,4 +43,24 @@ __all__ = [
     "perplexity",
     "save_checkpoint",
     "seed_everything",
+    "CANDIDATE_MODEL_VERSION_PATTERN",
+    "FINE_TUNING_FORMAT",
+    "FINE_TUNING_PROTOCOL_VERSION",
+    "FINE_TUNING_SCHEMA_VERSION",
+    "FineTuningCheckpointError",
+    "FineTuningConfigurationError",
+    "FineTuningConfig",
+    "FineTuningDatasetError",
+    "FineTuningDatasetIdentity",
+    "FineTuningError",
+    "FineTuningModelAdapter",
+    "FineTuningModelError",
+    "FineTuningRunConflictError",
+    "FineTuningRunResult",
+    "FineTuningRunner",
+    "FineTuningStatus",
+    "FodciModelAdapter",
+    "TokenizerIdentity",
+    "fine_tune",
+    "load_run_result",
 ]
