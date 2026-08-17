@@ -401,6 +401,13 @@ class FineTuningRunResult:
     def to_json(self) -> str:
         return _canonical_json(self.to_dict())
 
+    def create_model_artifact(self, directory: Path | str, *, model_id: str | None = None, evaluation_reference: Any | None = None, created_at: str | None = None) -> Any:
+        """Explicitly wrap this completed run as a Phase 11.4 ModelArtifact."""
+
+        from backend_ai.model_artifact import ModelArtifact
+
+        return ModelArtifact.create_from_fine_tuning_run(self, directory, model_id=model_id, evaluation_reference=evaluation_reference, created_at=created_at)
+
 
 class FineTuningRunner:
     """Run one validated, offline fine-tuning experiment."""

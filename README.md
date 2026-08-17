@@ -1200,3 +1200,44 @@ python scripts/run_phase113_fine_tuning.py \
 ```
 
 Phase 11.3 is an experiment-generation phase. It does not implement benchmark comparison, regression gates, model acceptance, production promotion, online learning, Agent self-training, cloud orchestration, distributed training, a new memory system, a new Agent tool, or a web interface. The resulting model is a traceable **candidate trained artifact**, not the official Fodci model.
+
+
+## Phase 11.4 — Model Artifact and Model Identity
+
+Phase 11.4 wraps a completed Phase 11.3 fine-tuning run in an immutable, integrity-verifiable Model Artifact. The artifact is the provenance boundary between fine-tuning and the later benchmark/regression/acceptance phases:
+
+```text
+Completed Fine-Tuning Run
+        ↓
+Final Checkpoint
+        ↓
+ModelArtifact metadata
+        ↓
+Canonical artifact fingerprint
+        ↓
+Local ModelArtifactRegistry
+        ↓
+Future Benchmark / Regression reference
+```
+
+`ModelArtifact` contains the copied final checkpoint plus `metadata.json` and `evaluation.json` under an explicit local artifact directory:
+
+```text
+artifacts/models/<model-version>/
+├── metadata.json
+├── evaluation.json
+└── checkpoint/
+    └── final.pt
+```
+
+The immutable metadata records `model_version`, `model_id`, base `ModelIdentity`, dataset version and fingerprint, the complete effective Phase 11.3 training configuration, training configuration fingerprint, safe checkpoint-relative path and checkpoint fingerprint, evaluation reference, creation metadata, provenance, and the final artifact fingerprint. Model identity cannot rely only on a human-readable version; the artifact ID and SHA-256 fingerprint are both required.
+
+`ModelArtifact.create_from_fine_tuning_run()` and `FineTuningRunResult.create_model_artifact()` are explicit conversion operations. They accept only a completed Phase 11.3 run with an actual final checkpoint, copy the checkpoint into a temporary artifact directory, write canonical metadata and evaluation-reference files, verify the complete artifact, and atomically replace the destination directory. A pre-existing destination is rejected. Creation timestamps are recorded for audit but excluded from the artifact identity fingerprint, so identical inputs remain stable.
+
+The artifact fingerprint is SHA-256 over canonical metadata identity and provenance excluding the mutable creation timestamp and excluding the fingerprint field itself. The checkpoint fingerprint is independently computed over the copied checkpoint bytes. Loading or verifying an artifact checks the directory, symlink safety, required files, checkpoint bytes, evaluation reference, training configuration fingerprint, and complete artifact fingerprint. Any checkpoint or metadata tampering is rejected.
+
+`EvaluationReference` is intentionally minimal. A new artifact defaults to `NOT_EVALUATED`; a later recorded evaluation can be referenced by evaluation ID, protocol version, and optional evaluation fingerprint. Phase 11.4 does not run benchmarks, fabricate scores, decide whether the model is better, or claim production readiness.
+
+`ModelArtifactRegistry` is a local atomic JSON index. It answers which artifacts exist, their model IDs/versions/locations/fingerprints, and optional current candidate or current official pointers. Model IDs and model versions cannot collide, registry writes use digest-based stale-writer protection and atomic replacement, and registry entries can reload and verify the referenced artifact. Registration does not automatically set a candidate or official model. `set_current_candidate()` and `set_current_official()` are explicit administrative operations; official promotion belongs to Phase 11.6.
+
+The public implementation is in `src/backend_ai/model_artifact.py`. It does not modify AgentLoop, `ToolRegistry.default()`, the normal `fodci` CLI, inference behavior, model architecture, checkpoint weights, or evaluation/acceptance logic. The artifact is a traceable candidate model record, not an official Fodci model.

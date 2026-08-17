@@ -2002,3 +2002,33 @@ Each run writes an explicit local directory containing `run.json`, `metrics.json
 A run ID is immutable after `run.json` exists. A resume is accepted only when its checkpoint contains Phase 11.3 lineage and matches the current base model, dataset, tokenizer, candidate version, and checkpoint model structure. A resumed run requires a new run ID, records `resumed_from`, restores model/optimizer state through `FodciTrainer.resume()`, and must extend the checkpoint epoch. Legacy or anonymous checkpoints cannot silently become Phase 11.3 resume inputs.
 
 The developer entry point is `scripts/run_phase113_fine_tuning.py`. The existing `fodci` CLI remains the normal Agent runtime and is intentionally not modified with a training subcommand in this phase because its command dispatcher is an interactive session boundary rather than a developer workflow argument parser. Phase 11.3 therefore has no automatic training, online learning, dynamic checkpoint consumption, Agent mutation, model promotion, benchmark, regression, or acceptance behavior.
+
+
+## Phase 11.4 — Model Artifact and Model Identity
+
+Phase 11.4 introduces the immutable provenance boundary between Phase 11.3 fine-tuning and future model evaluation:
+
+```text
+FineTuningRunResult(COMPLETED)
+        ↓
+ModelArtifact.create_from_fine_tuning_run
+        ├── copied checkpoint/final.pt
+        ├── metadata.json
+        └── evaluation.json
+        ↓
+ModelArtifact.verify / ModelArtifact.load
+        ↓
+ModelArtifactRegistry
+```
+
+`ModelArtifactMetadata` is the canonical identity contract. It contains the artifact format/schema, human-readable `model_version`, unique `model_id`, reusable Phase 11.1 `ModelIdentity` for the base checkpoint, Phase 11.2 dataset version/fingerprint, complete Phase 11.3 effective training configuration, its configuration fingerprint, a safe relative checkpoint path, checkpoint SHA-256, `EvaluationReference`, audit creation metadata, provenance, and the final artifact fingerprint. The base model fingerprint and checkpoint fingerprint are required; an ambiguous model cannot become an artifact.
+
+`ModelArtifact` creation is explicit and accepts only a completed Phase 11.3 run with a final checkpoint. The final checkpoint is copied into a temporary sibling directory. Canonical metadata and the minimal evaluation reference are written there, the copied bytes and full artifact are verified, and the directory is atomically renamed into place. Existing destination directories are rejected, so a new training run creates a new artifact rather than mutating an earlier version. Symlinked roots and artifact files are rejected.
+
+The checkpoint fingerprint is computed from the exact copied checkpoint bytes. The training-configuration fingerprint is computed from canonical JSON of the complete effective configuration. The artifact fingerprint is computed from canonical JSON over stable metadata/provenance identity, excluding `created_at` and the fingerprint field itself. Timestamps are audit-only and random values are not identity inputs. Identical artifact inputs therefore produce identical artifact metadata/fingerprints, while model ID/version, dataset, configuration, checkpoint, evaluation reference, or provenance changes alter identity.
+
+`EvaluationReference` is intentionally a reference-only contract with `NOT_EVALUATED` or `RECORDED` status, evaluation ID, protocol version, and optional fingerprint. Phase 11.4 does not execute benchmark tasks, regression comparisons, acceptance rules, or model promotion. New artifacts default to `NOT_EVALUATED`; future phases can attach a real evaluation reference without fabricating a result.
+
+`ModelArtifactRegistry` is a local JSON index with atomic replacement and digest-based stale-writer conflict protection. It stores unique model IDs and unique model versions, artifact directory, artifact fingerprint, and an explicit status. It can list entries, reload them, load/verify referenced artifacts, and expose optional current candidate and current official pointers. Registration alone never changes either pointer. Candidate and official pointer changes are explicit operations, with no automatic promotion path in Phase 11.4. Official model acceptance remains a later responsibility.
+
+No new CLI command was added because the existing `fodci` CLI is the normal interactive Agent runtime and does not provide a model-management command architecture. The Model Artifact API is available directly for offline developer workflows and integrates with Phase 11.3 through `FineTuningRunResult.create_model_artifact(...)`. AgentLoop, tools, inference, model architecture, checkpoint weights, training behavior, benchmark infrastructure, and acceptance policy remain otherwise unchanged.
