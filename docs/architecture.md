@@ -1523,3 +1523,30 @@ future model improvement
 ```
 
 No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset. Embeddings, semantic retrieval, vector databases, RAG, external storage, background agents, new tools, and new execution permissions remain outside this phase.
+
+## Phase 9.5 — unified Memory Retrieval
+
+Phase 9.5 adds `MemoryRetrieval` as a controlled orchestration layer above the four existing memory subsystems. It does not replace, merge, or duplicate their storage:
+
+```text
+Short-Term Memory   → current task/session context
+Project Memory      → project-scoped persistent facts
+Long-Term Memory    → global reusable knowledge
+Experience Records  → historical execution evidence
+        ↓
+Memory Retrieval    → normalized, bounded, provenance-preserving context
+```
+
+`MemoryRetrievalRequest` requires a non-empty query and an explicit tuple of `RetrievalSource` values. Each source adapter consumes an existing validated API: an immutable `MemorySnapshot` for Short-Term Memory, a `ProjectMemorySnapshot` for Project Memory, the existing `LongTermMemory.search/list` APIs for Long-Term Memory, and `ExperienceRecords.list` for historical records. The retrieval layer never reads memory storage files directly and never creates a second memory store.
+
+Project retrieval validates the supplied project identity and never returns a snapshot belonging to another project. Long-Term Memory remains global. Experience Records remain historical and can be filtered by project. Short-Term Memory remains current task/session state and is read only through its snapshot interface.
+
+Results are normalized into `MemoryRetrievalItem` with source, stable ID, sanitized content, relevance score, confidence, status, timestamp, metadata, retrieval reason, and optional project identity. Context rendering keeps source boundaries explicit so the Agent can distinguish project facts, global knowledge, historical evidence, and current task state.
+
+The ranking policy is deterministic. It combines lexical token overlap, exact normalized query presence, source prior, confidence, verification/status, recency when available, and stable ID tie-breaking. Existing Long-Term Memory lexical search and access tracking are reused for active entries; no unsupported ranking signal is fabricated for sources that do not provide it. Exact normalized-content deduplication removes only duplicate text after case/whitespace/punctuation normalization, never fuzzy or semantic matches.
+
+Per-source result limits, total result limits, and actual rendered context-character budgets are enforced before the final context is returned. Lower-ranked results are excluded when the budget is full; individual semantic records are not silently truncated. `RetrievalDiagnostic` records queried sources, source status, source failures, candidate counts, filtering, returned counts, and deduplication.
+
+Autonomous Tool Loop integration is explicit through `AutonomousLoopRequest.memory_retrieval_request`. When present, retrieval runs before prompt generation and is included as bounded source-labelled data-only context. The loop stores the retrieval result in state/result for observability. It does not query all sources by default, does not add tools, does not change permissions or budgets, and does not persist or mutate memory through retrieval.
+
+Embeddings, vector databases, semantic search, RAG, external search, external LLM retrieval, ML ranking, automatic memory conversion, new storage systems, new tools, and new execution permissions remain outside Phase 9.5.

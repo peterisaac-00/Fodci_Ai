@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 9.4 complete — bounded persistent historical Experience Records delivered; Phase 9.5+ not started.**
+> **Current status: Phase 9.5 complete — unified deterministic Memory Retrieval delivered; Phase 9.6+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -757,4 +757,33 @@ future model improvement
 
 That pipeline is not implemented in Phase 9.4. No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset.
 
-**Phase 9.4 implements historical Experience Records only. Embeddings, semantic retrieval, vector databases, RAG, dataset generation, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Embeddings, semantic retrieval, vector databases, RAG, dataset generation, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+
+## Phase 9.5 — unified Memory Retrieval
+
+Phase 9.5 adds `MemoryRetrieval` as a controlled orchestration layer above the four existing memory subsystems. It does not replace, merge, or duplicate their storage:
+
+```text
+Short-Term Memory   → current task/session context
+Project Memory      → project-scoped persistent facts
+Long-Term Memory    → global reusable knowledge
+Experience Records  → historical execution evidence
+        ↓
+Memory Retrieval    → normalized, bounded, provenance-preserving context
+```
+
+The public API is based on `MemoryRetrievalRequest`, `MemoryRetrieval`, and `MemoryRetrievalResult`. A request must provide a non-empty query and an explicit tuple of `RetrievalSource` values. It may provide the applicable project identity, source owners or snapshots, category/status/confidence filters, `max_results`, `max_results_per_source`, and `max_total_characters`. A source that is not requested is never queried.
+
+Each `MemoryRetrievalItem` contains its source, stable memory or experience ID, sanitized content, normalized relevance score, confidence when available, status, timestamp when available, provenance metadata, retrieval reason, and project identity when applicable. Context rendering keeps source boundaries explicit with `[SHORT_TERM_MEMORY]`, `[PROJECT_MEMORY]`, `[LONG_TERM_MEMORY]`, and `[EXPERIENCE_RECORDS]` sections.
+
+Project retrieval validates the supplied `ProjectIdentity` and only accepts facts from the matching snapshot. Global Long-Term Memory can be requested from any project because it is intentionally global. Experience Records can be filtered by project identity and remain historical evidence rather than general truth. Short-Term Memory is retrieved only from the caller-supplied immutable snapshot and is never persisted or converted into another memory type.
+
+The ranking policy is deterministic and uses only available structured signals. It combines lexical token overlap, exact normalized query presence, a documented source prior, confidence, verification/status, recency when available, and stable ID tie-breaking. Long-Term Memory uses its existing deterministic search API for active entries, preserving its access-tracking behavior; non-active status filters use the existing list API without inventing access updates. Project and Short-Term snapshots do not fabricate unsupported timestamps, and missing signals sort deterministically.
+
+Deduplication is exact after Unicode-aware lexical normalization: case, whitespace, and punctuation differences are normalized, but distinct text is not fuzzily merged. When duplicate normalized content exists across sources, the highest-ranked item retains the provenance. The result applies per-source and total result limits before rendering. Context budgets are enforced against the actual source-labelled rendered context; lower-ranked items are skipped when the budget would be exceeded, and individual semantic records are never silently truncated.
+
+Source failures are isolated and represented in `RetrievalDiagnostic` with queried source, status, message, candidate count, filtered count, returned count, and deduplicated count. Available source results are returned when another requested source fails. Secrets continue to be redacted by the underlying validated memory APIs and by final retrieval serialization; the retrieval layer never reads `.fodci/project_memory.json`, `~/.fodci/long_term_memory.json`, or any memory storage file directly.
+
+`AutonomousToolLoop` accepts an optional `memory_retrieval_request`. When explicitly supplied, retrieval runs before prompt generation, exposes bounded source-labelled context as data-only prompt input, and stores the normalized result in loop state and result. The loop does not query every memory source by default, does not gain new tools, does not change execution permissions or budgets, and does not persist or mutate memory through retrieval.
+
+**Phase 9.5 is deterministic retrieval only. Embeddings, vector databases, semantic search, RAG, external search APIs, external LLM retrieval, machine-learning ranking, new storage systems, automatic memory conversion, new tools, and new execution permissions remain out of scope.**

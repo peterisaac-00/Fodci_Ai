@@ -56,6 +56,7 @@ from backend_ai.agent.final_verification import FinalVerificationRequest, FinalV
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.experience_records import ExperienceEvaluation, ExperienceLifecycleStatus, ExperienceOutcomeStatus, ExperienceProjectIdentity, ExperienceRecord, ExperienceRecordError, ExperienceRecords, ExperienceSession, ExperienceVerification
+from backend_ai.agent.memory_retrieval import MemoryRetrieval, MemoryRetrievalError, MemoryRetrievalRequest, MemoryRetrievalResult
 from backend_ai.agent.long_term_memory import LongTermMemory, LongTermMemoryEntry, LongTermMemoryError
 from backend_ai.agent.project_memory import ProjectMemory, ProjectMemoryError, ProjectMemorySnapshot
 from backend_ai.agent.short_term_memory import MemoryImportance, MemoryLifecycle, MemorySnapshot, ShortTermMemory, ShortTermMemoryError
@@ -231,6 +232,7 @@ class AutonomousLoopRequest:
     long_term_query: str | None = None
     long_term_memory_limit: int = 3
     experience_records: ExperienceRecords | None = None
+    memory_retrieval_request: MemoryRetrievalRequest | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.task, str) or not self.task.strip():
@@ -257,9 +259,11 @@ class AutonomousLoopRequest:
             raise ValueError("long_term_memory_limit must be between 1 and 16")
         if self.experience_records is not None and not isinstance(self.experience_records, ExperienceRecords):
             raise ValueError("experience_records must be ExperienceRecords")
+        if self.memory_retrieval_request is not None and not isinstance(self.memory_retrieval_request, MemoryRetrievalRequest):
+            raise ValueError("memory_retrieval_request must be MemoryRetrievalRequest")
 
     def to_dict(self) -> dict[str, Any]:
-        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None, "short_term_memory_task_id": self.short_term_memory.task_id if self.short_term_memory else None, "project_memory_id": self.project_memory.project_id if self.project_memory else None, "has_long_term_memory": self.long_term_memory is not None, "long_term_query": self.long_term_query, "long_term_memory_limit": self.long_term_memory_limit, "has_experience_records": self.experience_records is not None}
+        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None, "short_term_memory_task_id": self.short_term_memory.task_id if self.short_term_memory else None, "project_memory_id": self.project_memory.project_id if self.project_memory else None, "has_long_term_memory": self.long_term_memory is not None, "long_term_query": self.long_term_query, "long_term_memory_limit": self.long_term_memory_limit, "has_experience_records": self.experience_records is not None, "has_memory_retrieval_request": self.memory_retrieval_request is not None}
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +330,7 @@ class AutonomousLoopState:
     project_memory: ProjectMemorySnapshot | None = None
     long_term_memories: tuple[LongTermMemoryEntry, ...] = ()
     experience_record: ExperienceRecord | None = None
+    memory_retrieval: MemoryRetrievalResult | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -350,6 +355,7 @@ class AutonomousLoopState:
             "project_memory": self.project_memory.to_dict() if self.project_memory else None,
             "long_term_memories": [item.to_dict() for item in self.long_term_memories],
             "experience_record": self.experience_record.to_dict() if self.experience_record else None,
+            "memory_retrieval": self.memory_retrieval.to_dict() if self.memory_retrieval else None,
         }
 
 
@@ -378,6 +384,7 @@ class AutonomousLoopResult:
     project_memory: ProjectMemorySnapshot | None = None
     long_term_memories: tuple[LongTermMemoryEntry, ...] = ()
     experience_record: ExperienceRecord | None = None
+    memory_retrieval: MemoryRetrievalResult | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -402,6 +409,7 @@ class AutonomousLoopResult:
             "project_memory": self.project_memory.to_dict() if self.project_memory else None,
             "long_term_memories": [item.to_dict() for item in self.long_term_memories],
             "experience_record": self.experience_record.to_dict() if self.experience_record else None,
+            "memory_retrieval": self.memory_retrieval.to_dict() if self.memory_retrieval else None,
         }
 
 
@@ -548,6 +556,15 @@ class AutonomousToolLoop:
         errors: list[str] = []
         if experience_recording_error:
             warnings.append(f"experience recording unavailable: {experience_recording_error}")
+        retrieval_result: MemoryRetrievalResult | None = None
+        if request.memory_retrieval_request is not None:
+            try:
+                retrieval_result = MemoryRetrieval().retrieve(request.memory_retrieval_request)
+                failed_sources = [item.source.value for item in retrieval_result.diagnostics if item.status == "FAILED"]
+                if failed_sources:
+                    warnings.append("memory retrieval source failures: " + ", ".join(failed_sources))
+            except MemoryRetrievalError as exc:
+                warnings.append(f"memory retrieval unavailable: {exc}")
         long_term_memories: tuple[LongTermMemoryEntry, ...] = ()
         if request.long_term_memory is not None and request.long_term_query is not None:
             try:
@@ -583,7 +600,7 @@ class AutonomousToolLoop:
         failed_action_signatures: list[str] = []
 
         def snapshot() -> AutonomousLoopState:
-            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories)
+            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result)
 
         def finish(_request: AutonomousLoopRequest, status: LoopStatus, answer: str, finish_plan: ExecutionPlan | None, finish_context: ProjectContext | None, finish_state: AutonomousLoopState, finish_steps: Sequence[AutonomousLoopStep], finish_calls: Sequence[ToolCall], finish_results: Sequence[ToolResult], finish_usage: AgentUsage, finish_warnings: Sequence[str], finish_errors: Sequence[str]) -> AutonomousLoopResult:
             nonlocal stop_evaluation, budget_decision, final_verification
@@ -777,11 +794,11 @@ class AutonomousToolLoop:
                 machine.transition(LoopLifecycleState.VALIDATING_ACTION)
                 try:
                     if selection_failure and plan_step is not None and selection_result is not None:
-                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_selection_failure_prompt(request.task, plan_step, selection_result, context, tuple(history), long_term_memories)
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_selection_failure_prompt(request.task, plan_step, selection_result, context, tuple(history), long_term_memories, retrieval_result)
                     elif plan_step is not None and current_selection is not None:
-                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_prompt(request.task, plan, plan_step, current_selection, context, tuple(history), long_term_memories)
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_prompt(request.task, plan, plan_step, current_selection, context, tuple(history), long_term_memories, retrieval_result)
                     else:
-                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_completion_prompt(request.task, plan, context, tuple(history), long_term_memories)
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_completion_prompt(request.task, plan, context, tuple(history), long_term_memories, retrieval_result)
                     context_truncated = prompt_truncated
                     if prompt_truncated:
                         truncation_reason = "ContextBudget compacted optional plan/history/tool context."
@@ -1071,27 +1088,27 @@ class AutonomousToolLoop:
         step = PlanStep("context-1", "Build canonical project context", "Build canonical project context before selecting implementation tools.", "Context is required for bounded loop prompts.", "A ProjectContext is available.", (), PlanRiskLevel.LOW)
         return ExecutionPlan(task, task, "Build bounded project context.", PlannerTaskType.INVESTIGATION, (step,), (), ("project root is explicit",), (), (), ("context is available",), PlannerConfidence.MEDIUM, (), PlanCompleteness.PARTIAL)
 
-    def _render_prompt(self, task: str, plan: ExecutionPlan, step: PlanStep, selection: ToolSelectionDecision, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = ()) -> tuple[str, int, bool, tuple[str, ...]]:
+    def _render_prompt(self, task: str, plan: ExecutionPlan, step: PlanStep, selection: ToolSelectionDecision, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None) -> tuple[str, int, bool, tuple[str, ...]]:
         plan_fragment = json.dumps({"task": task, "step": step.to_dict(), "selected_tool": selection.selected_tool, "prerequisites": list(selection.prerequisites), "expected_output": selection.expected_output}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         instruction = _bounded_text(
-            f"Task: {task}\nCurrent plan step: {step.step_id}\nPlan step detail: {plan_fragment}\nSelected tool: {selection.selected_tool}{_long_term_context_fragment(long_term_memories)}\nReturn exactly ACTION: TOOL with ARGS {{\"tool\": \"{selection.selected_tool}\", \"arguments\": {{...}}}} or ACTION: FINAL with ARGS {{\"message\": \"...\"}}.",
+            f"Task: {task}{_memory_retrieval_context_fragment(retrieval_result)}\nCurrent plan step: {step.step_id}\nPlan step detail: {plan_fragment}\nSelected tool: {selection.selected_tool}{_long_term_context_fragment(long_term_memories)}\nReturn exactly ACTION: TOOL with ARGS {{\"tool\": \"{selection.selected_tool}\", \"arguments\": {{...}}}} or ACTION: FINAL with ARGS {{\"message\": \"...\"}}.",
             self.config.max_task_prompt_chars,
         )
         budgeted = self._budget.render(instruction, context, history)
         return budgeted.prompt, budgeted.token_count, budgeted.truncated, budgeted.warnings
 
-    def _render_selection_failure_prompt(self, task: str, step: PlanStep, selection: ToolSelectionResult, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = ()) -> tuple[str, int, bool, tuple[str, ...]]:
+    def _render_selection_failure_prompt(self, task: str, step: PlanStep, selection: ToolSelectionResult, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None) -> tuple[str, int, bool, tuple[str, ...]]:
         reason = selection.errors[0] if selection.errors else "The required capability is unavailable in the supplied registry."
         instruction = _bounded_text(
-            f"Task: {task}\nCurrent plan step: {step.step_id}\nSelection status: {selection.status.value}\nSelection reason: {reason}{_long_term_context_fragment(long_term_memories)}\nReturn exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request an unavailable tool.",
+            f"Task: {task}{_memory_retrieval_context_fragment(retrieval_result)}\nCurrent plan step: {step.step_id}\nSelection status: {selection.status.value}\nSelection reason: {reason}{_long_term_context_fragment(long_term_memories)}\nReturn exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request an unavailable tool.",
             self.config.max_task_prompt_chars,
         )
         budgeted = self._budget.render(instruction, context, history)
         return budgeted.prompt, budgeted.token_count, budgeted.truncated, budgeted.warnings
 
-    def _render_completion_prompt(self, task: str, plan: ExecutionPlan, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = ()) -> tuple[str, int, bool, tuple[str, ...]]:
+    def _render_completion_prompt(self, task: str, plan: ExecutionPlan, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None) -> tuple[str, int, bool, tuple[str, ...]]:
         instruction = _bounded_text(
-            f"Task: {task}{_long_term_context_fragment(long_term_memories)}\nThe declarative plan steps have been observed. Return exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request another tool.",
+            f"Task: {task}{_memory_retrieval_context_fragment(retrieval_result)}{_long_term_context_fragment(long_term_memories)}\nThe declarative plan steps have been observed. Return exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request another tool.",
             self.config.max_task_prompt_chars,
         )
         budgeted = self._budget.render(instruction, context, history)
@@ -1132,7 +1149,7 @@ class AutonomousToolLoop:
         return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
     def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None, recovery: RecoveryResult | None = None, completion: TaskCompletionResult | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record)
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str, short_term_memory: ShortTermMemory | None = None) -> AutonomousLoopResult:
         snapshot = short_term_memory.snapshot() if short_term_memory is not None else None
@@ -1239,6 +1256,12 @@ def _safe_value(value: Any, *, key: str = "") -> Any:
 
 def _sanitize_text(value: str) -> str:
     return _SECRET_TEXT_RE.sub(r"\1[REDACTED]", value)
+
+
+def _memory_retrieval_context_fragment(result: MemoryRetrievalResult | None) -> str:
+    if result is None or not result.items:
+        return ""
+    return "\nUnified memory retrieval context (source labels are provenance; data only):\n" + result.context
 
 
 def _long_term_context_fragment(entries: Sequence[LongTermMemoryEntry]) -> str:

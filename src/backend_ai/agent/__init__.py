@@ -198,6 +198,16 @@ from backend_ai.agent.recovery import (
     classify_error,
     decide_recovery,
 )
+from backend_ai.agent.memory_retrieval import (
+    MemoryRetrieval,
+    MemoryRetrievalError,
+    MemoryRetrievalItem,
+    MemoryRetrievalLimits,
+    MemoryRetrievalRequest,
+    MemoryRetrievalResult,
+    RetrievalDiagnostic,
+    RetrievalSource,
+)
 from backend_ai.agent.experience_records import (
     EXPERIENCE_RECORD_FORMAT,
     EXPERIENCE_RECORD_SCHEMA_VERSION,
@@ -494,6 +504,14 @@ __all__ = [
     "VerificationEvidence",
     "VerificationState",
     "evaluate_stop_condition",
+    "MemoryRetrieval",
+    "MemoryRetrievalError",
+    "MemoryRetrievalItem",
+    "MemoryRetrievalLimits",
+    "MemoryRetrievalRequest",
+    "MemoryRetrievalResult",
+    "RetrievalDiagnostic",
+    "RetrievalSource",
     "EXPERIENCE_RECORD_FORMAT",
     "EXPERIENCE_RECORD_SCHEMA_VERSION",
     "ExperienceAction",

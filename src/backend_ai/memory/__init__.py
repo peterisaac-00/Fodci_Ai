@@ -5,6 +5,16 @@ Phase 9.1 adds a separate bounded working-memory implementation that does not
 persist or retrieve across tasks.
 """
 
+from backend_ai.agent.memory_retrieval import (
+    MemoryRetrieval,
+    MemoryRetrievalError,
+    MemoryRetrievalItem,
+    MemoryRetrievalLimits,
+    MemoryRetrievalRequest,
+    MemoryRetrievalResult,
+    RetrievalDiagnostic,
+    RetrievalSource,
+)
 from backend_ai.agent.experience_records import (
     EXPERIENCE_RECORD_FORMAT,
     EXPERIENCE_RECORD_SCHEMA_VERSION,
@@ -93,6 +103,14 @@ from backend_ai.core.contracts import Memory
 
 __all__ = [
     "Memory",
+    "MemoryRetrieval",
+    "MemoryRetrievalError",
+    "MemoryRetrievalItem",
+    "MemoryRetrievalLimits",
+    "MemoryRetrievalRequest",
+    "MemoryRetrievalResult",
+    "RetrievalDiagnostic",
+    "RetrievalSource",
     "EXPERIENCE_RECORD_FORMAT",
     "EXPERIENCE_RECORD_SCHEMA_VERSION",
     "ExperienceAction",
