@@ -54,6 +54,7 @@ from backend_ai.agent.regression_protection import RegressionProtection, Regress
 from backend_ai.agent.final_verification import FinalVerificationRequest, FinalVerificationResult, verify_final_state
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
+from backend_ai.agent.project_memory import ProjectMemory, ProjectMemoryError, ProjectMemorySnapshot
 from backend_ai.agent.short_term_memory import MemoryImportance, MemoryLifecycle, MemorySnapshot, ShortTermMemory, ShortTermMemoryError
 from backend_ai.agent.stop_conditions import (
     StopConditionRequest,
@@ -222,6 +223,7 @@ class AutonomousLoopRequest:
     project_root: Path | str
     project_context: ProjectContext | None = None
     short_term_memory: ShortTermMemory | None = None
+    project_memory: ProjectMemory | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.task, str) or not self.task.strip():
@@ -235,9 +237,14 @@ class AutonomousLoopRequest:
                 raise ValueError("short_term_memory must be ShortTermMemory")
             if self.short_term_memory.project_root is not None and self.short_term_memory.project_root != str(root):
                 raise ValueError("short_term_memory.project_root must equal the explicit project_root")
+        if self.project_memory is not None:
+            if not isinstance(self.project_memory, ProjectMemory):
+                raise ValueError("project_memory must be ProjectMemory")
+            if self.project_memory.project_root != str(root):
+                raise ValueError("project_memory.project_root must equal the explicit project_root")
 
     def to_dict(self) -> dict[str, Any]:
-        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None, "short_term_memory_task_id": self.short_term_memory.task_id if self.short_term_memory else None}
+        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None, "short_term_memory_task_id": self.short_term_memory.task_id if self.short_term_memory else None, "project_memory_id": self.project_memory.project_id if self.project_memory else None}
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,6 +308,7 @@ class AutonomousLoopState:
     completion: TaskCompletionResult | None = None
     final_verification: FinalVerificationResult | None = None
     short_term_memory: MemorySnapshot | None = None
+    project_memory: ProjectMemorySnapshot | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -322,6 +330,7 @@ class AutonomousLoopState:
             "completion": self.completion.to_dict() if self.completion else None,
             "final_verification": self.final_verification.to_dict() if self.final_verification else None,
             "short_term_memory": self.short_term_memory.to_dict() if self.short_term_memory else None,
+            "project_memory": self.project_memory.to_dict() if self.project_memory else None,
         }
 
 
@@ -347,6 +356,7 @@ class AutonomousLoopResult:
     completion: TaskCompletionResult | None = None
     final_verification: FinalVerificationResult | None = None
     short_term_memory: MemorySnapshot | None = None
+    project_memory: ProjectMemorySnapshot | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -368,6 +378,7 @@ class AutonomousLoopResult:
             "completion": self.completion.to_dict() if self.completion else None,
             "final_verification": self.final_verification.to_dict() if self.final_verification else None,
             "short_term_memory": self.short_term_memory.to_dict() if self.short_term_memory else None,
+            "project_memory": self.project_memory.to_dict() if self.project_memory else None,
         }
 
 
@@ -489,6 +500,7 @@ class AutonomousToolLoop:
             return self._failure_result(str(exc), LoopStatus.FAILED, LoopFailureCode.INVALID_ACTION.value, task="")
 
         memory = request.short_term_memory or ShortTermMemory.for_task(request.task, request.project_root)
+        project_memory = request.project_memory or ProjectMemory.for_project(request.project_root)
         try:
             memory.record_observation(request.task, source="user", importance=MemoryImportance.CRITICAL, authoritative=True, operation="task_created")
         except ShortTermMemoryError as exc:
@@ -530,7 +542,7 @@ class AutonomousToolLoop:
         failed_action_signatures: list[str] = []
 
         def snapshot() -> AutonomousLoopState:
-            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot())
+            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot())
 
         def finish(_request: AutonomousLoopRequest, status: LoopStatus, answer: str, finish_plan: ExecutionPlan | None, finish_context: ProjectContext | None, finish_state: AutonomousLoopState, finish_steps: Sequence[AutonomousLoopStep], finish_calls: Sequence[ToolCall], finish_results: Sequence[ToolResult], finish_usage: AgentUsage, finish_warnings: Sequence[str], finish_errors: Sequence[str]) -> AutonomousLoopResult:
             nonlocal stop_evaluation, budget_decision, final_verification
@@ -612,6 +624,12 @@ class AutonomousToolLoop:
                 history.append(AgentMessage(AgentMessageRole.TOOL, bootstrap_observation, name=bootstrap_call.name, call_id=bootstrap_call.call_id))
                 steps.append(AutonomousLoopStep(0, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, "context-1", bootstrap_call.name, bootstrap_call.arguments, "SUCCESS", None, "", False, False))
                 machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
+
+            if context is not None:
+                try:
+                    project_memory.add_project_context(context)
+                except ProjectMemoryError as exc:
+                    warnings.append(f"project memory context update unavailable: {exc}")
 
             plan_result = self.planner.plan(PlannerRequest(request.task, context))
             if plan_result.plan is None:
@@ -1033,7 +1051,7 @@ class AutonomousToolLoop:
         return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
     def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None, recovery: RecoveryResult | None = None, completion: TaskCompletionResult | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory)
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str, short_term_memory: ShortTermMemory | None = None) -> AutonomousLoopResult:
         snapshot = short_term_memory.snapshot() if short_term_memory is not None else None

@@ -15,6 +15,7 @@ from backend_ai.agent import (
     PlannerConfidence,
     PlannerTaskType,
     ShortTermMemory,
+    ProjectMemory,
     ToolRegistry,
     ToolSelectionRisk,
     ToolSelectionStatus,
@@ -134,13 +135,16 @@ def test_real_task_checkpoint_uses_bounded_memory_until_close(tmp_path: Path) ->
     observation_tool = _Tool("record_observation", {"observation": "pytest is configured", "password": "not persisted"})
     test_tool = _Tool("parse_test_result", {"overall_status": "PASS", "tests": 1})
     memory = ShortTermMemory.for_task("Fix a failing authentication test", root)
+    project_memory = ProjectMemory.for_project(root)
     memory.record_failure({"error": "401 from authentication endpoint"}, classification="ASSERTION", message="authentication test failed", location="tests/test_auth.py")
     memory.record_fix({"target": "auth.py", "result": "token validation corrected"}, target="auth.py", result="applied", verification_status="PENDING")
     memory.record_test_result({"status": "PASS", "tests": 1}, status="PASS", tests_executed=1)
     loop = AutonomousToolLoop(_Engine(), registry=ToolRegistry((observation_tool, test_tool)), planner=_Planner(plan), selector=_Selector())
-    result = loop.run(AutonomousLoopRequest("Fix a failing authentication test", root, _context(root), memory))
+    result = loop.run(AutonomousLoopRequest("Fix a failing authentication test", root, _context(root), memory, project_memory))
 
     assert result.short_term_memory is not None
+    assert result.project_memory is not None
+    assert result.project_memory.identity.project_id == project_memory.project_id
     snapshot = result.short_term_memory
     assert result.status.value in {"COMPLETED", "BLOCKED"}
     assert snapshot.lifecycle is MemoryLifecycle.CLOSED

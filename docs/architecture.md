@@ -1422,4 +1422,30 @@ Bounds are host-controlled by `ShortTermMemoryLimits`. Each record category has 
 
 Authoritative task intent is stored separately from derived observations. Derived hypotheses or proposed fixes cannot overwrite the objective, requirements, or constraints. Values are redacted before storage using key-based and text-based rules for passwords, tokens, API keys, authorization values, cookies, credentials, environment-style secret assignments, and private-key blocks. Memory records do not modify `ExecutionBudgetLedger`; they have local context bounds only, and failures in memory handling do not bypass tool policy, safety, budget, verification, or stop conditions.
 
-The boundary deliberately stops before Project Memory and later phases. Phase 9.2 may define project-scoped knowledge, while later phases may add long-term records or retrieval; none of those are present here. Phase 9.1 does not add embeddings, RAG, semantic ranking, external storage, network access, LLM summarization, training, model-weight changes, background agents, or cross-task contamination.
+The Phase 9.1 boundary remains separate from Project Memory. Phase 9.2 provides persistent project-scoped facts through its own store; later phases may add long-term records or retrieval. Phase 9.1 does not add embeddings, RAG, semantic ranking, external storage, network access, LLM summarization, training, model-weight changes, background agents, or cross-task contamination.
+
+## Phase 9.2 — project-scoped persistent memory
+
+Phase 9.2 adds a bounded `ProjectMemory` subsystem for stable, reusable facts about one explicitly identified project. It is deliberately separate from Phase 9.1 `ShortTermMemory`: short-term memory answers what the current task is doing, while Project Memory answers which verified facts are stable for the project and can be reused by a later task.
+
+```text
+ProjectContext / explicit trusted evidence
+              ↓
+       ProjectMemory facts
+              ↓
+   bounded ProjectMemorySnapshot
+              ↓
+ atomic .fodci/project_memory.json
+              ↓
+ Task B loads the same project facts
+```
+
+The public model contains `ProjectIdentity`, `ProjectFact`, `FactEvidence`, `FactCategory`, `FactSource`, `FactConfidence`, `FactStatus`, `ProjectMemoryLimits`, `ProjectMemorySnapshot`, and `ProjectMemoryStore`. Facts enter through controlled `add_fact()`, `add_project_context()`, `confirm_fact()`, and `invalidate_fact()` operations; callers cannot mutate a raw dictionary. Every fact requires bounded provenance evidence, and lower-authority or lower-confidence claims cannot silently replace a stronger active fact. Conflicts remain represented as rejected or superseded records rather than disappearing.
+
+Persistence is deliberately project-local at `.fodci/project_memory.json`. The store validates project identity and schema version, rejects malformed or future schemas, returns explicit `MEMORY_MISSING`, `MEMORY_CORRUPTED`, `MEMORY_INVALID`, or `MEMORY_UNAVAILABLE` states, and never fabricates facts after corruption. Saves use a temporary file, flush and `fsync`, `os.replace`, and a directory sync where supported. A SHA-256 digest detects stale concurrent writes so one process cannot silently overwrite another process's update. The store rejects symlinked storage locations and does not write outside the normalized project root.
+
+Project Memory is bounded by host-controlled fact count, fact-value length, evidence count, metadata size, conflict count, and total serialized UTF-8 bytes. It stores compact structured values and evidence summaries only; it does not store raw source files, complete logs, terminal output, test reports, or stack traces. Secret-like keys and text such as passwords, API keys, tokens, credentials, authorization values, cookies, private keys, and `.env` values are redacted before persistence.
+
+`AutonomousLoopRequest.project_memory` accepts an explicit Project Memory owner, while `AutonomousToolLoop` exposes a bounded project-memory snapshot independently from its closed short-term snapshot. Existing ProjectContext data can be converted to eligible project facts at the orchestration boundary, but the loop does not automatically persist the memory file. The caller-controlled `ProjectMemoryStore` remains responsible for loading and saving. Project Memory does not modify tools, policies, execution budgets, stop conditions, final verification, model weights, training, or Phase 9.1 lifecycle.
+
+**Phase 9.2 implements persistent project-scoped memory only. Long-Term Memory, experience records, retrieval, semantic search, embeddings, RAG, memory-quality systems, network storage, background agents, and cross-project memory are not implemented.**

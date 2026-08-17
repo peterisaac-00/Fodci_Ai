@@ -5,6 +5,27 @@ Phase 9.1 adds a separate bounded working-memory implementation that does not
 persist or retrieve across tasks.
 """
 
+from backend_ai.agent.project_memory import (
+    PROJECT_MEMORY_FORMAT,
+    PROJECT_MEMORY_SCHEMA_VERSION,
+    FactCategory,
+    FactConfidence,
+    FactEvidence,
+    FactSource,
+    FactStatus,
+    ProjectFact,
+    ProjectIdentity,
+    ProjectMemory,
+    ProjectMemoryClosedError,
+    ProjectMemoryConflictError,
+    ProjectMemoryError,
+    ProjectMemoryLimits,
+    ProjectMemoryLoadResult,
+    ProjectMemoryLoadStatus,
+    ProjectMemorySnapshot,
+    ProjectMemoryStore,
+    ProjectMemoryValidationError,
+)
 from backend_ai.agent.short_term_memory import (
     MemoryClosedError,
     MemoryImportance,
@@ -24,6 +45,25 @@ from backend_ai.core.contracts import Memory
 
 __all__ = [
     "Memory",
+    "PROJECT_MEMORY_FORMAT",
+    "PROJECT_MEMORY_SCHEMA_VERSION",
+    "FactCategory",
+    "FactConfidence",
+    "FactEvidence",
+    "FactSource",
+    "FactStatus",
+    "ProjectFact",
+    "ProjectIdentity",
+    "ProjectMemory",
+    "ProjectMemoryClosedError",
+    "ProjectMemoryConflictError",
+    "ProjectMemoryError",
+    "ProjectMemoryLimits",
+    "ProjectMemoryLoadResult",
+    "ProjectMemoryLoadStatus",
+    "ProjectMemorySnapshot",
+    "ProjectMemoryStore",
+    "ProjectMemoryValidationError",
     "MemoryClosedError",
     "MemoryImportance",
     "MemoryInformationKind",

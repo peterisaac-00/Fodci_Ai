@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 9.1 complete — bounded task-scoped Short-Term Memory delivered; Phase 9.2+ not started.**
+> **Current status: Phase 9.2 complete — bounded persistent project-scoped memory delivered; Phase 9.3+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -652,3 +652,29 @@ Snapshots are frozen dataclass views containing tuples and recursively read-only
 The autonomous loop receives memory explicitly through `AutonomousLoopRequest.short_term_memory`; it does not inject the entire snapshot into model prompts automatically. The loop records bounded task activity at the orchestration boundary and exposes the final closed snapshot through both `AutonomousLoopState` and `AutonomousLoopResult`. `ToolRegistry.default()` and the read-only `AgentLoop` remain unchanged in capability and behavior. Memory closure rejects later writes and does not reactivate the task.
 
 **Phase 9.1 implements task-scoped Short-Term Memory only. Project Memory, Long-Term Memory, retrieval, semantic search, memory quality, and cross-task persistence belong to future phases. Short-Term Memory does not modify model weights, tokenizer behavior, training, or execution-budget limits.**
+
+## Phase 9.2 — project-scoped persistent memory
+
+Phase 9.2 adds a bounded `ProjectMemory` subsystem for stable, reusable facts about one explicitly identified project. It is deliberately separate from Phase 9.1 `ShortTermMemory`: short-term memory answers what the current task is doing, while Project Memory answers which verified facts are stable for the project and can be reused by a later task.
+
+```text
+ProjectContext / explicit trusted evidence
+              ↓
+       ProjectMemory facts
+              ↓
+   bounded ProjectMemorySnapshot
+              ↓
+ atomic .fodci/project_memory.json
+              ↓
+ Task B loads the same project facts
+```
+
+The public model contains `ProjectIdentity`, `ProjectFact`, `FactEvidence`, `FactCategory`, `FactSource`, `FactConfidence`, `FactStatus`, `ProjectMemoryLimits`, `ProjectMemorySnapshot`, and `ProjectMemoryStore`. Facts enter through controlled `add_fact()`, `add_project_context()`, `confirm_fact()`, and `invalidate_fact()` operations; callers cannot mutate a raw dictionary. Every fact requires bounded provenance evidence, and lower-authority or lower-confidence claims cannot silently replace a stronger active fact. Conflicts remain represented as rejected or superseded records rather than disappearing.
+
+Persistence is deliberately project-local at `.fodci/project_memory.json`. The store validates project identity and schema version, rejects malformed or future schemas, returns explicit `MEMORY_MISSING`, `MEMORY_CORRUPTED`, `MEMORY_INVALID`, or `MEMORY_UNAVAILABLE` states, and never fabricates facts after corruption. Saves use a temporary file, flush and `fsync`, `os.replace`, and a directory sync where supported. A SHA-256 digest detects stale concurrent writes so one process cannot silently overwrite another process's update. The store rejects symlinked storage locations and does not write outside the normalized project root.
+
+Project Memory is bounded by host-controlled fact count, fact-value length, evidence count, metadata size, conflict count, and total serialized UTF-8 bytes. It stores compact structured values and evidence summaries only; it does not store raw source files, complete logs, terminal output, test reports, or stack traces. Secret-like keys and text such as passwords, API keys, tokens, credentials, authorization values, cookies, private keys, and `.env` values are redacted before persistence.
+
+`AutonomousLoopRequest.project_memory` accepts an explicit Project Memory owner, while `AutonomousToolLoop` exposes a bounded project-memory snapshot independently from its closed short-term snapshot. Existing ProjectContext data can be converted to eligible project facts at the orchestration boundary, but the loop does not automatically persist the memory file. The caller-controlled `ProjectMemoryStore` remains responsible for loading and saving. Project Memory does not modify tools, policies, execution budgets, stop conditions, final verification, model weights, training, or Phase 9.1 lifecycle.
+
+**Phase 9.2 implements persistent project-scoped memory only. Long-Term Memory, experience records, retrieval, semantic search, embeddings, RAG, memory-quality systems, network storage, background agents, and cross-project memory are not implemented.**
