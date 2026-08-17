@@ -177,6 +177,9 @@ class BenchmarkValidator:
         behavior_ids: dict[str, str] = {}
         test_ids: dict[str, str] = {}
         criterion_sources: dict[str, list[str]] = {}
+        all_requirement_ids = {item.requirement_id for task in tasks_tuple for item in task.requirements}
+        all_behavior_ids = {item.behavior_id for task in tasks_tuple for item in task.expected_behaviors}
+        all_test_ids = {item.test_id for task in tasks_tuple for item in task.tests}
 
         for index, task in enumerate(tasks_tuple):
             validation = self.task_validator.validate(task)
@@ -201,7 +204,7 @@ class BenchmarkValidator:
 
             task_ids.append(task.task_id)
 
-            no_test_criteria = any(criterion.criterion_type is SuccessCriterionType.TEST_PASS and not criterion.test_ids for criterion in task.success_criteria)
+            no_test_criteria = any(getattr(criterion.criterion_type, "value", str(criterion.criterion_type)) == SuccessCriterionType.TEST_PASS.value and not criterion.test_ids for criterion in task.success_criteria)
             if no_test_criteria:
                 issues.append(_issue(counter, "SCOPE", IssueLevel.WARNING, task.task_id, "TEST_CRITERION_NO_TEST", "TEST_PASS criterion declares no test IDs; the criterion has no evidence source"))
 
@@ -226,14 +229,14 @@ class BenchmarkValidator:
                 declared_ids.add(test.test_id)
                 criterion_sources.setdefault(test.test_id, []).append(task.task_id)
             for criterion in task.success_criteria:
-                missing_tests = [test_id for test_id in criterion.test_ids if test_id not in test_ids and test_id not in declared_ids]
-                missing_behaviors = [behavior_id for behavior_id in criterion.behavior_ids if behavior_id not in behavior_ids and behavior_id not in declared_ids]
+                missing_tests = [test_id for test_id in criterion.test_ids if test_id not in all_test_ids]
+                missing_behaviors = [behavior_id for behavior_id in criterion.behavior_ids if behavior_id not in all_behavior_ids]
                 if missing_tests:
                     issues.append(_issue(counter, "SCOPE", IssueLevel.WARNING, task.task_id, "UNRESOLVED_REFERENCE", f"criterion {criterion.criterion_id} references undeclared tests {missing_tests}"))
                 if missing_behaviors:
                     issues.append(_issue(counter, "SCOPE", IssueLevel.WARNING, task.task_id, "UNRESOLVED_REFERENCE", f"criterion {criterion.criterion_id} references undeclared behaviors {missing_behaviors}"))
 
-            no_meaningful = all(criterion.criterion_type is SuccessCriterionType.TEST_PASS and not criterion.test_ids for criterion in task.success_criteria) and not task.tests
+            no_meaningful = all(getattr(criterion.criterion_type, "value", str(criterion.criterion_type)) == SuccessCriterionType.TEST_PASS.value and not criterion.test_ids for criterion in task.success_criteria) and not task.tests
             if no_meaningful:
                 issues.append(_issue(counter, "FAIRNESS", IssueLevel.WARNING, task.task_id, "NO_EVALUABLE_CRITERION", "task declares no tests and no criterion with an evidence source; it cannot be evaluated"))
 
@@ -259,7 +262,7 @@ class BenchmarkValidator:
         required_tasks = [task for task in tasks_tuple if any(requirement.mandatory for requirement in task.requirements)]
         criteria_without_requirement = [
             task for task in tasks_tuple
-            if any(criterion.required and criterion.criterion_type is SuccessCriterionType.BEHAVIOR for criterion in task.success_criteria) and not task.requirements
+            if any(criterion.required and getattr(criterion.criterion_type, "value", str(criterion.criterion_type)) == SuccessCriterionType.BEHAVIOR.value for criterion in task.success_criteria) and not task.requirements
         ]
         if criteria_without_requirement:
             for task in criteria_without_requirement:

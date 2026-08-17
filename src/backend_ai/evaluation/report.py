@@ -360,6 +360,18 @@ def _regression_summary(comparison: EvaluationComparisonResult | None, config: R
     return summary
 
 
+def _regression_evaluation_summary(regression_result: Any | None, config: ReportConfig) -> dict[str, Any] | None:
+    if regression_result is None:
+        return None
+    summary = dict(regression_result.to_dict()) if hasattr(regression_result, "to_dict") else {"value": str(regression_result)}
+    warnings = tuple(summary.get("warnings", ()))
+    bounded, truncated = _bounded_sequence(warnings, config.max_warnings)
+    summary["warnings"] = list(bounded)
+    if truncated:
+        summary["truncated"] = True
+    return summary
+
+
 def _comparison_summary(comparison: EvaluationComparisonResult | None, config: ReportConfig) -> dict[str, Any] | None:
     if comparison is None:
         return None
@@ -480,7 +492,7 @@ def generate_evaluation_report(inputs: ReportInputs, config: ReportConfig | None
         task_breakdown=task_rows,
         category_breakdown=category_rows,
         difficulty_breakdown=difficulty_rows,
-        regression=_regression_summary(inputs.comparison, config),
+        regression=_regression_evaluation_summary(inputs.regression_result, config),
         validation=_validation_summary(inputs.validation_result, config),
         comparison=_comparison_summary(inputs.comparison, config),
         evidence_completeness=inputs.benchmark_score.evidence_completeness,

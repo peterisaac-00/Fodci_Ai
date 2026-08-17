@@ -17,7 +17,7 @@ from backend_ai.evaluation import (
     BenchmarkTaskStatus,
     ReportConfig,
     ReportInputs,
-    EvaluationResult,
+    ScoringEvaluationResult,
     BenchmarkScore,
     EvaluationStatus,
     collect_metrics,
@@ -96,8 +96,8 @@ def _score(runs: tuple) -> BenchmarkScore:
     )
 
 
-def _evaluation_result(result: BenchmarkResult, score: BenchmarkScore) -> EvaluationResult:
-    return EvaluationResult(
+def _evaluation_result(result: BenchmarkResult, score: BenchmarkScore) -> ScoringEvaluationResult:
+    return ScoringEvaluationResult(
         result,
         score,
         "8.3",

@@ -77,7 +77,7 @@ def test_evaluation_is_deterministic_for_same_seed_and_source(tmp_path: Path) ->
 
 
 def test_compare_reports_loss_and_perplexity_improvement() -> None:
-    from backend_ai.evaluation import EvaluationResult
+    from backend_ai.evaluation import ModelEvaluationResult
 
     common = {
         "checkpoint_path": None,
@@ -92,8 +92,8 @@ def test_compare_reports_loss_and_perplexity_improvement() -> None:
         "evaluated_tokens": 8,
         "evaluation_seconds": 0.1,
     }
-    baseline = EvaluationResult(checkpoint_id="random", loss=4.0, perplexity=54.0, **common)
-    trained = EvaluationResult(checkpoint_id="trained", loss=2.0, perplexity=7.0, epoch=1, global_step=2, **common)
+    baseline = ModelEvaluationResult(checkpoint_id="random", loss=4.0, perplexity=54.0, **common)
+    trained = ModelEvaluationResult(checkpoint_id="trained", loss=2.0, perplexity=7.0, epoch=1, global_step=2, **common)
 
     comparison = FodciEvaluator.compare(baseline, trained)
 

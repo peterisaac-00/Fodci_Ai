@@ -57,6 +57,8 @@ class GroupMetricComparison:
         ]
         if not classifications:
             return ComparisonStatus.INCOMPARABLE
+        if any(item is ComparisonClassification.INCONCLUSIVE for item in classifications) and all(item is ComparisonClassification.INCONCLUSIVE for item in classifications):
+            return ComparisonStatus.INCONCLUSIVE
         decisive = [item for item in classifications if item is not ComparisonClassification.EQUIVALENT]
         if not decisive:
             return ComparisonStatus.EQUIVALENT
@@ -137,12 +139,9 @@ def _dimension(
     if baseline_value is not None and candidate_value is not None:
         delta = candidate_value - baseline_value
         classification = _classify(delta, epsilon)
-    elif baseline_value is None and candidate_value is not None:
+    elif (baseline_value is None) != (candidate_value is None):
         delta = None
-        classification = ComparisonClassification.IMPROVED
-    elif candidate_value is None and baseline_value is not None:
-        delta = None
-        classification = ComparisonClassification.REGRESSED
+        classification = ComparisonClassification.INCONCLUSIVE
     return ComparisonDimension(name, baseline_value, candidate_value, delta, classification, evidence_ids)
 
 
@@ -174,9 +173,9 @@ class VersionMetricsComparison:
         """Phase 8.4 status rules over overall and group dimensions."""
 
         classifications: list[ComparisonStatus] = []
-        for item in [self.overall_success_rate.classification]:
-            if item is not None:
-                classifications.append(ComparisonStatus(item.value))
+        for item in (self.overall_success_rate, self.overall_test_pass_rate, self.overall_average_task_score):
+            if item.classification is not None:
+                classifications.append(ComparisonStatus(item.classification.value))
         for group in list(self.category_comparisons) + list(self.difficulty_comparisons):
             status = group.status()
             if status is not ComparisonStatus.INCOMPARABLE:
@@ -184,6 +183,8 @@ class VersionMetricsComparison:
         decisive = [item for item in classifications if item is not ComparisonStatus.EQUIVALENT]
         if not classifications:
             return ComparisonStatus.INCOMPARABLE
+        if ComparisonStatus.INCONCLUSIVE in classifications and all(item is ComparisonStatus.INCONCLUSIVE for item in classifications):
+            return ComparisonStatus.INCONCLUSIVE
         if not decisive:
             return ComparisonStatus.EQUIVALENT
         if all(item is ComparisonStatus.REGRESSED for item in decisive):
@@ -321,9 +322,9 @@ def compare_evaluation_metrics(
         )
 
     if set(baseline_categories) != set(candidate_categories):
-        warnings.append("category sets differ between evaluations; uncovered groups are treated as regressions")
+        warnings.append("category sets differ between evaluations; uncovered groups are inconclusive")
     if set(baseline_difficulties) != set(candidate_difficulties):
-        warnings.append("difficulty sets differ between evaluations; uncovered groups are treated as regressions")
+        warnings.append("difficulty sets differ between evaluations; uncovered groups are inconclusive")
 
     categories = tuple(group_pair(name, "category") for name in sorted(set(baseline_categories) | set(candidate_categories)))
     difficulties = tuple(group_pair(name, "difficulty") for name in sorted(set(baseline_difficulties) | set(candidate_difficulties)))

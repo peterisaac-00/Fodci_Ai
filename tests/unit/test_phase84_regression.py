@@ -11,7 +11,7 @@ from backend_ai.evaluation import (
     ComparisonConfig,
     ComparisonStatus,
     DimensionComparison,
-    EvaluationResult,
+    ScoringEvaluationResult,
     EvaluationStatus,
     EvaluationVersion,
     RegressionSeverity,
@@ -35,7 +35,7 @@ def _task_score(task_id: str, value: float, status: EvaluationStatus = Evaluatio
     return TaskScore(task_id, value, value, value, value, value, value * 100, status, dimensions)
 
 
-def _result(values: dict[str, float], statuses: dict[str, EvaluationStatus] | None = None, *, benchmark: str = "BENCH-1", evidence: float = 1.0, definition: str = "1.0", policy: str = "1.0") -> EvaluationResult:
+def _result(values: dict[str, float], statuses: dict[str, EvaluationStatus] | None = None, *, benchmark: str = "BENCH-1", evidence: float = 1.0, definition: str = "1.0", policy: str = "1.0") -> ScoringEvaluationResult:
     statuses = statuses or {}
     scores = tuple(_task_score(task_id, value, statuses.get(task_id, EvaluationStatus.VERIFIED)) for task_id, value in sorted(values.items()))
     aggregate = sum(item.final_score for item in scores) / len(scores) if scores else 0.0
@@ -43,7 +43,7 @@ def _result(values: dict[str, float], statuses: dict[str, EvaluationStatus] | No
     score = BenchmarkScore(benchmark, scores, aggregate, aggregate * 100, dimensions, sum(item.status is EvaluationStatus.VERIFIED for item in scores), sum(item.status is EvaluationStatus.FAILED for item in scores), sum(item.status is EvaluationStatus.INCOMPLETE for item in scores), sum(item.status is EvaluationStatus.BLOCKED for item in scores), sum(item.status is EvaluationStatus.UNAVAILABLE for item in scores), "HIGH" if evidence == 1.0 else "LOW", evidence)
     summary = BenchmarkRunSummary(len(scores), score.completed_count, score.failed_count, score.blocked_count, 0, 0, score.unavailable_count, 0, score.incomplete_count)
     run = BenchmarkResult(benchmark, "1.0", BenchmarkStatus.COMPLETED, (), summary, 0.1, BenchmarkTerminationReason.COMPLETED)
-    return EvaluationResult(run, score, "8.3", policy, (), {"definition": definition})
+    return ScoringEvaluationResult(run, score, "8.3", policy, (), {"definition": definition})
 
 
 def _compare(base, candidate, **kwargs):

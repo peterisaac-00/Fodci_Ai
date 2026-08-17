@@ -140,7 +140,7 @@ def _severity_rank(severity: RegressionSeverity) -> int:
 
 
 def _severity_gte(first: RegressionSeverity, second: RegressionSeverity) -> bool:
-    return _severity_rank(first) >= _severity_rank(second)
+    return _severity_rank(first) > _severity_rank(second)
 
 
 def _gate_pass(gate: RegressionGate, value: float | None, explanation: str) -> RegressionGateResult:
@@ -231,6 +231,15 @@ class RegressionEvaluator:
         warnings: list[str] = []
         gate_results: list[RegressionGateResult] = []
         gates = tuple(self.gates)
+        supported_defaults = {"regression_count", "severity"}
+        if metrics_comparison is not None:
+            supported_defaults.update({"task_success_rate", "test_pass_rate", "reliability"})
+        if comparison is not None and comparison.aggregate is not None:
+            supported_defaults.update({"overall_score", "test_pass_rate", "efficiency"})
+        gates = tuple(
+            gate for gate in gates
+            if _gate_key(gate) not in self._default_gate_keys or gate.gate_type in supported_defaults
+        )
         if max_regression_count is not None:
             gates = gates + (RegressionGate("regression_count", "maximum regression count", max_allowed=max_regression_count),)
         if max_severity is not None:
@@ -254,7 +263,10 @@ class RegressionEvaluator:
             elif gate.gate_type == "task_success_rate":
                 gate_results.append(_gate_pass(gate, metric_map.get("overall_success_rate"), "task success rate delta against threshold"))
             elif gate.gate_type == "test_pass_rate":
-                gate_results.append(_gate_pass(gate, metric_map.get("overall_test_pass_rate") or metric_map.get("test_success_rate"), "test pass rate delta against threshold"))
+                test_delta = metric_map.get("overall_test_pass_rate")
+                if test_delta is None:
+                    test_delta = metric_map.get("test_success_rate")
+                gate_results.append(_gate_pass(gate, test_delta, "test pass rate delta against threshold"))
             elif gate.gate_type == "regression_count":
                 gate_results.append(_gate_pass(gate, len(findings), "regression count against allowed maximum"))
             elif gate.gate_type == "severity":
@@ -265,12 +277,14 @@ class RegressionEvaluator:
             elif gate.gate_type == "efficiency":
                 gate_results.append(_gate_pass(gate, metric_map.get("efficiency_score"), "efficiency delta against threshold"))
             elif gate.gate_type == "reliability":
-                test_value = metric_map.get("overall_test_pass_rate") or metric_map.get("test_success_rate")
+                test_value = metric_map.get("overall_test_pass_rate")
+                if test_value is None:
+                    test_value = metric_map.get("test_success_rate")
                 gate_results.append(_gate_pass(gate, test_value, "test reliability delta against threshold"))
             elif gate.gate_type == "regression_free_rate":
-                gate_results.append(_gate_pass(gate, metric_map.get("overall_success_rate"), "regression-free evidence against threshold"))
+                gate_results.append(_gate_pass(gate, metric_map.get("regression_free_rate"), "regression-free evidence against threshold"))
             else:
-                gate_results.append(RegressionGateResult(gate, True, None, ("gate",), f"unknown gate type {gate.gate_type}; treated as passed"))
+                gate_results.append(RegressionGateResult(gate, False, None, ("unknown_gate",), f"unknown gate type {gate.gate_type}; explicit handling is unavailable"))
 
         if metrics_comparison is not None:
             overall = metrics_comparison.overall_classification
@@ -287,7 +301,8 @@ class RegressionEvaluator:
         count_gate_failed = any(not item.passed for item in gate_results if item.gate.gate_type == "regression_count")
         severity_failed = any(_gate_severity_blocked(gate, finding) for gate in gates for finding in findings)
         _ALWAYS_EVALUABLE_GATES = {"regression_count", "severity"}
-        inconclusive = all(item.value is None for item in gate_results if item.gate.gate_type not in _ALWAYS_EVALUABLE_GATES)
+        missing_gate_evidence = any(item.value is None for item in gate_results if item.gate.gate_type not in _ALWAYS_EVALUABLE_GATES)
+        concrete_gate_failed = any(not item.passed and item.value is not None for item in gate_results)
         regressed = comparison is not None and comparison.status is ComparisonStatus.REGRESSED
         mixed = comparison is not None and comparison.status is ComparisonStatus.IMPROVED_WITH_REGRESSIONS
         sources_present = bool(metrics_comparison) or bool(comparison) or bool(findings)
@@ -295,7 +310,7 @@ class RegressionEvaluator:
         explicit_gate_failed = any(not item.passed for item in explicitly_supplied_gates)
         explicit_comparison_gate_failed = any(not item.passed for item in explicitly_supplied_gates if item.gate.gate_type in _COMPARISON_GATES)
         explicit_task_gate_failed = any(not item.passed for item in explicitly_supplied_gates if item.gate.gate_type in _TASK_METRIC_GATES or item.gate.gate_type == "regression_count")
-        if severity_failed or count_gate_failed or explicit_task_gate_failed:
+        if severity_failed or count_gate_failed or explicit_task_gate_failed or concrete_gate_failed:
             verdict = RegressionVerdict.REGRESSION_FAILED
         elif regressed or metrics_regressed or (mixed and any(_severity_gte(item.severity, RegressionSeverity.MEDIUM) for item in findings)):
             verdict = RegressionVerdict.REGRESSION_FAILED
@@ -307,13 +322,13 @@ class RegressionEvaluator:
                 warnings.append("improvements are accompanied by regressions; overall verdict is failed")
             else:
                 warnings.append("regression-free rate did not hold; overall verdict is failed")
+        elif missing_gate_evidence:
+            warnings.append("one or more required regression gates lacked evidence; verdict is inconclusive")
+            verdict = RegressionVerdict.REGRESSION_INCONCLUSIVE
         elif explicit_gate_failed and not sources_present:
-            if explicit_comparison_gate_failed and inconclusive:
-                warnings.append("every gate lacked evidence; verdict is inconclusive")
-            else:
-                warnings.append("explicitly supplied gates failed; verdict is failed")
-            verdict = RegressionVerdict.REGRESSION_FAILED if not (explicit_comparison_gate_failed and inconclusive) else RegressionVerdict.REGRESSION_INCONCLUSIVE
-        elif inconclusive and not sources_present:
+            warnings.append("explicitly supplied gates failed without comparison evidence; verdict is inconclusive")
+            verdict = RegressionVerdict.REGRESSION_INCONCLUSIVE
+        elif not sources_present:
             warnings.append("no comparison or metrics comparison was supplied; verdict is inconclusive")
             verdict = RegressionVerdict.REGRESSION_INCONCLUSIVE
         elif sources_present:

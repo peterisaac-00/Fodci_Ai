@@ -14,10 +14,14 @@ from backend_ai.evaluation.benchmark_runner import (
     BenchmarkTaskRun, BenchmarkTaskStatus, BenchmarkTerminationReason,
 )
 from backend_ai.evaluation.scoring import (
-    BenchmarkScorer, BenchmarkScore, CriterionEvaluation, EvaluationResult,
+    BenchmarkScorer, BenchmarkScore, CriterionEvaluation, EvaluationResult as ScoringEvaluationResult,
     EvaluationScorer, EvaluationStatus, EvaluationWeights, EvidenceStatus, ScoreDimension,
     ScoringPolicy, TaskEvaluation, TaskScore, evaluate_benchmark,
 )
+
+# Preserve the Phase 2.8 public model-evaluation name while exposing the Phase 8.3
+# result under an unambiguous name.
+EvaluationResult = ModelEvaluationResult
 from backend_ai.evaluation.regression import (
     AggregateComparison, ComparisonClassification, ComparisonConfig, ComparisonResult,
     ComparisonStatus, DimensionComparison, EvaluationComparisonRequest,
@@ -61,7 +65,7 @@ __all__ = [
     "BenchmarkConfig", "BenchmarkEvidence", "BenchmarkExecutionResult", "BenchmarkRequest",
     "BenchmarkResult", "BenchmarkRunSummary", "BenchmarkRunner", "BenchmarkStatus",
     "BenchmarkTaskRun", "BenchmarkTaskStatus", "BenchmarkTerminationReason",
-    "BenchmarkScorer", "BenchmarkScore", "CriterionEvaluation", "EvaluationResult",
+    "BenchmarkScorer", "BenchmarkScore", "CriterionEvaluation", "EvaluationResult", "ScoringEvaluationResult",
     "EvaluationScorer", "EvaluationStatus", "EvaluationWeights", "EvidenceStatus", "ScoreDimension",
     "ScoringPolicy", "TaskEvaluation", "TaskScore", "evaluate_benchmark",
     "AggregateComparison", "ComparisonClassification", "ComparisonConfig", "ComparisonResult",

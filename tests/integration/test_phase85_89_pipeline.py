@@ -22,7 +22,7 @@ from backend_ai.evaluation import (
     BenchmarkScorer,
     BenchmarkTaskStatus,
     EvaluationDifficulty,
-    EvaluationResult,
+    ScoringEvaluationResult,
     EvaluationConstraint,
     EvaluationTask,
     EvaluationTaskCategory,
@@ -116,7 +116,7 @@ def _fake_result(passed: bool, duration: float):
     )
 
 
-def _run_benchmark(pass_tasks: set[str]) -> tuple[BenchmarkResult, EvaluationResult]:
+def _run_benchmark(pass_tasks: set[str]) -> tuple[BenchmarkResult, ScoringEvaluationResult]:
     config = BenchmarkConfig(
         benchmark_id="bench-pipeline",
         benchmark_version="1.0.0",

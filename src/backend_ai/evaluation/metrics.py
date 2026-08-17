@@ -36,10 +36,12 @@ from backend_ai.evaluation.task_model import EvaluationTask
 class MetricStatus(str, Enum):
     """Outcome of a single metric computation."""
 
+    AVAILABLE = "AVAILABLE"
     PASS = "PASS"
     FAIL = "FAIL"
     UNKNOWN = "UNKNOWN"
     UNAVAILABLE = "UNAVAILABLE"
+    INCOMPARABLE = "INCOMPARABLE"
     INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
     NOT_APPLICABLE = "NOT_APPLICABLE"
 
@@ -122,13 +124,15 @@ class TaskMetrics:
     satisfied_criteria: int
     evidence_ids: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    score: float | None = None
+    regression_evidence_available: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "evidence_ids", tuple(sorted(set(self.evidence_ids))))
         object.__setattr__(self, "warnings", tuple(sorted(set(self.warnings))))
 
 
-def _task_metrics_from_run(task: EvaluationTask, run: BenchmarkTaskRun) -> TaskMetrics:
+def _task_metrics_from_run(task: EvaluationTask, run: BenchmarkTaskRun, task_score: TaskScore | None = None) -> TaskMetrics:
     """Derive per-task metric evidence strictly from existing run evidence."""
 
     ev = run.evidence
@@ -137,19 +141,20 @@ def _task_metrics_from_run(task: EvaluationTask, run: BenchmarkTaskRun) -> TaskM
     criteria = tuple(task.success_criteria)
     satisfied = 0
     for criterion in criteria:
-        if criterion.criterion_type.value == "TEST_PASS":
+        criterion_type = getattr(criterion.criterion_type, "value", str(criterion.criterion_type))
+        if criterion_type == "TEST_PASS":
             satisfied += int(run.evidence.tests_executed and _test_evidence_passed(run.evidence))
-        elif criterion.criterion_type.value in ("VERIFICATION", "COMPLETION"):
-            source = ev.final_verification_evidence if criterion.criterion_type.value == "VERIFICATION" else ev.completion_evidence
+        elif criterion_type in ("VERIFICATION", "COMPLETION"):
+            source = ev.final_verification_evidence if criterion_type == "VERIFICATION" else ev.completion_evidence
             value = _status_value(source)
             satisfied += int(value in ("VERIFIED", "COMPLETE", "PASSED", "COMPLETED", "PASS"))
-        elif criterion.criterion_type.value in ("REGRESSION_FREE", "NO_UNRELATED_CHANGE"):
+        elif criterion_type in ("REGRESSION_FREE", "NO_UNRELATED_CHANGE"):
             satisfied += int(
                 not ev.forbidden_changes_detected
                 and not ev.unexpected_modifications
                 and not _regression_in(ev)
             )
-        elif criterion.criterion_type.value == "BEHAVIOR":
+        elif criterion_type == "BEHAVIOR":
             completed = ev.execution_completed and ev.execution_started
             final = _status_value(ev.final_verification_evidence)
             satisfied += int(completed and final in ("VERIFIED", "COMPLETE", "PASSED") and not _regression_in(ev))
@@ -158,20 +163,28 @@ def _task_metrics_from_run(task: EvaluationTask, run: BenchmarkTaskRun) -> TaskM
     test_evaluated = ev.tests_executed and ev.test_result is not None
     test_passed = test_evaluated and _test_evidence_passed(ev) and not _regression_in(ev)
     final = _status_value(ev.final_verification_evidence)
-    final_verification_required = True
-    final_verification_passed = final in ("VERIFIED", "COMPLETE", "PASSED")
+    final_verification_required = any(
+        getattr(criterion.criterion_type, "value", str(criterion.criterion_type)) in ("VERIFICATION", "COMPLETION", "REGRESSION_FREE") and criterion.required
+        for criterion in criteria
+    ) if criteria else bool(ev.final_verification_evidence)
+    final_verification_passed = final in ("VERIFIED", "COMPLETE", "PASSED") if final_verification_required else False
     eligible = run.status not in (BenchmarkTaskStatus.SKIPPED, BenchmarkTaskStatus.UNAVAILABLE)
     if not eligible:
         final_verification_required = False
     if run.status is BenchmarkTaskStatus.INCOMPLETE_EVIDENCE:
         final_verification_passed = False
+    regression_evidence_available = bool(
+        ev.final_verification_evidence and ("regression_status" in ev.final_verification_evidence or ev.failure_information)
+    ) or bool(ev.forbidden_changes_detected or ev.unexpected_modifications)
+    evaluation_status = task_score.status if task_score is not None else _evaluation_status(run, final)
+    success_value = task_score.status in (EvaluationStatus.VERIFIED, EvaluationStatus.PASS) if task_score is not None else run.status is BenchmarkTaskStatus.PASSED
     return TaskMetrics(
         task_id=run.task_id,
         category=run.category,
         difficulty=run.difficulty,
         status=run.status,
-        evaluation_status=_evaluation_status(run, final),
-        success=run.status is BenchmarkTaskStatus.PASSED,
+        evaluation_status=evaluation_status,
+        success=success_value,
         tests_evaluated=test_evaluated,
         tests_passed=test_passed,
         final_verification_required=final_verification_required,
@@ -186,7 +199,9 @@ def _task_metrics_from_run(task: EvaluationTask, run: BenchmarkTaskRun) -> TaskM
         criterion_count=len(criteria),
         satisfied_criteria=satisfied,
         evidence_ids=("task_status", "evidence", "budget_state") if budget else ("task_status", "evidence"),
-        warnings=tuple(run.warnings),
+        warnings=tuple(run.warnings) + (() if regression_evidence_available else ("regression evidence is unavailable",)),
+        score=task_score.final_score if task_score is not None else None,
+        regression_evidence_available=regression_evidence_available,
     )
 
 
@@ -206,9 +221,10 @@ def _status_value(value: Mapping[str, Any] | None) -> str:
 
 
 def _regression_in(ev: Any) -> bool:
-    text = " ".join((str(ev.execution_status), str(ev.termination_reason), " ".join(ev.failure_information)))
+    text = " ".join((str(ev.execution_status), str(ev.termination_reason), " ".join(ev.failure_information))).upper()
     status = _status_value(ev.final_verification_evidence)
-    return "REGRESSION" in text.upper() or "REGRESSION" in status or bool(ev.final_verification_evidence and ev.final_verification_evidence.get("regression_status") in ("REGRESSION_DETECTED", "FAILED"))
+    regression_status = str(ev.final_verification_evidence.get("regression_status", "")).upper() if ev.final_verification_evidence else ""
+    return any(token in text for token in ("REGRESSION_DETECTED", "REGRESSION_FAILED")) or status in ("REGRESSION_DETECTED", "REGRESSION_FAILED") or regression_status in ("REGRESSION_DETECTED", "REGRESSION_FAILED")
 
 
 def _evaluation_status(run: BenchmarkTaskRun, final_verification: str) -> EvaluationStatus | None:
@@ -262,7 +278,7 @@ def _count(runs: Sequence[BenchmarkTaskRun], status: BenchmarkTaskStatus) -> int
     return sum(1 for run in runs if run.status is status)
 
 
-def collect_benchmark_metrics(benchmark_result: BenchmarkResult, tasks: Sequence[EvaluationTask] | None = None) -> "BenchmarkMetrics":
+def collect_benchmark_metrics(benchmark_result: BenchmarkResult, tasks: Sequence[EvaluationTask] | None = None, *, benchmark_score: BenchmarkScore | None = None) -> "BenchmarkMetrics":
     """Compute all core metrics from a completed benchmark result.
 
     The optional ``tasks`` sequence supplies category/difficulty labels and
@@ -275,7 +291,12 @@ def collect_benchmark_metrics(benchmark_result: BenchmarkResult, tasks: Sequence
     task_map: dict[str, EvaluationTask] = {}
     if tasks is not None:
         task_map = {task.task_id: task for task in tasks}
-    metrics = TaskMetricsCollection(benchmark_result, task_map)
+    score_map = {
+        item.task_id: item
+        for item in (benchmark_score.task_scores if benchmark_score is not None else ())
+        if isinstance(item, TaskScore)
+    }
+    metrics = TaskMetricsCollection(benchmark_result, task_map, score_map)
     eligible = _eligible_runs(runs)
     excluded = tuple(run for run in runs if run.status is BenchmarkTaskStatus.SKIPPED)
     exclusion_reasons = ("skipped because benchmark terminated before task started",) if excluded else ()
@@ -328,20 +349,20 @@ def _core_metrics(
     def rate(numerator: int, denominator: int) -> tuple[float | None, MetricStatus]:
         if denominator <= 0:
             return None, MetricStatus.UNAVAILABLE
-        return numerator / denominator, MetricStatus.PASS
+        return numerator / denominator, MetricStatus.AVAILABLE
 
     value, status = rate(summary.completed_tasks, eligible)
     metric(MetricName.TASK_SUCCESS_RATE, value, summary.completed_tasks, eligible, status, ("task_status",))
     value, status = rate(summary.completed_tasks, total)
     metric(MetricName.TASK_COMPLETION_RATE, value, summary.completed_tasks, total, status, ("task_status",))
-    test_value, test_status = metrics.test_pass_rate()
-    criterion_value, criterion_status = metrics.criterion_satisfaction_rate()
-    final_value, final_status = metrics.final_verification_rate()
-    regression_value, regression_status = metrics.regression_free_rate()
-    metric(MetricName.TEST_PASS_RATE, test_value, None, max(eligible, 0), test_status)
-    metric(MetricName.CRITERION_SATISFACTION_RATE, criterion_value, None, max(eligible, 0), criterion_status)
-    metric(MetricName.FINAL_VERIFICATION_RATE, final_value, None, max(eligible, 0), final_status)
-    metric(MetricName.REGRESSION_FREE_RATE, regression_value, None, max(eligible, 0), regression_status)
+    test_value, test_status, test_numerator, test_denominator = metrics.test_pass_rate_details()
+    criterion_value, criterion_status, criterion_numerator, criterion_denominator = metrics.criterion_satisfaction_details()
+    final_value, final_status, final_numerator, final_denominator = metrics.final_verification_details()
+    regression_value, regression_status, regression_numerator, regression_denominator = metrics.regression_free_details()
+    metric(MetricName.TEST_PASS_RATE, test_value, test_numerator, test_denominator, test_status)
+    metric(MetricName.CRITERION_SATISFACTION_RATE, criterion_value, criterion_numerator, criterion_denominator, criterion_status)
+    metric(MetricName.FINAL_VERIFICATION_RATE, final_value, final_numerator, final_denominator, final_status)
+    metric(MetricName.REGRESSION_FREE_RATE, regression_value, regression_numerator, regression_denominator, regression_status)
     value, status = rate(summary.failed_tasks, eligible)
     metric(MetricName.FAILURE_RATE, value, summary.failed_tasks, eligible, status, ("task_status",))
     value, status = rate(summary.blocked_tasks, eligible)
@@ -381,16 +402,17 @@ def _core_metrics(
 class TaskMetricsCollection:
     """Derives per-task metric evidence and aggregate breakdowns deterministically."""
 
-    def __init__(self, result: BenchmarkResult, task_map: dict[str, EvaluationTask]) -> None:
-        self.per_task: tuple[TaskMetrics, ...] = tuple(self._from_run(run, task_map.get(run.task_id)) for run in sorted(result.task_runs, key=lambda run: run.task_id))
+    def __init__(self, result: BenchmarkResult, task_map: dict[str, EvaluationTask], score_map: Mapping[str, TaskScore] | None = None) -> None:
+        scores = score_map or {}
+        self.per_task: tuple[TaskMetrics, ...] = tuple(self._from_run(run, task_map.get(run.task_id), scores.get(run.task_id)) for run in sorted(result.task_runs, key=lambda run: run.task_id))
         self.warnings: tuple[str, ...] = tuple(sorted({warning for item in self.per_task for warning in item.warnings}))
 
-    def _from_run(self, run: BenchmarkTaskRun, task: EvaluationTask | None) -> TaskMetrics:
+    def _from_run(self, run: BenchmarkTaskRun, task: EvaluationTask | None, task_score: TaskScore | None = None) -> TaskMetrics:
         if task is None:
             from backend_ai.evaluation.task_model import EvaluationTask
 
             task = EvaluationTask(task_id=run.task_id, title=run.task_id, description=run.task_id, version=run.task_version or "1.0", category=run.category or "UNKNOWN", difficulty=run.difficulty or "MEDIUM")
-        return _task_metrics_from_run(task, run)
+        return _task_metrics_from_run(task, run, task_score)
 
     def _group(self, key: str) -> dict[str, list[TaskMetrics]]:
         groups: dict[str, list[TaskMetrics]] = defaultdict(list)
@@ -410,7 +432,39 @@ class TaskMetricsCollection:
         if not evaluated:
             return None, MetricStatus.INSUFFICIENT_EVIDENCE
         passed = sum(1 for item in evaluated if item.tests_passed)
-        return passed / len(evaluated), MetricStatus.PASS
+        return passed / len(evaluated), MetricStatus.AVAILABLE
+
+    def test_pass_rate_details(self) -> tuple[float | None, MetricStatus, int | None, int]:
+        runs = [item for item in self.per_task if item.status not in (BenchmarkTaskStatus.SKIPPED, BenchmarkTaskStatus.UNAVAILABLE, BenchmarkTaskStatus.INFRASTRUCTURE_ERROR)]
+        evaluated = [item for item in runs if item.tests_evaluated]
+        if not evaluated:
+            return None, MetricStatus.INSUFFICIENT_EVIDENCE, None, 0
+        passed = sum(1 for item in evaluated if item.tests_passed)
+        return passed / len(evaluated), MetricStatus.AVAILABLE, passed, len(evaluated)
+
+    def criterion_satisfaction_details(self) -> tuple[float | None, MetricStatus, int | None, int]:
+        runs = [item for item in self.per_task if item.status is not BenchmarkTaskStatus.SKIPPED]
+        denominator = sum(item.criterion_count for item in runs)
+        if denominator == 0:
+            return None, MetricStatus.INSUFFICIENT_EVIDENCE, None, 0
+        numerator = sum(item.satisfied_criteria for item in runs)
+        return numerator / denominator, MetricStatus.AVAILABLE, numerator, denominator
+
+    def final_verification_details(self) -> tuple[float | None, MetricStatus, int | None, int]:
+        required = [item for item in self.per_task if item.final_verification_required]
+        if not required:
+            return None, MetricStatus.NOT_APPLICABLE, None, 0
+        numerator = sum(1 for item in required if item.final_verification_passed)
+        return numerator / len(required), MetricStatus.AVAILABLE, numerator, len(required)
+
+    def regression_free_details(self) -> tuple[float | None, MetricStatus, int | None, int]:
+        runs = [item for item in self.per_task if item.status is not BenchmarkTaskStatus.SKIPPED]
+        if not runs:
+            return None, MetricStatus.UNAVAILABLE, None, 0
+        if any(not item.regression_evidence_available for item in runs):
+            return None, MetricStatus.INSUFFICIENT_EVIDENCE, None, len(runs)
+        numerator = sum(1 for item in runs if item.regression_free)
+        return numerator / len(runs), MetricStatus.AVAILABLE, numerator, len(runs)
 
     def criterion_satisfaction_rate(self) -> tuple[float | None, MetricStatus]:
         runs = [item for item in self.per_task if item.status not in (BenchmarkTaskStatus.SKIPPED,)]
@@ -418,47 +472,42 @@ class TaskMetricsCollection:
         if criteria_total == 0:
             return None, MetricStatus.INSUFFICIENT_EVIDENCE
         satisfied = sum(item.satisfied_criteria for item in runs)
-        return satisfied / criteria_total, MetricStatus.PASS
+        return satisfied / criteria_total, MetricStatus.AVAILABLE
 
     def final_verification_rate(self) -> tuple[float | None, MetricStatus]:
         required = [item for item in self.per_task if item.final_verification_required]
         if not required:
             return None, MetricStatus.NOT_APPLICABLE
         passed = sum(1 for item in required if item.final_verification_passed)
-        return passed / len(required), MetricStatus.PASS
+        return passed / len(required), MetricStatus.AVAILABLE
 
     def regression_free_rate(self) -> tuple[float | None, MetricStatus]:
         runs = [item for item in self.per_task if item.status not in (BenchmarkTaskStatus.SKIPPED,)]
         if not runs:
             return None, MetricStatus.UNAVAILABLE
+        if any(not item.regression_evidence_available for item in runs):
+            return None, MetricStatus.INSUFFICIENT_EVIDENCE
         free = sum(1 for item in runs if item.regression_free)
-        return free / len(runs), MetricStatus.PASS
+        return free / len(runs), MetricStatus.AVAILABLE
 
     def average_task_score(self) -> tuple[float | None, MetricStatus]:
-        scored = [item for item in self.per_task if item.evaluation_status not in (None, EvaluationStatus.UNAVAILABLE)]
+        scored = [item for item in self.per_task if item.score is not None]
         if not scored:
             return None, MetricStatus.INSUFFICIENT_EVIDENCE
-        total = 0.0
-        for item in scored:
-            if item.evaluation_status is EvaluationStatus.VERIFIED:
-                total += 1.0
-            elif item.evaluation_status is EvaluationStatus.PASS:
-                total += 0.5
-            else:
-                total += 0.0
-        return total / len(scored), MetricStatus.PASS
+        total = sum(item.score for item in scored if item.score is not None)
+        return total / len(scored), MetricStatus.AVAILABLE
 
     def average_duration(self) -> tuple[float | None, MetricStatus]:
         durations = self._positive_durations()
         if not durations:
             return None, MetricStatus.INSUFFICIENT_EVIDENCE
-        return sum(durations) / len(durations), MetricStatus.PASS
+        return sum(durations) / len(durations), MetricStatus.AVAILABLE
 
     def median_duration(self) -> tuple[float | None, MetricStatus]:
         durations = self._positive_durations()
         if len(durations) < 2:
             return None, MetricStatus.INSUFFICIENT_EVIDENCE
-        return float(median(durations)), MetricStatus.PASS
+        return float(median(durations)), MetricStatus.AVAILABLE
 
     def _positive_durations(self) -> list[float]:
         return [item.duration_seconds for item in self.per_task if item.duration_seconds > 0]
@@ -484,7 +533,7 @@ class TaskMetricsCollection:
                 values.append(float(value))
         if not values:
             return None, MetricStatus.INSUFFICIENT_EVIDENCE
-        return sum(values) / len(values), MetricStatus.PASS
+        return sum(values) / len(values), MetricStatus.AVAILABLE
 
 
 @dataclass(frozen=True, slots=True)
@@ -531,15 +580,9 @@ def _category_rates(tasks: Sequence[TaskMetrics]) -> tuple[float | None, float |
     success_rate = success / len(eligible) if eligible else None
     evaluated = [item for item in eligible if item.tests_evaluated]
     test_rate = sum(1 for item in evaluated if item.tests_passed) / len(evaluated) if evaluated else None
-    scored = [item for item in eligible if item.evaluation_status not in (None, EvaluationStatus.UNAVAILABLE)]
+    scored = [item for item in eligible if item.score is not None]
     if scored:
-        total = 0.0
-        for item in scored:
-            if item.evaluation_status is EvaluationStatus.VERIFIED:
-                total += 1.0
-            elif item.evaluation_status is EvaluationStatus.PASS:
-                total += 0.5
-        average = total / len(scored)
+        average = sum(item.score for item in scored if item.score is not None) / len(scored)
     else:
         average = None
     return success_rate, test_rate, average
@@ -595,7 +638,7 @@ def collect_metrics(result: BenchmarkResult, tasks: Sequence[EvaluationTask] | N
     rules.
     """
 
-    collected = collect_benchmark_metrics(result, tasks)
+    collected = collect_benchmark_metrics(result, tasks, benchmark_score=benchmark_score)
     if benchmark_score is None:
         return collected
     return _merge_score(collected, benchmark_score)
@@ -628,7 +671,7 @@ def _merge_score(collected: BenchmarkMetrics, score: BenchmarkScore) -> Benchmar
                 dimension_score,
                 eligible,
                 eligible,
-                MetricStatus.PASS if eligible else MetricStatus.UNAVAILABLE,
+                MetricStatus.AVAILABLE if eligible else MetricStatus.UNAVAILABLE,
                 len(collected.task_metrics),
                 eligible,
                 0,
