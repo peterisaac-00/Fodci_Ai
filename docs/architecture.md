@@ -2032,3 +2032,36 @@ The checkpoint fingerprint is computed from the exact copied checkpoint bytes. T
 `ModelArtifactRegistry` is a local JSON index with atomic replacement and digest-based stale-writer conflict protection. It stores unique model IDs and unique model versions, artifact directory, artifact fingerprint, and an explicit status. It can list entries, reload them, load/verify referenced artifacts, and expose optional current candidate and current official pointers. Registration alone never changes either pointer. Candidate and official pointer changes are explicit operations, with no automatic promotion path in Phase 11.4. Official model acceptance remains a later responsibility.
 
 No new CLI command was added because the existing `fodci` CLI is the normal interactive Agent runtime and does not provide a model-management command architecture. The Model Artifact API is available directly for offline developer workflows and integrates with Phase 11.3 through `FineTuningRunResult.create_model_artifact(...)`. AgentLoop, tools, inference, model architecture, checkpoint weights, training behavior, benchmark infrastructure, and acceptance policy remain otherwise unchanged.
+
+
+## Phase 11.5 — Benchmark
+
+Phase 11.5 is an evaluation-only layer over the existing bounded `BenchmarkRunner`:
+
+```text
+BenchmarkDataset
+        ↓
+BenchmarkComparisonRunner
+        ├── BenchmarkModelSpec(base)
+        └── BenchmarkModelSpec(candidate)
+                ↓
+BenchmarkRuntimeFactory
+                ↓
+existing BenchmarkRunner + isolated temporary workspace
+                ↓
+BenchmarkTaskResult / BenchmarkAggregate
+                ↓
+BenchmarkComparison + report
+```
+
+`BenchmarkDataset` is a dedicated, versioned, benchmark-only collection of immutable `EvaluationTask` definitions. It is not a `TrainingDatasetArtifact`, is not passed to `FineTuningRunner`, and has its own canonical SHA-256 fingerprint. Optional Phase 11.2 training fingerprints and source record IDs are retained for contamination checks. A matching dataset fingerprint or overlapping source record IDs invalidates execution instead of being silently ignored.
+
+`BenchmarkProtocolConfig` is the host-controlled fair-comparison contract. It records seed, temperature, max tokens, max iterations, timeout, system prompt version, Agent version, tool version, runs per task, deterministic mode, and raw-run store path. `BenchmarkComparisonRunner` creates separate runtime adapters for Base and Candidate while passing the same dataset, fixture provider, `BenchmarkConfig`, and protocol values to both arms. The default Fodci runtime is the existing `AutonomousToolLoopBenchmarkRuntime` with `ToolRegistry.default()`, not a new mutable tool system.
+
+`BenchmarkModelSpec` preserves exact model identity. Base models can be loaded from a checkpoint through the existing `ModelIdentity`; Candidates can be loaded from a verified Phase 11.4 `ModelArtifact`, preserving artifact ID and artifact fingerprint. A benchmark cannot run with a missing checkpoint, invalid artifact, or identical Base/Candidate model version.
+
+Each arm uses the existing sequential, bounded, isolated-workspace `BenchmarkRunner`. It records raw task evidence before metric aggregation. The new `BenchmarkTaskResult` retains task ID, category, difficulty, status, success, attempts, tests passed/failed/total, tool calls and success/failure counts, recovery state, duration, final state, and failure reason/errors. `BenchmarkAggregate` derives Task Success Rate, Test Pass Rate, Tool-Use Success Rate, Error Recovery Rate, Average Attempts, Failure Rate, and deterministic category/difficulty slices.
+
+`BenchmarkComparison` stores absolute Base/Candidate values, signed deltas, direction-aware classifications, task counts, dataset/model/run identities, warnings, and a comparison status. `render_comparison_report()` presents overall, category, and difficulty tables with absolute values and deltas. The benchmark does not infer model acceptance from these results and does not implement promotion, regression gates, or production replacement. Phase 11.6 consumes the raw runs and comparison evidence.
+
+`BenchmarkRunStore` and `BenchmarkComparisonStore` use local canonical JSON, atomic replacement, digest-based stale-writer detection, and immutable IDs. The stores preserve raw evidence and metrics rather than only a summary score. The explicit developer entry point is `scripts/run_phase115_benchmark.py`; the existing interactive `fodci` CLI remains unchanged because it is the Agent runtime boundary rather than an argument-based model-management CLI.

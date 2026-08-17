@@ -1241,3 +1241,57 @@ The artifact fingerprint is SHA-256 over canonical metadata identity and provena
 `ModelArtifactRegistry` is a local atomic JSON index. It answers which artifacts exist, their model IDs/versions/locations/fingerprints, and optional current candidate or current official pointers. Model IDs and model versions cannot collide, registry writes use digest-based stale-writer protection and atomic replacement, and registry entries can reload and verify the referenced artifact. Registration does not automatically set a candidate or official model. `set_current_candidate()` and `set_current_official()` are explicit administrative operations; official promotion belongs to Phase 11.6.
 
 The public implementation is in `src/backend_ai/model_artifact.py`. It does not modify AgentLoop, `ToolRegistry.default()`, the normal `fodci` CLI, inference behavior, model architecture, checkpoint weights, or evaluation/acceptance logic. The artifact is a traceable candidate model record, not an official Fodci model.
+
+
+## Phase 11.5 — Benchmark
+
+Phase 11.5 provides a reproducible Base-vs-Candidate benchmark that measures actual bounded Backend Engineering task execution rather than training loss or subjective response quality. It is independent of training and never modifies model weights, benchmark tasks, training data, the source repository, or Agent runtime configuration.
+
+```text
+Versioned BenchmarkDataset
+        ↓
+Same tasks + fixtures + protocol
+        ├── Base Model
+        └── Candidate Model
+                ↓
+Raw task evidence
+                ↓
+Metrics and category/difficulty aggregates
+                ↓
+Absolute values + deltas + comparison report
+```
+
+The dedicated benchmark manifest is `src/backend_ai/evaluation/datasets/phase115_backend_benchmark.json`. It is marked `benchmark_only`, uses `benchmark-v1` / `backend-v1`, contains stable `EvaluationTask` IDs, and is fingerprinted independently from the Phase 11.2 training artifact. The loader validates every task through the existing `EvaluationTaskValidator`. The dataset carries optional training fingerprints and source record IDs; a supplied training fingerprint or source-ID overlap invalidates a run before execution.
+
+Base and Candidate receive the same ordered tasks, project fixture materialization, read-only default tool registry, timeout bounds, test/evidence rules, seed, temperature, token budget, iteration budget, system prompt version, Agent version, and tool version. Each task runs in a separate temporary workspace through the existing bounded `BenchmarkRunner`; the real source repository is never modified. Runtime adapters are created independently for each model arm, so one arm cannot access the other arm’s state.
+
+`BenchmarkModelSpec` uses the Phase 11.4 identity system. A base model is identified by model version, checkpoint identity, tokenizer version, and SHA-256 checkpoint fingerprint. A Candidate can be loaded from an immutable `ModelArtifact`, preserving model artifact ID and artifact fingerprint. A candidate checkpoint that does not exist or an invalid artifact fails clearly; no fake result is created.
+
+Raw results preserve task-level evidence including task ID, category, difficulty, status, success, attempts, tests passed/failed/total, tool calls and their success/failure counts, recovery encounter/success, duration, final state, and failure information. Aggregate results include Task Success Rate, Test Pass Rate, Tool-Use Success Rate, Error Recovery Rate, Average Attempts, Failure Rate, category-level metrics, and difficulty-level metrics. Missing evidence remains `N/A` rather than being converted into success.
+
+`BenchmarkComparison` reports absolute Base and Candidate values plus deltas and direction-aware classifications for each metric. The report includes overall, category, and difficulty sections and a clear `IMPROVED`, `REGRESSED`, `EQUIVALENT`, or `INCONCLUSIVE` evidence status. It does not decide model acceptance or production promotion; Phase 11.6 consumes the persisted evidence and makes that policy decision.
+
+Benchmark runs and comparisons are stored in separate local atomic JSON stores:
+
+```text
+artifacts/evaluation/benchmark_runs.json
+artifacts/evaluation/benchmark_comparisons.json
+```
+
+Run IDs and comparison IDs are immutable. Reusing an ID with different results raises a conflict, while identical replays are idempotent. The persisted records include benchmark version, dataset fingerprint, exact model identities, protocol configuration, environment, timestamps, raw benchmark evidence, metrics, and comparison deltas.
+
+The explicit developer CLI is `scripts/run_phase115_benchmark.py`. The normal `fodci` interactive CLI is intentionally not redesigned because its existing command architecture is slash-command based and is the Agent runtime boundary. A real comparison requires an existing Base checkpoint and an existing Candidate checkpoint or Phase 11.4 Model Artifact:
+
+```text
+python scripts/run_phase115_benchmark.py \
+  --base-checkpoint artifacts/checkpoints/fodci-tiny-v1.pt \
+  --candidate-artifact artifacts/models/candidate-v1 \
+  --candidate-version candidate-v1 \
+  --comparison-id candidate-v1-backend-v1 \
+  --timeout-seconds 60 \
+  --runs-store artifacts/evaluation/benchmark_runs.json \
+  --comparison-store artifacts/evaluation/benchmark_comparisons.json \
+  --report artifacts/evaluation/candidate-v1-backend-v1.txt
+```
+
+Phase 11.5 includes deterministic mock-model integration coverage so the benchmark infrastructure can be verified without expensive inference. The repository currently has no committed Phase 11.4 production Candidate artifact, so no real Base-vs-Candidate score is claimed until a real Candidate artifact is supplied. A smoke test proves the execution, evidence, metrics, persistence, and report path; it does not fabricate a production benchmark result.

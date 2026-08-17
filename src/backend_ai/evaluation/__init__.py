@@ -60,6 +60,16 @@ from backend_ai.evaluation.baseline import (
     BaselineTaskResult, ModelIdentity, create_current_model_runtime,
     load_evaluation_dataset, model_identity_from_checkpoint,
 )
+from backend_ai.evaluation.benchmark import (
+    BENCHMARK_DATASET_FORMAT, BENCHMARK_DATASET_VERSION, BENCHMARK_FORMAT,
+    BENCHMARK_PROTOCOL_VERSION, BENCHMARK_VERSION, BenchmarkAggregate,
+    BenchmarkComparison, BenchmarkComparisonRunner, BenchmarkComparisonStore,
+    BenchmarkContaminationError, BenchmarkDataset, BenchmarkError, BenchmarkGroupComparison,
+    BenchmarkModelSpec, BenchmarkProtocolConfig, BenchmarkRun, BenchmarkRunStore,
+    BenchmarkRuntimeFactory, BenchmarkStatus as Phase115BenchmarkStatus, BenchmarkTaskResult,
+    FodciBenchmarkRuntimeFactory, MetricDelta, MetricDirection, build_comparison,
+    compute_benchmark_dataset_fingerprint, load_benchmark_dataset, render_comparison_report,
+)
 from backend_ai.evaluation.task_model import (
     AllowedScope, ChangeType, EvaluationConstraint, EvaluationDifficulty,
     EvaluationTask, EvaluationTaskCategory, EvaluationTaskValidationResult,
@@ -99,6 +109,7 @@ __all__ = [
     "RegressionVerdict", "RegressionEvaluationResult", "evaluate_regression",
     "BenchmarkHealth", "BenchmarkValidationResult", "BenchmarkValidator",
     "BenchmarkValidationIssue", "IssueLevel", "ValidationStatus", "validate_benchmark",
+    "BENCHMARK_DATASET_FORMAT", "BENCHMARK_DATASET_VERSION", "BENCHMARK_FORMAT", "BENCHMARK_PROTOCOL_VERSION", "BENCHMARK_VERSION", "BenchmarkAggregate", "BenchmarkComparison", "BenchmarkComparisonRunner", "BenchmarkComparisonStore", "BenchmarkContaminationError", "BenchmarkDataset", "BenchmarkError", "BenchmarkGroupComparison", "BenchmarkModelSpec", "BenchmarkProtocolConfig", "BenchmarkRun", "BenchmarkRunStore", "BenchmarkRuntimeFactory", "BenchmarkStatus", "BenchmarkTaskResult", "FodciBenchmarkRuntimeFactory", "MetricDelta", "MetricDirection", "Phase115BenchmarkStatus", "build_comparison", "compute_benchmark_dataset_fingerprint", "load_benchmark_dataset", "render_comparison_report",
     "BASELINE_DATASET_FORMAT", "BASELINE_DATASET_VERSION", "BASELINE_EVALUATION_FORMAT",
     "BASELINE_EVALUATION_PROTOCOL_VERSION", "AutonomousToolLoopBenchmarkRuntime",
     "BaselineAggregateReport", "BaselineEvaluationConfig", "BaselineEvaluationConflictError",
