@@ -1550,3 +1550,67 @@ Per-source result limits, total result limits, and actual rendered context-chara
 Autonomous Tool Loop integration is explicit through `AutonomousLoopRequest.memory_retrieval_request`. When present, retrieval runs before prompt generation and is included as bounded source-labelled data-only context. The loop stores the retrieval result in state/result for observability. It does not query all sources by default, does not add tools, does not change permissions or budgets, and does not persist or mutate memory through retrieval.
 
 Embeddings, vector databases, semantic search, RAG, external search, external LLM retrieval, ML ranking, automatic memory conversion, new storage systems, new tools, and new execution permissions remain outside Phase 9.5.
+
+## Phase 9.6 — Memory Quality & Governance
+
+Phase 9.6 adds a deterministic governance layer after the Phase 9.5 candidate adapters and before final context rendering:
+
+```text
+Short-Term Memory snapshot
+Project Memory snapshot
+Long-Term Memory owner
+Experience Records owner
+              ↓
+       Memory Retrieval
+              ↓
+       candidate items
+              ↓
+       Memory Governance
+       ├── structural validation
+       ├── source-confidence policy
+       ├── source-aware verification
+       ├── freshness/staleness
+       ├── provenance validation
+       ├── exact duplicate identity
+       ├── structured conflict groups
+       ├── nested secret detection
+       └── explicit eligibility decision
+              ↓
+ deterministic ranking and deduplication
+              ↓
+ actual rendered context budget
+              ↓
+ source-labelled trusted context
+```
+
+`MemoryGovernance` is an orchestration-free decision service over normalized `MemoryRetrievalItem` values. `GovernancePolicy` sets the minimum confidence, stale/conflict/duplicate behavior, provenance requirement, archived-evidence exception, and candidate bound. `FreshnessPolicy` has separate Long-Term Memory and Experience Record windows; Project Memory and Short-Term Memory are not assigned generic retention clocks. All decisions are immutable and include `MemoryQualityAssessment.reasons`.
+
+`MemoryQualityAssessment` records source, stable ID, project identity, source confidence, `QualityStatus`, `VerificationStatus`, `FreshnessStatus`, `ProvenanceStatus`, `ConflictStatus`, `DuplicateStatus`, `SecurityStatus`, `EligibilityStatus`, `RetentionAction`, timestamp, and reasons. A candidate can be high confidence and still be ineligible when invalidated, conflicted, duplicated, stale under policy, malformed, missing persistent provenance, or unsafe. Experience success is treated as verified historical evidence only when the existing verification object exists; it is never promoted automatically to universal knowledge.
+
+`GovernanceEvaluation` first groups exact Unicode-normalized content and structured conflict identities, then assesses every bounded candidate. Duplicate canonical selection is deterministic and uses confidence, verification metadata, source priority, timestamp, stable ID, and input position. Project conflicts use project identity plus fact key; Long-Term conflicts use category plus explicit topic/key/subject metadata, matching the existing Long-Term Memory conflict convention. Distinct similar content is not merged. `GovernanceAudit` is read-only and aggregates eligible, fresh, aging, stale, invalidated, duplicate, conflict, missing-provenance, security, malformed, and deterministic finding counts.
+
+The retrieval flow now uses governance before ranking and final context:
+
+```text
+MemoryRetrievalRequest
+          ↓
+source adapters and source diagnostics
+          ↓
+MemoryGovernance.evaluate_candidates()
+          ↓
+reject ineligible candidates
+          ↓
+existing deterministic lexical ranking
+          ↓
+existing exact content deduplication
+          ↓
+existing per-source/result/context budgets
+          ↓
+MemoryRetrievalResult with governance audit and assessments
+```
+
+`MemoryRetrievalResult` retains the Phase 9.5 items, source-labelled context, diagnostics, queried sources, context character count, and deduplication count. It additionally exposes the governance audit and per-candidate assessments. `AutonomousToolLoop` remains unchanged in its execution authority: it receives only the governed context through the existing explicit `memory_retrieval_request`, and governance cannot create tools, execute commands, change policies, bypass budgets, or interpret memory content as instructions.
+
+Invalidation is explicit and delegates to existing owner APIs. Project Memory uses `invalidate_fact`; Long-Term Memory uses `update(status="invalidated")` with redacted governance reason metadata; Experience Records use `ExperienceRecords.invalidate`, preserving lifecycle, outcome, attempts, verification, and historical content while marking governance invalidation metadata. No normal retrieval path includes invalidated entries, and no invalidation physically deletes historical evidence. Short-Term Memory has no persistent invalidation API and is therefore not mutated by governance.
+
+Phase 9.6 does not add embeddings, semantic similarity, vector databases, RAG, external APIs, network validation, LLM judging, training, fine-tuning, model-weight updates, dataset generation, cloud memory, background agents, automatic promotion, new tools, or new execution permissions.

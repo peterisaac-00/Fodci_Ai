@@ -11,6 +11,7 @@ from types import MappingProxyType
 from typing import Any
 
 from backend_ai.agent.experience_records import ExperienceRecord, ExperienceRecords
+from backend_ai.agent.memory_governance import GovernanceAudit, GovernanceEvaluation, GovernancePolicy, MemoryGovernance
 from backend_ai.agent.long_term_memory import LongTermMemory, LongTermMemoryCategory, LongTermMemoryConfidence, LongTermMemoryStatus
 from backend_ai.agent.project_memory import FactConfidence, FactStatus, ProjectMemorySnapshot
 from backend_ai.agent.short_term_memory import MemoryImportance, MemorySnapshot, _redact_text
@@ -67,6 +68,8 @@ class MemoryRetrievalRequest:
     max_results: int = 32
     max_results_per_source: int = 16
     max_total_characters: int = 12_288
+    governance_policy: GovernancePolicy | None = None
+    governance_as_of: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.query, str) or not self.query.strip():
@@ -86,6 +89,10 @@ class MemoryRetrievalRequest:
             raise MemoryRetrievalError("category must contain text when provided")
         if self.status is not None and (not isinstance(self.status, str) or not self.status.strip()):
             raise MemoryRetrievalError("status must contain text when provided")
+        if self.governance_policy is not None and not isinstance(self.governance_policy, GovernancePolicy):
+            raise MemoryRetrievalError("governance_policy must be GovernancePolicy when provided")
+        if self.governance_as_of is not None and (not isinstance(self.governance_as_of, str) or not self.governance_as_of.strip()):
+            raise MemoryRetrievalError("governance_as_of must contain text when provided")
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,13 +151,18 @@ class MemoryRetrievalResult:
     queried_sources: tuple[RetrievalSource, ...]
     context_characters: int
     deduplicated_count: int
+    governance_audit: GovernanceAudit | None = None
+    governance_assessments: tuple[Any, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        return {"query": self.query, "items": [item.to_dict() for item in self.items], "context": self.context, "diagnostics": [item.to_dict() for item in self.diagnostics], "queried_sources": [item.value for item in self.queried_sources], "context_characters": self.context_characters, "deduplicated_count": self.deduplicated_count}
+        return {"query": self.query, "items": [item.to_dict() for item in self.items], "context": self.context, "diagnostics": [item.to_dict() for item in self.diagnostics], "queried_sources": [item.value for item in self.queried_sources], "context_characters": self.context_characters, "deduplicated_count": self.deduplicated_count, "governance_audit": self.governance_audit.to_dict() if self.governance_audit else None, "governance_assessments": [item.to_dict() for item in self.governance_assessments]}
 
 
 class MemoryRetrieval:
     """Explicit orchestration layer; it never reads memory storage files."""
+
+    def __init__(self, *, governance: MemoryGovernance | None = None) -> None:
+        self.governance = governance or MemoryGovernance()
 
     def retrieve(self, request: MemoryRetrievalRequest) -> MemoryRetrievalResult:
         if not isinstance(request, MemoryRetrievalRequest):
@@ -166,15 +178,22 @@ class MemoryRetrieval:
                 diagnostics.append(RetrievalDiagnostic(source, "AVAILABLE", candidate_count=len(candidates), filtered_count=len(candidates) - len(filtered), returned_count=len(ranked)))
             except Exception as exc:  # source failure is isolated and observable
                 diagnostics.append(RetrievalDiagnostic(source, "FAILED", _safe_message(exc)))
+        governance = self.governance if request.governance_policy is None else MemoryGovernance(policy=request.governance_policy)
+        governance_evaluation = governance.evaluate_candidates(
+            tuple(all_items),
+            as_of=request.governance_as_of,
+            explicit_status=request.status,
+        )
+        governed_items = list(governance_evaluation.eligible_items)
         deduped: list[MemoryRetrievalItem] = []
         seen: set[str] = set()
-        for item in sorted(all_items, key=lambda candidate: self._ranking_key(candidate, request.query), reverse=True):
+        for item in sorted(governed_items, key=lambda candidate: self._ranking_key(candidate, request.query), reverse=True):
             key = item.normalized_content
             if key in seen:
                 continue
             seen.add(key)
             deduped.append(item)
-        deduplicated_count = len(all_items) - len(deduped)
+        deduplicated_count = governance_evaluation.deduplicated_count + (len(governed_items) - len(deduped))
         selected: list[MemoryRetrievalItem] = []
         per_source: dict[RetrievalSource, int] = {}
         total_chars = 0
@@ -195,7 +214,7 @@ class MemoryRetrieval:
             total_chars = len(candidate_context)
         context = self.render_context(tuple(selected), max_total_characters=request.max_total_characters)
         diagnostics = tuple(replace_diagnostic(item, returned_count=sum(1 for result in selected if result.source is item.source), deduplicated_count=deduplicated_count if item.status == "AVAILABLE" else 0) for item in diagnostics)
-        return MemoryRetrievalResult(request.query, tuple(selected), context, diagnostics, request.sources, len(context), deduplicated_count)
+        return MemoryRetrievalResult(request.query, tuple(selected), context, diagnostics, request.sources, len(context), deduplicated_count, governance_evaluation.audit, governance_evaluation.assessments)
 
     @staticmethod
     def render_context(items: Sequence[MemoryRetrievalItem], *, max_total_characters: int = 12_288) -> str:
@@ -242,7 +261,7 @@ class MemoryRetrieval:
                 content = value.summary
                 metadata = {"kind": kind, "category": value.category, "operation": value.operation, "information_kind": value.information_kind.value}
                 status = value.status or snapshot.status.value
-            items.append(MemoryRetrievalItem(RetrievalSource.SHORT_TERM_MEMORY, f"{snapshot.task_id}:st-{index:04d}", _redact_text(content), 0.0, _importance_confidence(value), status, None, metadata, "current task/session context", snapshot.project_id))
+            items.append(MemoryRetrievalItem(RetrievalSource.SHORT_TERM_MEMORY, f"{snapshot.task_id}:st-{index:04d}", _redact_text(content), 0.0, _importance_confidence(value) if not isinstance(value, str) else 2, status, None, metadata, "current task/session context", snapshot.project_id))
         return items
 
     def _project(self, snapshot: ProjectMemorySnapshot | None, request: MemoryRetrievalRequest) -> list[MemoryRetrievalItem]:
@@ -253,7 +272,7 @@ class MemoryRetrieval:
         if request.project_root is not None and snapshot.identity.project_root != request.project_root:
             raise MemoryRetrievalError("project root does not match request")
         facts = snapshot.active_facts if request.status is None else tuple(snapshot.facts) + tuple(snapshot.conflicts)
-        return [MemoryRetrievalItem(RetrievalSource.PROJECT_MEMORY, fact.fact_id, _fact_content(fact), 0.0, int(fact.confidence), fact.status.value, None, {"key": fact.key, "category": fact.category.value, "source": fact.source.value, "evidence_count": len(fact.evidence)}, "verified project fact", snapshot.identity.project_id) for fact in facts]
+        return [MemoryRetrievalItem(RetrievalSource.PROJECT_MEMORY, fact.fact_id, _fact_content(fact), 0.0, int(fact.confidence), fact.status.value, None, {"key": fact.key, "category": fact.category.value, "source": fact.source.value, "evidence_count": len(fact.evidence), "conflict_with": list(fact.conflict_with)}, "verified project fact", snapshot.identity.project_id) for fact in facts]
 
     def _long_term(self, memory: LongTermMemory | None, request: MemoryRetrievalRequest) -> list[MemoryRetrievalItem]:
         if memory is None:
@@ -263,7 +282,7 @@ class MemoryRetrieval:
             entries = memory.search(request.query, category=category, limit=request.max_results_per_source)
         else:
             entries = memory.list(category=category, status=request.status)
-        return [MemoryRetrievalItem(RetrievalSource.LONG_TERM_MEMORY, entry.entry_id, entry.content, 0.0, int(entry.confidence), entry.status.value, entry.updated_at, {"category": entry.category.value, "source": entry.source.value, "access_count": entry.access_count, "conflict_with": list(entry.conflict_with)}, "global reusable knowledge", None) for entry in entries]
+        return [MemoryRetrievalItem(RetrievalSource.LONG_TERM_MEMORY, entry.entry_id, entry.content, 0.0, int(entry.confidence), entry.status.value, entry.updated_at, {"category": entry.category.value, "source": entry.source.value, "topic": entry.metadata.get("topic") or entry.metadata.get("key") or entry.metadata.get("subject"), "access_count": entry.access_count, "conflict_with": list(entry.conflict_with)}, "global reusable knowledge", None) for entry in entries]
 
     def _experiences(self, records: ExperienceRecords | None, request: MemoryRetrievalRequest) -> list[MemoryRetrievalItem]:
         if records is None:
@@ -272,7 +291,7 @@ class MemoryRetrieval:
         items: list[MemoryRetrievalItem] = []
         for record in experiences:
             content = _experience_content(record)
-            items.append(MemoryRetrievalItem(RetrievalSource.EXPERIENCE_RECORDS, record.experience_id, content, 0.0, _experience_confidence(record), record.status.value, record.completed_at or record.started_at, {"outcome": record.outcome.value if record.outcome else None, "attempts": len(record.attempts), "verified": record.verification is not None}, "historical execution evidence; not general knowledge", record.project_identity.project_id if record.project_identity else None))
+            items.append(MemoryRetrievalItem(RetrievalSource.EXPERIENCE_RECORDS, record.experience_id, content, 0.0, _experience_confidence(record), record.status.value, record.completed_at or record.started_at, {"outcome": record.outcome.value if record.outcome else None, "attempts": len(record.attempts), "verified": record.verification is not None, "project_root": record.project_identity.project_root if record.project_identity else None, "governance_invalidated": record.metadata.get("governance_invalidated") is True, "governance_invalidation_reason": record.metadata.get("governance_invalidation_reason")}, "historical execution evidence; not general knowledge", record.project_identity.project_id if record.project_identity else None))
         return items
 
     def _matches(self, item: MemoryRetrievalItem, request: MemoryRetrievalRequest) -> bool:

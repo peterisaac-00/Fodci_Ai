@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 9.5 complete — unified deterministic Memory Retrieval delivered; Phase 9.6+ not started.**
+> **Current status: Phase 9.6 complete — deterministic Memory Quality & Governance delivered; Phase 10+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -757,7 +757,7 @@ future model improvement
 
 That pipeline is not implemented in Phase 9.4. No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset.
 
-**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Embeddings, semantic retrieval, vector databases, RAG, dataset generation, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Embeddings, semantic retrieval, vector databases, RAG, dataset generation, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
 
 ## Phase 9.5 — unified Memory Retrieval
 
@@ -787,3 +787,60 @@ Source failures are isolated and represented in `RetrievalDiagnostic` with queri
 `AutonomousToolLoop` accepts an optional `memory_retrieval_request`. When explicitly supplied, retrieval runs before prompt generation, exposes bounded source-labelled context as data-only prompt input, and stores the normalized result in loop state and result. The loop does not query every memory source by default, does not gain new tools, does not change execution permissions or budgets, and does not persist or mutate memory through retrieval.
 
 **Phase 9.5 is deterministic retrieval only. Embeddings, vector databases, semantic search, RAG, external search APIs, external LLM retrieval, machine-learning ranking, new storage systems, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+
+## Phase 9.6 — Memory Quality & Governance
+
+Phase 9.6 adds `MemoryGovernance` as a deterministic, rule-based trust and eligibility layer above the Phase 9.5 retrieval candidates. It does not replace any memory store, create a parallel persistence system, or mutate memory merely because it was retrieved.
+
+```text
+Short-Term Memory
+Project Memory
+Long-Term Memory
+Experience Records
+        ↓
+Memory Retrieval
+        ↓
+Memory Quality & Governance
+        ↓
+Eligible / trusted context
+        ↓
+Agent
+```
+
+The public API consists of `MemoryGovernance`, `GovernancePolicy`, `FreshnessPolicy`, `MemoryQualityAssessment`, `GovernanceEvaluation`, `GovernanceAudit`, `InvalidationResult`, and explicit typed status enums. An assessment preserves source, stable identifier, project identity when available, confidence supplied by the source, verification status, freshness status, provenance status, conflict status, duplicate status, security status, eligibility, retention action, timestamp, and deterministic reasons.
+
+### Quality and confidence policy
+
+Quality is represented by explainable states: `trusted`, `acceptable`, `uncertain`, `stale`, `invalid`, `conflicted`, and `duplicate`. Source confidence is not treated as proof by itself. The default minimum source confidence is `1`; confidence `0` is uncertain and ineligible unless a caller explicitly requests an archived Long-Term Memory entry under the documented archived-evidence exception. Verified evidence can make a memory `trusted`, but it does not override invalidation, conflicts, duplicate suppression, missing provenance, or security violations.
+
+Verification is source-aware. Project facts with sufficient evidence and confidence at least `VERIFIED` are treated as verified. Long-Term Memory entries with confidence at least `VERIFIED` are considered verified evidence, while lower-confidence knowledge remains unverified. Experience Records are verified only when their existing verification object is present; successful historical outcomes are not promoted to universal truth. Short-Term Memory authoritative records are treated as verified current evidence, while derived records are partial evidence.
+
+### Freshness and staleness
+
+`FreshnessPolicy` uses explicit source-aware timestamp windows. Project Memory and Short-Term Memory use `not_applicable` freshness because their existing semantics are project-fact and current-session lifecycle semantics rather than generic retention clocks. Long-Term Memory defaults to fresh through seven days, aging through thirty days, and stale through ninety days. Experience Records default to fresh through thirty days, aging through ninety days, and stale after one year. Freshness is evaluated against an explicit `as_of` timestamp; malformed timestamps are governance failures. Stale memories are not deleted: they become ineligible by default and receive the `archive_candidate` retention action.
+
+### Invalidation and retention
+
+Invalidation is explicit. Project facts delegate to `ProjectMemory.invalidate_fact`, Long-Term Memory entries delegate to `LongTermMemory.update(status="invalidated")` while preserving an auditable reason in redacted metadata, and Experience Records use `ExperienceRecords.invalidate` to preserve their original lifecycle, outcome, attempts, and verification while recording governance invalidation metadata. Invalidated records remain historical/audit evidence but are excluded from normal governed retrieval context. Short-Term Memory has no persistent invalidation API; governance therefore reports that no approved owner mutation was applied rather than inventing one.
+
+Retention is non-destructive by default. Fresh records remain active, aging records remain retained with an aging reason, stale records are archive candidates, and invalidated, duplicate, and conflicted records are explicitly preserved for audit. Governance never silently destroys historical Experience Records.
+
+### Duplicates, conflicts, and provenance
+
+Duplicate detection uses exact Unicode-aware normalized content. It is not fuzzy or semantic. The canonical duplicate is chosen deterministically using source confidence, verification metadata, source priority, timestamp, stable ID, and input position; other copies are marked duplicate while their provenance remains available in the audit. Distinct similar wording is not merged.
+
+Conflict detection uses existing structured identity. Project facts with the same project and fact key but different normalized content are conflicting. Long-Term Memory entries with the same category and explicit topic/key/subject but different content are conflicting, matching the existing store's topic-based conflict behavior. Existing `conflict_with` metadata is also honored. Conflicting memories remain visible to audit and are not silently selected as unquestioned truth.
+
+A candidate must have a known governance source, stable memory ID, non-empty content, and sufficient timestamp provenance for persistent global or historical sources. Missing or malformed provenance makes it ineligible under the default policy. Existing memory redaction remains authoritative, and governance performs a second bounded security check over content and nested metadata.
+
+### Retrieval eligibility and audit
+
+Governance runs after candidate retrieval and before ranking and context rendering. Ineligible candidates are removed before the final source-labelled context is produced. The `MemoryRetrievalResult` now includes `governance_audit` and per-candidate `governance_assessments`, while the existing items, diagnostics, ordering, source selection, project isolation, and context budget contracts remain intact.
+
+`GovernanceAudit` is read-only and reports total inspected candidates, eligible candidates, fresh/aging/stale counts, invalidated memories, duplicates, conflicts, missing provenance, security violations, malformed entries, deterministic findings, and the complete assessment list. `explain`, `is_eligible`, `retention_evaluate`, and `audit` expose decisions without numerical scores as the only explanation.
+
+### Autonomous Tool Loop and security boundary
+
+When `memory_retrieval_request` is explicitly supplied, `AutonomousToolLoop` receives only the governance-approved, source-labelled context generated by `MemoryRetrieval`. Governance does not execute commands, read project files, call an LLM, create tools, alter tool policies, bypass execution budgets, or add execution permissions. `ToolRegistry.default()` remains read-only, and memory content cannot change safety controls.
+
+**Phase 9.6 is governance only.** Embeddings, vector databases, semantic search, RAG, external retrieval APIs, LLM-based evaluation, training, fine-tuning, model-weight updates, dataset generation, cloud/network memory, background agents, automatic promotion, automatic training-data conversion, new tools, and new execution permissions remain out of scope.

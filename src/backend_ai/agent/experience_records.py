@@ -532,6 +532,26 @@ class ExperienceRecords:
         status_value = _coerce_enum(status, ExperienceLifecycleStatus, "lifecycle status") if status is not None else None
         return tuple(item for item in sorted(self._records.values(), key=lambda record: (record.started_at, record.experience_id)) if (project_id is None or (item.project_identity and item.project_identity.project_id == project_id)) and (status_value is None or item.status is status_value) and (started_after is None or item.started_at >= started_after) and (started_before is None or item.started_at <= started_before))
 
+    def invalidate(self, experience_id: str, *, reason: str) -> ExperienceRecord:
+        """Explicitly mark historical evidence invalid while preserving the record."""
+
+        _validate_id(experience_id, "experience_id")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ExperienceRecordValidationError("invalidation reason must contain text")
+        current = self._records.get(experience_id)
+        if current is None:
+            raise ExperienceRecordValidationError("unknown experience_id")
+        metadata = _thaw_value(current.metadata)
+        metadata["governance_invalidated"] = True
+        metadata["governance_invalidation_reason"] = _safe_text(reason, self.limits.max_content_length)
+        updated = replace(current, metadata=_safe_metadata(metadata, self.limits))
+        previous = self._records.get(experience_id)
+        self._records[experience_id] = updated
+        if len(self.to_json().encode("utf-8")) > self.limits.max_total_storage_bytes:
+            self._records[experience_id] = previous  # type: ignore[assignment]
+            raise ExperienceRecordValidationError("experience collection exceeds total storage limit")
+        return updated
+
     def snapshot(self) -> ExperienceRecordsSnapshot:
         return ExperienceRecordsSnapshot(tuple(sorted(self._records.values(), key=lambda item: (item.started_at, item.experience_id))), self._load_status, self._sequence)
 
