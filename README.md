@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 10.1 complete — deterministic Experience Dataset Extraction delivered; Phase 10.2+ not started.**
+> **Current status: Phase 10.2 complete — strict versioned canonical Dataset Schema delivered; Phase 10.3+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -757,7 +757,7 @@ future model improvement
 
 That pipeline is not implemented in Phase 9.4. No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset.
 
-**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Embeddings, semantic retrieval, vector databases, RAG, dataset filtering/scoring, dataset versioning, dataset splitting, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Embeddings, semantic retrieval, vector databases, RAG, dataset filtering/scoring, quality gates, dataset release versioning, dataset splitting, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
 
 ## Phase 9.5 — unified Memory Retrieval
 
@@ -872,3 +872,37 @@ Phase 9.6 governance is consulted for the minimum extraction-time checks: persis
 Existing Experience Record redaction is reused for candidate fields and metadata. A final bounded security scan rejects prohibited secret material that cannot be safely represented, and diagnostics redact exception text. Candidate and result objects are immutable and bounded by `DatasetExtractionLimits`, while existing Experience Record resource limits remain authoritative for source storage.
 
 `DatasetExtractionResult` reports candidates, diagnostics, inspected count, extracted count, skipped count, and total derived bytes. No permanent Dataset Candidate storage, dataset version, dataset manifest, train/validation/test split, leakage detection, tokenization change, training loop, fine-tuning, checkpoint generation, model update, or automatic learning is part of Phase 10.1.
+
+## Phase 10.2 — Canonical Dataset Schema
+
+Phase 10.2 adds the strict, versioned, model-agnostic `DatasetRecord` contract after Phase 10.1 extraction:
+
+```text
+ExperienceRecord
+        ↓
+Memory Quality & Governance
+        ↓
+DatasetCandidate
+        ↓
+DatasetRecord schema 1.0
+        ↓
+Phase 10.3 filtering and quality gates
+```
+
+`DatasetCandidate` remains an intermediate extraction representation. `DatasetRecord` is the canonical schema consumed by later dataset phases; it is distinct from both `ExperienceRecord` and `DatasetCandidate`. Each record contains the explicit `format`, `schema_version="1.0"`, deterministic `record_id`, `experience_id`, original task, optional project context, structured trajectory, separate solution, verification, evaluation, strict outcome, mandatory provenance, and bounded metadata.
+
+The deterministic identity is `drec-` plus the first 24 hexadecimal characters of SHA-256 over `dataset_schema_version | experience_id | source_schema_version`. Serialization never generates a UUID or timestamp, so the same Experience Record produces the same Dataset Record identity and canonical JSON on every conversion.
+
+The trajectory preserves ordered attempts, actions, observations, errors, corrections, and an explicit `verification_events` collection. Phase 10.2 does not invent verification events that were absent from the source. Each supported nested event retains the source fields and validates identifiers, timestamps, types, unknown fields, duplicate identifiers, and bounded structure. Errors and corrections are never removed because a final outcome succeeded.
+
+`DatasetSolution` keeps `solution`, `final_result`, and `final_summary` separate. `DatasetVerification` preserves explicit test counts, status, summary, timestamp, and metadata while representing absent verification with `present=false`. `DatasetEvaluation` is independent from verification, preserves source score/status/summary/criteria/evaluator metadata, and represents missing evaluation with `present=false`. `DatasetOutcome` strictly accepts only `success`, `failure`, or `cancelled`; schema conversion never changes the historical outcome.
+
+`DatasetRecordProvenance` is mandatory and requires `source_type="experience_record"`, `experience_id`, source Experience Record schema version, source creation/completion timestamps, original status/outcome, verification presence, and optional project identity. Provenance must match the record identity and outcome. Project context is copied only from the explicit Experience Record/Candidate identity; the schema does not include arbitrary files or the full Project Memory.
+
+`DatasetRecord.from_candidate()`, `DatasetRecord.from_dict()`, and `DatasetRecord.from_json()` perform complete strict validation. Unknown fields, missing fields, wrong types, invalid enums, invalid or timezone-less timestamps, duplicate identifiers, malformed nested structures, unsupported future schema versions, invalid provenance, excessive nesting, non-finite numbers, oversized values, and prohibited secret material are rejected deterministically. `validate_dataset_record()` returns a stable validation result without silently repairing or dropping data.
+
+Canonical JSON uses UTF-8-preserving `ensure_ascii=false`, sorted keys, compact separators, stable enum values, stable timestamps, and no environment-dependent or random metadata. `to_dict()`/`to_json()` and `from_dict()`/`from_json()` provide a tested semantic round-trip. Existing Experience Record redaction remains authoritative, and the schema performs a bounded final secret check without introducing a weaker alternate security policy.
+
+`DatasetRecordLimits` bounds task length, attempts, total trajectory events, solution fields, verification bytes, evaluation bytes, metadata bytes, nesting depth, and total serialized record bytes. These limits validate schema integrity only; Phase 10.2 does not score quality or decide training usefulness.
+
+**Phase 10.2 does not implement** filtering, quality gates, usefulness/relevance scoring, duplicate dataset filtering, dataset splitting, leakage detection, dataset release/version management, tokenization, training examples, fine-tuning, LoRA, optimizer changes, checkpoints, model updates, automatic learning, or external services. The required `schema_version` is a schema contract version and is not a dataset release version.

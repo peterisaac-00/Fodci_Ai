@@ -1654,3 +1654,43 @@ Dataset Candidates
 ```
 
 Dataset format design, advanced filtering and quality gates, dataset versioning/manifests, dataset splitting/leakage detection, tokenization, training, fine-tuning, checkpoints, automatic promotion, and model updates remain later phases and are not implemented here.
+
+## Phase 10.2 — Canonical Dataset Schema
+
+Phase 10.2 adds a formal canonical contract after extraction and before future filtering:
+
+```text
+Experience Records
+        ↓
+Memory Quality & Governance
+        ↓
+Dataset Extraction
+        ↓
+DatasetCandidate
+        ↓
+DatasetRecord schema 1.0
+        ↓
+Phase 10.3 — Filtering & Quality Gates
+        ↓
+Phase 10.4 — Dataset Release Versioning
+        ↓
+Future model-agnostic training pipeline
+```
+
+`DatasetCandidate` is an intermediate representation produced by `ExperienceDatasetExtractor`. `DatasetRecord` is the canonical schema contract and is implemented in `agent.dataset_schema`; it does not replace or mutate Experience Records. The public `agent` and `memory` barrels expose the schema models without changing the existing memory/retrieval/governance boundaries.
+
+The top-level record fields are `format`, `schema_version`, `record_id`, `experience_id`, `task`, optional `project_context`, `trajectory`, `solution`, `verification`, `evaluation`, `outcome`, mandatory `provenance`, and bounded `metadata`. The current schema version is `1.0`, represented separately from the Experience Record schema version `9.4`, any future dataset release/version, model version, or training-run version.
+
+`record_id` is deterministic: it is derived from the current dataset schema version, the source `experience_id`, and the source Experience Record schema version using SHA-256, with a stable `drec-` prefix and bounded digest. Serialization never produces random identity or operational timestamps. `DatasetRecord.__post_init__` verifies that the supplied identity matches this derivation.
+
+`DatasetTrajectory` preserves attempts and the separate ordered collections of actions, observations, errors, corrections, and verification events. The converter copies only fields supported by the Phase 10.1 candidate and leaves `verification_events` empty when no such source events exist; it never fabricates an event. Nested event IDs must be unique within their collection, timestamps must be timezone-qualified ISO-8601 values, source fields must be present, and unknown nested fields are rejected.
+
+`DatasetSolution` preserves solution, final result, and final summary as separate concepts. `DatasetVerification` and `DatasetEvaluation` are independent immutable structures. Both carry an explicit `present` flag so absent evidence is represented rather than invented or silently rejected. Verification validates source test counts and timestamps; evaluation validates finite score, status, summary, criteria, and evaluator metadata without invoking an LLM. `DatasetOutcome` accepts only `success`, `failure`, or `cancelled` and is checked against provenance without rewriting historical outcomes.
+
+`DatasetRecordProvenance` requires `source_type="experience_record"`, stable `experience_id`, source schema version, source creation/completion timestamps, original status/outcome, verification presence, and optional project identity. It must match the top-level identity and outcome. Project context is limited to explicit source identity and does not import files, Project Memory, or arbitrary project data.
+
+`DatasetRecord.from_candidate()` is the explicit conversion boundary. `DatasetRecord.from_dict()` and `DatasetRecord.from_json()` validate the complete structure before constructing an immutable record. `_expect_fields` rejects unknown fields, future schema versions are rejected explicitly, missing/invalid required fields produce typed validation errors, and `validate_dataset_record()` exposes deterministic non-throwing diagnostics for untrusted payloads.
+
+Canonical serialization uses UTF-8-preserving JSON with sorted keys, compact separators, stable enum values, stable timestamps, no environment-dependent values, and no random metadata. `to_dict()`/`to_json()` and `from_dict()`/`from_json()` are guaranteed to round-trip semantically. Existing Experience Record redaction is reused and a final bounded canonical payload check rejects prohibited secrets in task, trajectory, solution, verification, evaluation, provenance, or metadata.
+
+`DatasetRecordLimits` bounds task length, attempt/event counts, solution lengths, verification/evaluation/metadata bytes, total serialized bytes, and nested JSON depth. These are structural integrity limits only. Phase 10.2 deliberately does not implement filtering, quality gates, usefulness/relevance scoring, duplicate dataset filtering, splitting, leakage checks, dataset release versioning, tokenization, training, fine-tuning, checkpoints, model updates, or automatic learning. `schema_version` is a schema contract version, not a dataset release.
