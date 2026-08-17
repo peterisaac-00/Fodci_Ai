@@ -1614,3 +1614,43 @@ MemoryRetrievalResult with governance audit and assessments
 Invalidation is explicit and delegates to existing owner APIs. Project Memory uses `invalidate_fact`; Long-Term Memory uses `update(status="invalidated")` with redacted governance reason metadata; Experience Records use `ExperienceRecords.invalidate`, preserving lifecycle, outcome, attempts, verification, and historical content while marking governance invalidation metadata. No normal retrieval path includes invalidated entries, and no invalidation physically deletes historical evidence. Short-Term Memory has no persistent invalidation API and is therefore not mutated by governance.
 
 Phase 9.6 does not add embeddings, semantic similarity, vector databases, RAG, external APIs, network validation, LLM judging, training, fine-tuning, model-weight updates, dataset generation, cloud memory, background agents, automatic promotion, new tools, or new execution permissions.
+
+## Phase 10.1 — Experience Dataset Extraction
+
+Phase 10.1 introduces a derived extraction boundary after Experience Records and Memory Quality & Governance:
+
+```text
+ExperienceRecord / ExperienceRecordStore.load()
+                    ↓
+        finalized-record safety checks
+                    ↓
+         MemoryGovernance minimum checks
+                    ↓
+       ExperienceDatasetExtractor
+                    ↓
+             DatasetCandidate
+```
+
+`ExperienceDatasetExtractor` is separate from `ExperienceRecord`, `ExperienceRecordStore`, `MemoryRetrieval`, and `MemoryGovernance`. Its authoritative input is an existing finalized `ExperienceRecord`, a bounded sequence, an `ExperienceRecords` owner, or an existing store queried through `load()`. It never opens or parses the persistence path itself and never reconstructs historical records from Short-Term Memory, Project Memory, Long-Term Memory, terminal history, raw logs, arbitrary files, or model output.
+
+`DatasetCandidate` is an immutable intermediate representation, not a training format. It preserves the task, project identity, all attempts, structured actions, observations, errors, corrections, final solution, final summary, verification, evaluation, outcome, source schema version, source metadata, and `DatasetCandidateProvenance`. The provenance contains `source_type="experience_record"`, the stable `experience_id`, source schema version, start/completion timestamps, project identity, original lifecycle/outcome, and verification presence. Attempt-level structures remain intact while action/observation/error/correction collections are also exposed for deterministic downstream inspection.
+
+The extraction boundary accepts only finalized `completed` and `failed` records, plus `cancelled` records that contain a sufficient final result. Started, running, unfinished, cancelled-without-result, invalidated, malformed, unsupported-schema, unavailable, or unsafe records produce `DatasetExtractionDiagnostic` entries. A batch continues across individual failures and returns valid candidates together with bounded reason/source-status/message diagnostics.
+
+Governance integration is intentionally narrow. The extractor creates a normalized historical-evidence candidate view and consults `MemoryGovernance` for provenance, status, invalidation, and security safety. It does not duplicate or implement Phase 10.3 quality gates, solution scoring, relevance scoring, task scoring, noisy-trace scoring, training-usefulness scoring, or promotion policy.
+
+All source text and structured fields pass through the existing Experience Record redaction helpers before candidate materialization, followed by a bounded prohibited-secret check over the canonical candidate representation. Candidate content is immutable and deterministic; no extraction timestamp, random identifier, filesystem order, or model-generated summary is introduced. `DatasetExtractionLimits` bounds record count, candidate bytes, total bytes, and diagnostic size while the existing Experience Record limits remain authoritative for source storage.
+
+Phase 10.1 ends at derived candidates:
+
+```text
+Experience Records
+        ↓
+Memory Quality & Governance
+        ↓
+Dataset Extraction
+        ↓
+Dataset Candidates
+```
+
+Dataset format design, advanced filtering and quality gates, dataset versioning/manifests, dataset splitting/leakage detection, tokenization, training, fine-tuning, checkpoints, automatic promotion, and model updates remain later phases and are not implemented here.

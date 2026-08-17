@@ -34,6 +34,17 @@ from backend_ai.agent.memory_governance import (
     SecurityStatus,
     VerificationStatus,
 )
+from backend_ai.agent.experience_dataset import (
+    DATASET_CANDIDATE_SOURCE_TYPE,
+    DatasetCandidate,
+    DatasetCandidateProvenance,
+    DatasetExtractionDiagnostic,
+    DatasetExtractionError,
+    DatasetExtractionLimits,
+    DatasetExtractionReason,
+    DatasetExtractionResult,
+    ExperienceDatasetExtractor,
+)
 from backend_ai.agent.experience_records import (
     EXPERIENCE_RECORD_FORMAT,
     EXPERIENCE_RECORD_SCHEMA_VERSION,
@@ -147,6 +158,15 @@ __all__ = [
     "RetentionAction",
     "SecurityStatus",
     "VerificationStatus",
+    "DATASET_CANDIDATE_SOURCE_TYPE",
+    "DatasetCandidate",
+    "DatasetCandidateProvenance",
+    "DatasetExtractionDiagnostic",
+    "DatasetExtractionError",
+    "DatasetExtractionLimits",
+    "DatasetExtractionReason",
+    "DatasetExtractionResult",
+    "ExperienceDatasetExtractor",
     "EXPERIENCE_RECORD_FORMAT",
     "EXPERIENCE_RECORD_SCHEMA_VERSION",
     "ExperienceAction",
