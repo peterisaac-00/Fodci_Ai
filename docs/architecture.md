@@ -1694,3 +1694,70 @@ The top-level record fields are `format`, `schema_version`, `record_id`, `experi
 Canonical serialization uses UTF-8-preserving JSON with sorted keys, compact separators, stable enum values, stable timestamps, no environment-dependent values, and no random metadata. `to_dict()`/`to_json()` and `from_dict()`/`from_json()` are guaranteed to round-trip semantically. Existing Experience Record redaction is reused and a final bounded canonical payload check rejects prohibited secrets in task, trajectory, solution, verification, evaluation, provenance, or metadata.
 
 `DatasetRecordLimits` bounds task length, attempt/event counts, solution lengths, verification/evaluation/metadata bytes, total serialized bytes, and nested JSON depth. These are structural integrity limits only. Phase 10.2 deliberately does not implement filtering, quality gates, usefulness/relevance scoring, duplicate dataset filtering, splitting, leakage checks, dataset release versioning, tokenization, training, fine-tuning, checkpoints, model updates, or automatic learning. `schema_version` is a schema contract version, not a dataset release.
+
+## Phase 10.3 — Dataset Filtering & Quality Gates
+
+Phase 10.3 adds a dedicated quality-control boundary after the canonical Phase 10.2 schema:
+
+```text
+DatasetRecord
+      ↓
+DatasetQualityEvaluator
+      ├── strict schema validation
+      ├── security hard gate
+      ├── internal consistency
+      ├── task quality and backend relevance
+      ├── solution completeness
+      ├── verification strength
+      ├── trajectory quality and noise
+      ├── outcome policy
+      └── exact batch duplicate identity
+      ↓
+QualityAssessment
+      ├── QualityScore
+      ├── named QualityCheck values
+      ├── reasons/warnings
+      └── source provenance
+      ↓
+ACCEPT / REVIEW / REJECT
+```
+
+The evaluator is separate from `DatasetRecord`, `ExperienceDatasetExtractor`, `ExperienceRecord`, Memory Retrieval, Memory Governance, and all model/training components. It receives canonical records or untrusted mappings, validates mappings through `DatasetRecord.from_dict()` with the configured schema limits, and never repairs malformed input. Structural validity and dataset quality remain different responsibilities.
+
+`DatasetQualityPolicy` is an immutable, inspectable policy object. It names the minimum final score, task length bounds, verification threshold, maximum noise ratio, repeated-event threshold, successful-trajectory minimum, accepted outcomes, failed/cancelled decisions, duplicate decision, relevance decision, domain terms, placeholder terms, irrelevant terms, and schema limits. No operational threshold is hidden as an unexplained magic number.
+
+The final score is deterministic and bounded:
+
+```text
+final_score = round(
+    0.20 * task_score
+  + 0.20 * completeness_score
+  + 0.25 * verification_score
+  + 0.15 * trajectory_score
+  + 0.10 * relevance_score
+  + 0.10 * consistency_score,
+  6
+)
+```
+
+Every component is exposed through `QualityScore`. Hard gates override the score and reject schema-invalid input, security violations, impossible event references, missing successful solutions, contradictory successful verification, and failed outcomes under the default high-quality policy. Soft signals produce warnings or `REVIEW` rather than destructive filtering: weak/missing verification, uncertain relevance, placeholder/short task text, sparse or repetitive traces, partial solutions, and cancelled outcomes.
+
+Task relevance is conservative and deterministic. It uses bounded domain terms related to backend engineering—Python, APIs, databases, authentication, services, testing, deployment, security, performance, and related concepts—without semantic search or an aggressive blacklist. A task with uncertain relevance is reviewable. Exact duplicate detection is performed only by `filter_many`; it hashes canonical record content while excluding `record_id`, rejects later exact copies according to policy, and records `duplicate_of` without mutating either source record. Similar wording is not treated as duplication.
+
+`QualityAssessment` always preserves record ID, Experience ID, decision, score, named checks, bounded reasons/warnings, and canonical provenance. `DatasetFilteringResult` contains accepted `DatasetRecord` objects plus rejected/review assessments, all assessments, diagnostics, and counts. Rejected records are not persisted, deleted, or rewritten; they remain available as historical source data.
+
+Security is a hard gate. The evaluator checks the canonical serialized record with the existing redaction/security conventions and emits only safe reason codes such as `security_violation`; secret payloads never enter diagnostics. The evaluator performs no LLM call, no external retrieval, no embeddings, no vector lookup, no RAG, no filesystem mutation, and no automatic persistence.
+
+Phase 10.3 ends at eligibility decisions:
+
+```text
+DatasetRecord
+        ↓
+Filtering & Quality Gates
+        ↓
+Accepted / Review / Rejected diagnostics
+        ↓
+Future Dataset Release / Phase 10.4
+```
+
+Dataset release/version management, train/validation/test splitting, leakage detection, semantic search, LLM evaluation, tokenization, training, fine-tuning, checkpoints, model updates, and automatic learning remain outside this phase.

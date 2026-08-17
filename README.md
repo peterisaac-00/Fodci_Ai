@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 10.2 complete — strict versioned canonical Dataset Schema delivered; Phase 10.3+ not started.**
+> **Current status: Phase 10.3 complete — deterministic Dataset Filtering & Quality Gates delivered; Phase 10.4+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -757,7 +757,7 @@ future model improvement
 
 That pipeline is not implemented in Phase 9.4. No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset.
 
-**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Embeddings, semantic retrieval, vector databases, RAG, dataset filtering/scoring, quality gates, dataset release versioning, dataset splitting, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Phase 10.3 adds deterministic Dataset Filtering & Quality Gates with ACCEPT/REVIEW/REJECT decisions. Embeddings, semantic retrieval, vector databases, RAG, dataset release versioning, dataset splitting, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
 
 ## Phase 9.5 — unified Memory Retrieval
 
@@ -906,3 +906,39 @@ Canonical JSON uses UTF-8-preserving `ensure_ascii=false`, sorted keys, compact 
 `DatasetRecordLimits` bounds task length, attempts, total trajectory events, solution fields, verification bytes, evaluation bytes, metadata bytes, nesting depth, and total serialized record bytes. These limits validate schema integrity only; Phase 10.2 does not score quality or decide training usefulness.
 
 **Phase 10.2 does not implement** filtering, quality gates, usefulness/relevance scoring, duplicate dataset filtering, dataset splitting, leakage detection, dataset release/version management, tokenization, training examples, fine-tuning, LoRA, optimizer changes, checkpoints, model updates, automatic learning, or external services. The required `schema_version` is a schema contract version and is not a dataset release version.
+
+## Phase 10.3 — Dataset Filtering & Quality Gates
+
+Phase 10.3 adds `DatasetQualityEvaluator` as a deterministic, explainable eligibility layer above canonical `DatasetRecord` objects. Phase 10.2 answers whether a record is structurally valid; Phase 10.3 answers whether that valid record is strong enough to continue toward later dataset processing.
+
+```text
+DatasetRecord
+      ↓
+Structural validation + security hard gate
+      ↓
+Completeness / outcome consistency
+      ↓
+Verification / trajectory / noise
+      ↓
+Backend relevance / solution signals
+      ↓
+Quality score and policy
+      ↓
+ACCEPT / REVIEW / REJECT
+```
+
+The public API includes `DatasetQualityPolicy`, `DatasetQualityEvaluator`, `QualityAssessment`, `QualityCheck`, `QualityScore`, `QualityDecision`, and `DatasetFilteringResult`. `evaluate(record)` and `filter(record)` return one explainable assessment; `filter_many(records)` returns accepted canonical records, rejected assessments, review assessments, all assessments, diagnostics, and deterministic counts. The input records are never changed or deleted.
+
+The default score is explicit and bounded from six named signals: `task_score` 0.20, `completeness_score` 0.20, `verification_score` 0.25, `trajectory_score` 0.15, `relevance_score` 0.10, and `consistency_score` 0.10. The final score is the rounded weighted sum of these components in `[0.0, 1.0]`. The score never replaces hard gates, and every component is exposed in `QualityScore`.
+
+Hard gates reject invalid schema, security violations, impossible internal consistency, missing successful solutions, failed verification on a claimed success, and failed outcomes under the default high-quality policy. Soft signals produce warnings or `REVIEW` for missing/partial verification, ambiguous backend relevance, placeholder or short tasks, sparse/noisy trajectories, incomplete solution fields, and cancelled outcomes. Failed experiences are rejected by default, while errors and corrections in an otherwise successful recovery trajectory are valuable evidence and do not automatically disqualify it.
+
+Task quality uses conservative deterministic heuristics. Empty or schema-invalid tasks are hard failures; obvious placeholders such as `hello`, `test`, `fix`, `asdf`, and `...` are review signals; legitimate short backend tasks such as `Fix Redis` are not automatically rejected. Backend relevance is inferred only from bounded deterministic domain terms and explicit structured task text. Uncertain relevance becomes `REVIEW`, not automatic rejection, unless a caller explicitly configures a different policy.
+
+Verification distinguishes absent, partial, strong, and failed evidence. Full passing test evidence receives the strongest signal. Missing verification on a success normally produces `REVIEW`; failed test evidence or a failed verification status on a success is a hard rejection. Alternative evidence such as migration, endpoint, static-analysis, or health-check summaries remains represented by the source verification fields and is not replaced with invented test data.
+
+Trajectory checks preserve the value of debugging recovery. Actions, observations, errors, and corrections remain available in the source record; repeated identical event content beyond the named policy threshold produces a review warning rather than destructive cleanup. Exact duplicate detection is batch-only, canonical, and SHA-256 based over the record excluding `record_id`; the later duplicate is rejected with `duplicate_of=<record_id>`. Similar wording is not treated as semantic duplication.
+
+Every assessment preserves `record_id`, `experience_id`, decision, score, checks, reasons, warnings, and provenance. Diagnostics are bounded and secret-safe. Schema-invalid and security-invalid inputs are rejected without leaking payloads. The evaluator reuses the canonical schema validation and existing redaction/security mechanisms; it does not call an LLM or external service.
+
+**Phase 10.3 does not implement** dataset release/version management, train/validation/test splitting, leakage detection, embeddings, vector databases, semantic similarity, RAG, LLM-based quality evaluation, tokenization, training examples, fine-tuning, checkpoints, model updates, automatic persistence, or automatic learning. Filtering is an eligibility decision, not historical deletion.

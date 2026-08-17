@@ -34,6 +34,17 @@ from backend_ai.agent.memory_governance import (
     SecurityStatus,
     VerificationStatus,
 )
+from backend_ai.agent.dataset_quality import (
+    DatasetFilteringResult,
+    DatasetQualityError,
+    DatasetQualityEvaluator,
+    DatasetQualityPolicy,
+    QualityAssessment,
+    QualityCheck,
+    QualityCheckStatus,
+    QualityDecision,
+    QualityScore,
+)
 from backend_ai.agent.dataset_schema import (
     DATASET_RECORD_FORMAT,
     DATASET_RECORD_ID_PREFIX,
@@ -203,6 +214,15 @@ __all__ = [
     "DatasetVerification",
     "derive_dataset_record_id",
     "validate_dataset_record",
+    "DatasetFilteringResult",
+    "DatasetQualityError",
+    "DatasetQualityEvaluator",
+    "DatasetQualityPolicy",
+    "QualityAssessment",
+    "QualityCheck",
+    "QualityCheckStatus",
+    "QualityDecision",
+    "QualityScore",
     "EXPERIENCE_RECORD_FORMAT",
     "EXPERIENCE_RECORD_SCHEMA_VERSION",
     "ExperienceAction",
