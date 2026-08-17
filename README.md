@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 10.4 complete — deterministic Dataset Splitting delivered; Phase 10.5+ not started.**
+> **Current status: Phase 10.5 complete — deterministic Dataset Validation delivered; Phase 10.6+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -757,7 +757,7 @@ future model improvement
 
 That pipeline is not implemented in Phase 9.4. No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset.
 
-**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Phase 10.3 adds deterministic Dataset Filtering & Quality Gates with ACCEPT/REVIEW/REJECT decisions. Phase 10.4 adds deterministic train/validation/test partitioning for accepted canonical Dataset Records. Embeddings, semantic retrieval, vector databases, RAG, dataset release versioning, dataset artifact publishing, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Phase 10.3 adds deterministic Dataset Filtering & Quality Gates with ACCEPT/REVIEW/REJECT decisions. Phase 10.4 adds deterministic train/validation/test partitioning for accepted canonical Dataset Records. Phase 10.5 adds read-only deterministic Dataset Validation over canonical records and split manifests, including schema/provenance/security/consistency/integrity/quality-decision/leakage checks with structured diagnostics. Embeddings, semantic retrieval, vector databases, RAG, dataset release versioning, dataset artifact publishing, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
 
 ## Phase 9.5 — unified Memory Retrieval
 
@@ -974,3 +974,35 @@ The splitter supports explicit grouping modes: `record`, `experience`, and `proj
 Duplicate input `record_id` values raise `DuplicateDatasetRecordError`; the splitter never silently deduplicates. Invalid types or schema objects raise `DatasetSplitError`; the splitter relies on canonical `DatasetRecord` construction rather than duplicating the full Phase 10.2 validator. No source record, Experience Record, quality assessment, provenance, ID, task, trajectory, solution, verification, evaluation, or outcome is mutated.
 
 **Phase 10.4 does not implement** dataset release/version management, dataset artifact storage or publishing, automatic export, tokenization, embeddings, vector databases, semantic search, RAG, LLM evaluation, training, fine-tuning, checkpoints, model updates, test-set inspection, or automatic learning. `split_version` describes the split algorithm contract only and is not a dataset release version.
+
+## Phase 10.5 — Dataset Validation
+
+Phase 10.5 adds `DatasetValidator` as a deterministic, read-only integrity boundary after Dataset Schema, Quality Gates, and Dataset Splitting.
+
+```text
+DatasetRecord
+      ↓
+Schema Validation
+      ↓
+Quality Gates
+      ↓
+Dataset Split
+      ↓
+Dataset Validation
+      ↓
+VALID / VALID_WITH_WARNINGS / INVALID
+```
+
+The public API includes `validate_record`, `validate_records`, `validate_split`, `validate_dataset`, `DatasetValidator`, `DatasetValidationResult`, `DatasetDiagnostic`, `DatasetValidationLimits`, and immutable provenance summaries. Validation operates on canonical `DatasetRecord` objects or strict canonical mappings, and accepts the existing `DatasetSplitResult` without rebuilding records from raw logs, memories, terminal history, files, or Experience Records.
+
+Record validation reuses Phase 10.2 `DatasetRecord.from_dict`, `validate_dataset_record`, schema limits, deterministic identity, canonical serialization, and existing bounded secret detection. It verifies record ID format and derivation, schema version, required fields, nested structure, provenance source type and identity, source status/outcome, verification presence, project consistency, timestamps, security, attempt/event ordering, referenced IDs, verification/evaluation consistency, successful outcome requirements, and cancelled/failed outcome semantics. Historical values are never repaired or rewritten.
+
+Dataset validation reports stable machine-readable diagnostic codes including `record_schema_invalid`, `record_identity_invalid`, `duplicate_record`, `duplicate_experience`, `exact_duplicate_record`, `contradictory_identity`, `provenance_invalid`, `security_violation`, `internal_consistency_error`, `verification_inconsistency`, `evaluation_inconsistency`, `split_manifest_mismatch`, `partition_overlap`, `partition_missing_record`, `group_leakage`, `experience_leakage`, `project_leakage`, `dataset_count_mismatch`, `quality_decision_mismatch`, and `resource_limit_exceeded`. Each diagnostic contains severity, bounded safe message, optional record/experience/partition/path, and safe provenance; secret values are never included.
+
+Dataset-level checks sort inputs and diagnostics by stable identifiers, detect duplicate record IDs, duplicate Experience IDs where canonical uniqueness is expected, exact canonical duplicates, contradictory identities, missing provenance, and coverage/count problems. Exact structural identity is required for duplicate/leakage errors; similar wording is not treated as semantic duplication.
+
+When a `DatasetSplitResult` is supplied, the validator verifies train/validation/test presence, partition disjointness, actual counts against the manifest, record IDs, group IDs, requested and actual ratios, seed, split version, Dataset Schema version, policy metadata, and grouping isolation. It detects record overlap and experience/project leakage according to the manifest grouping mode without moving records or silently accepting invalid assignments. With Phase 10.3 assessments, it verifies that assessment provenance matches the DatasetRecord, scores remain in `[0, 1]`, hard-gate failures are not marked `ACCEPT`, and only `ACCEPT` records appear in an eligible split.
+
+`DatasetValidationResult` reports `VALID`, `VALID_WITH_WARNINGS`, or `INVALID`, along with validation version, schema version, total/valid/invalid record counts, warning/error counts, deterministic summary, diagnostics, and provenance. Results and nested diagnostic/provenance collections are immutable. Resource limits bound record count, diagnostic count and size, total bytes inspected, and schema work. Exceeding a limit produces explicit `resource_limit_exceeded` rather than silently stopping.
+
+**Phase 10.5 is read-only and side-effect free.** It does not write files, mutate records, modify Experience Records or quality assessments, change split assignments, execute commands, access the network, install packages, modify Git, invoke an LLM, create background processes, publish datasets, manage releases, tokenize, use embeddings, perform semantic search, train, fine-tune, update checkpoints, or change model weights. It validates dataset integrity only; it does not publish or improve the model.

@@ -1796,3 +1796,41 @@ The default `record` grouping produces exact requested-count partitions. Optiona
 Duplicate input record IDs raise `DuplicateDatasetRecordError`; malformed types raise `DatasetSplitError`. The splitter does not silently skip invalid records or deduplicate them. All source DatasetRecord objects remain semantically unchanged, including identity, provenance, task, trajectory, solution, verification, evaluation, and outcome. Excluded quality records remain historical and are represented only by decision metadata, not deleted.
 
 Phase 10.4 stops at reproducible in-memory partitioning. Dataset release management, artifact storage/publishing, automatic export, tokenization, embeddings, semantic retrieval, vector databases, RAG, LLM evaluation, test-set inspection, training, fine-tuning, checkpoints, model updates, and automatic learning remain outside this phase.
+
+## Phase 10.5 — Dataset Validation
+
+Phase 10.5 adds a dedicated read-only validation boundary after the existing Dataset Schema, Quality Gates, and Dataset Split layers:
+
+```text
+DatasetRecord
+      ↓
+Dataset Schema validation
+      ↓
+Quality Gates
+      ↓
+Dataset Split
+      ↓
+DatasetValidator
+      ├── record/schema identity
+      ├── provenance and project consistency
+      ├── bounded security checks
+      ├── internal trajectory consistency
+      ├── dataset duplicates and coverage
+      ├── quality-decision consistency
+      ├── split manifest integrity
+      └── structural leakage detection
+      ↓
+VALID / VALID_WITH_WARNINGS / INVALID
+```
+
+`DatasetValidator` does not reconstruct records and does not call the extractor, quality evaluator, or splitter to make new decisions. `validate_record` and `validate_records` accept canonical `DatasetRecord` values or strict schema mappings. `validate_split` validates an existing `DatasetSplitResult`. `validate_dataset` combines record, dataset, quality-assessment, and split validation when those inputs are supplied.
+
+The immutable `DatasetValidationResult` contains validation status, validation version, Dataset Schema version, total/valid/invalid counts, warning/error counts, deterministic summary, ordered diagnostics, and safe provenance. `DatasetDiagnostic` is machine-readable with stable code/severity/message and optional record ID, Experience ID, partition, field path, and provenance. `DatasetValidationLimits` bounds record count, total bytes, diagnostic count/message size, and delegated schema limits; resource exhaustion is reported explicitly.
+
+Record validation delegates structure to Phase 10.2 `validate_dataset_record` and `DatasetRecord.from_dict`. Additional checks verify canonical `drec-` identity and derivation, provenance source type/experience/outcome/status/verification/project consistency, redaction/security, attempt chronology, event chronology, attempt/event references, correction/error references, successful solution/verification requirements, failed/cancelled semantics, and evaluation score bounds. These checks report contradictions; they never mutate or normalize historical data.
+
+Dataset validation sorts inputs and diagnostics by stable identifiers. It detects duplicate `record_id`, duplicate `experience_id` under the canonical one-record-per-experience assumption, exact canonical duplicate payloads, contradictory identity payloads, missing provenance, and coverage/count problems. Similar text is not treated as semantic similarity or leakage.
+
+Split validation consumes an existing split result and verifies partition existence, record disjointness, manifest counts, record IDs, group IDs, requested/actual ratios, seed, split version, schema version, and policy metadata. It separately detects record overlap and experience/project group leakage according to the manifest's grouping mode. It also compares the split against the supplied canonical dataset and Phase 10.3 quality assessments: only `ACCEPT` records may be eligible, `REVIEW`/`REJECT` records cannot enter the split, assessment provenance must match the record, scores must stay within `[0, 1]`, and an `ACCEPT` assessment cannot contain a hard-gate failure.
+
+The validator is deterministic: it uses only source timestamps for comparison, stable identifiers for ordering, canonical JSON for exact identity, and no random value, UUID, current timestamp, environment identifier, model, or external service. Diagnostics are bounded and secret-safe; messages never include secret payloads. Validation is side-effect free and does not write files, modify records, persist results, execute processes, access network resources, modify Git, invoke an LLM, create background work, publish datasets, manage releases, tokenize, embed, search semantically, train, fine-tune, checkpoint, or update model weights.
