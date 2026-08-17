@@ -1084,3 +1084,53 @@ Historical runs are persisted only when an explicit local store path is supplied
 The first actual baseline run was executed against the local `fodci-tiny-v1` checkpoint with model fingerprint `sha256:8af6a5d0792ba5df77a16da262abf94e64b83a3ca17a700278310a5fc26d5314` and tokenizer version `1`. It completed all six tasks with `task_success_rate = 0.0`; all six tasks reached the bounded budget failure path (`accumulated budget dimension is exhausted`). No test executions were applicable, so `test_pass_rate` and `code_correctness_rate` are unavailable. The run is preserved in `artifacts/evaluation/baseline_runs.json` under evaluation ID `baseline-fodci-tiny-v1-2026-08-17-1`.
 
 Phase 11.1 ends at baseline measurement and historical evidence. It does not implement fine-tuning, optimizer updates, gradient steps, training data loading, checkpoint creation, model comparison gates, automatic model updates, semantic evaluation, embeddings, RAG, network access, background agents, or self-improvement.
+
+
+## Phase 11.2 — Training Dataset
+
+Phase 11.2 adds a model-agnostic training-dataset preparation boundary above the existing Phase 10 Experience → Dataset Schema → Quality Gates → Validation → Split → Version pipeline. It consumes only real ExperienceRecord-derived data and does not fine-tune, tokenize, load a model, change model architecture, update weights, or introduce synthetic examples.
+
+```text
+ExperienceRecords
+        ↓
+ExperienceDatasetExtractor
+        ↓
+DatasetRecord schema validation
+        ↓
+Deterministic canonical deduplication
+        ↓
+DatasetQualityEvaluator
+        ↓
+DatasetValidator
+        ↓
+DatasetSplitter(seed=2026, group_by=record)
+        ↓
+DatasetVersioner(dataset-v1)
+        ↓
+TrainingExample contract
+        ↓
+TrainingDatasetArtifact + metadata + manifest
+```
+
+`TrainingExample` is a frozen, serializable, versioned contract containing `example_id`, `source_record_id` (the originating `ExperienceRecord.experience_id`), `source_experience_id`, `task`, evidence `context`, rendered `input`, optional `expected_behavior`, verified `target`, and bounded quality/source metadata. The example ID is derived from the source record ID and schema version. The target is selected only from an existing recorded solution, final result, or final summary; missing targets are rejected and never fabricated.
+
+`TrainingDatasetBuilder` exposes explicit entry points for `ExperienceRecords`, ExperienceRecord sequences, canonical DatasetRecord sequences, and an existing Experience Record store. It reuses the current extractor, canonical schema, quality policy, validator, splitter, and immutable versioner. Invalid schema records, extraction failures, failed validation, `REJECT` quality decisions, `REVIEW` quality decisions, missing targets, duplicates, and resource-limit violations are retained as bounded `TrainingDatasetRejection` records with stable reasons and processing stages. The source records are never modified.
+
+The final artifact uses a deterministic directory format:
+
+```text
+training/dataset-v1/
+├── manifest.json
+├── metadata.json
+├── train.json
+├── validation.json
+└── test.json
+```
+
+Every split file contains the artifact header, dataset version, final SHA-256 fingerprint, split name, ordered example IDs, and complete serialized examples. Writes use UTF-8 canonical JSON and atomic temporary-file replacement. `TrainingDatasetArtifact.load()` verifies all headers, IDs, metadata, partition disjointness, and the complete content fingerprint before returning an immutable artifact.
+
+The manifest records the dataset and schema versions, source Phase 10.6 fingerprint, canonical schema and split versions, seed, grouping policy, source/valid/rejected/duplicate/example counts, partition counts, source IDs by split, rejection reasons, processing configuration, validation summary, artifact paths, and final dataset fingerprint. `created_at` is supplied by the caller and is audit metadata only; it is not used as identity input. The default record-level split is safe because the canonical Phase 10 schema contains one DatasetRecord per ExperienceRecord, while `DatasetValidator` and `TrainingDatasetArtifact` independently verify partition disjointness.
+
+`TrainingDatasetLoader.load_for_training()` can load only `train.json`, `load_for_validation()` can load only `validation.json`, and `load_for_benchmark()` is the only purpose-aware path allowed to load `test.json`. A training or validation purpose requesting the test partition raises `TestSetAccessError`. Thus the test set remains isolated for the later benchmark phase and is not available through the training-purpose loader.
+
+The public implementation is in `src/backend_ai/agent/training_dataset.py`, with exports from `backend_ai.agent`. The pipeline is deliberately model-agnostic and is ready for Phase 11.3 to consume the train split through `TrainingDatasetLoader.load_for_training()` without coupling dataset preparation to a model or optimizer.
