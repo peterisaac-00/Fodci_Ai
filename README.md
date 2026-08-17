@@ -1295,3 +1295,72 @@ python scripts/run_phase115_benchmark.py \
 ```
 
 Phase 11.5 includes deterministic mock-model integration coverage so the benchmark infrastructure can be verified without expensive inference. The repository currently has no committed Phase 11.4 production Candidate artifact, so no real Base-vs-Candidate score is claimed until a real Candidate artifact is supplied. A smoke test proves the execution, evidence, metrics, persistence, and report path; it does not fabricate a production benchmark result.
+
+
+## Phase 11.6 — Regression & Model Acceptance
+
+Phase 11.6 is the final evidence gate for Phase 11. It consumes persisted Phase 11.5 Base-vs-Candidate benchmark runs and does not rerun benchmarks, train models, modify weights, or promote a registry pointer.
+
+```text
+Persisted Base/V2 Benchmark Evidence
+                ↓
+Regression Analysis
+                ↓
+Reproducibility + Held-Out + Contamination Checks
+                ↓
+Configurable Acceptance Policy
+                ↓
+ACCEPT / REJECT / INVALID_EVALUATION
+```
+
+`ModelAcceptanceEvaluator` requires the same benchmark dataset identity, same run IDs, same protocol, complete task coverage, model fingerprints, benchmark fingerprint, training dataset fingerprint, training configuration, and explicit held-out-test confirmation before `ACCEPT` can be returned. A complete benchmark containing failed tasks remains valid evidence for a policy-based `REJECT`; an incomplete or invalid benchmark becomes `INVALID_EVALUATION` instead of being treated as success.
+
+The default policy is conservative and versioned as `11.6-v1`. Its configurable fields include minimum Task Success Rate, minimum Test Pass Rate, minimum Tool Success Rate, minimum Error Recovery Rate, maximum Failure Rate, maximum Average Attempts, maximum allowed regression count, minimum required improvement, minimum number of improved metrics, regression tolerance, critical regression delta, maximum validation-to-held-out gap, held-out requirement, overfitting behavior, complete-evidence requirement, reproducibility requirement, and critical backend categories. The policy requires at least two improved metrics, so a single-metric improvement can never produce acceptance.
+
+The regression engine reports capability, metric, tool, debugging/recovery, backend-domain, overfitting, contamination, and reproducibility findings. A Base-passed/Candidate-failed task is a capability regression. Category-level decreases are retained even when the overall aggregate improves. High or critical regressions, failure of a critical backend category, threshold violations, insufficient improvement, missing evidence, fingerprint mismatches, and suspicious validation/test gaps block acceptance according to policy.
+
+The machine-readable `AcceptanceReport` preserves:
+
+```text
+model_version
+base_model_version
+dataset_version
+benchmark_version
+benchmark_fingerprint
+evaluation_id
+decision
+reason
+metrics
+regressions
+warnings
+policy
+reproducibility
+fingerprints
+lineage
+created_at
+```
+
+The human-readable report is headed `FODCI MODEL ACCEPTANCE REPORT` and explains the decision, absolute Base/Candidate metrics, deltas, regression findings, warnings, reproducibility result, and final decision. Reports are persisted immutably in:
+
+```text
+artifacts/evaluation/acceptance_reports.json
+```
+
+Acceptance is separate from promotion. An `ACCEPT` report only makes a candidate eligible for a future explicit promotion workflow; it never changes `current_official`, overwrites a checkpoint, or modifies the normal `fodci` runtime. `REJECT` and `INVALID_EVALUATION` remain distinguishable in the report store.
+
+The developer-facing workflow is:
+
+```text
+python scripts/run_phase116_acceptance.py \
+  --evaluation-id candidate-v1-backend-v1 \
+  --comparison-store artifacts/evaluation/benchmark_comparisons.json \
+  --runs-store artifacts/evaluation/benchmark_runs.json \
+  --candidate-artifact artifacts/models/candidate-v1 \
+  --training-dataset-fingerprint sha256:<training-dataset-fingerprint> \
+  --held-out-test \
+  --acceptance-store artifacts/evaluation/acceptance_reports.json \
+  --human-report artifacts/evaluation/candidate-v1-acceptance.txt \
+  --json-report artifacts/evaluation/candidate-v1-acceptance.json
+```
+
+The command reads persisted evidence only. If a candidate artifact, benchmark result, fingerprint, training configuration, or held-out identity is unavailable, it produces a fail-closed invalid/rejected outcome or exits with a clear input error; it never invents acceptance evidence. Phase 11.6 includes two end-to-end scenarios: a deterministic improved candidate that is accepted under a test policy, and a candidate with critical capability regression that is rejected despite any other metric movement.

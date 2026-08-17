@@ -498,6 +498,12 @@ class BenchmarkComparisonStore:
             raise BenchmarkError("comparison store is malformed") from exc
         self._loaded_digest = _digest(raw)
 
+    def get(self, comparison_id: str) -> BenchmarkComparison | None:
+        return self._comparisons.get(comparison_id)
+
+    def list_comparisons(self) -> tuple[BenchmarkComparison, ...]:
+        return tuple(self._comparisons[key] for key in sorted(self._comparisons))
+
     def save(self, comparison: BenchmarkComparison) -> BenchmarkComparison:
         existing = self._comparisons.get(comparison.comparison_id)
         if existing is not None:

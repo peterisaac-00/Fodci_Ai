@@ -52,3 +52,25 @@ python scripts/run_phase115_benchmark.py \
 ```
 
 The command writes immutable raw runs and comparison metadata to the configured JSON stores. It requires real local inputs; if a Candidate artifact is unavailable, the command fails rather than fabricating benchmark scores. The benchmark dataset loader performs task validation and training-contamination checks before any model runtime is created.
+
+
+## Phase 11.6 regression and acceptance
+
+`run_phase116_acceptance.py` consumes persisted Phase 11.5 benchmark runs and comparisons. It does not rerun inference or benchmarks.
+
+```text
+python scripts/run_phase116_acceptance.py \
+  --evaluation-id candidate-v1-backend-v1 \
+  --comparison-store artifacts/evaluation/benchmark_comparisons.json \
+  --runs-store artifacts/evaluation/benchmark_runs.json \
+  --candidate-artifact artifacts/models/candidate-v1 \
+  --training-dataset-fingerprint sha256:<training-dataset-fingerprint> \
+  --held-out-test \
+  --acceptance-store artifacts/evaluation/acceptance_reports.json \
+  --human-report artifacts/evaluation/candidate-v1-acceptance.txt \
+  --json-report artifacts/evaluation/candidate-v1-acceptance.json
+```
+
+A policy JSON object can be supplied with `--policy` to override documented `AcceptancePolicy` fields. The command returns exit code `0` only for `ACCEPT`, `2` for a valid evidence set that is `REJECT` or `INVALID_EVALUATION`, and `1` for missing/corrupt input stores or other command errors. Every evaluated decision is written to the immutable acceptance store when the required input records are available.
+
+The acceptance workflow requires real persisted evidence. It does not fabricate a Candidate artifact, training configuration, benchmark result, test-set identity, or fingerprint. Acceptance never promotes the candidate or changes the normal `fodci` runtime.

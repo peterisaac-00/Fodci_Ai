@@ -2065,3 +2065,44 @@ Each arm uses the existing sequential, bounded, isolated-workspace `BenchmarkRun
 `BenchmarkComparison` stores absolute Base/Candidate values, signed deltas, direction-aware classifications, task counts, dataset/model/run identities, warnings, and a comparison status. `render_comparison_report()` presents overall, category, and difficulty tables with absolute values and deltas. The benchmark does not infer model acceptance from these results and does not implement promotion, regression gates, or production replacement. Phase 11.6 consumes the raw runs and comparison evidence.
 
 `BenchmarkRunStore` and `BenchmarkComparisonStore` use local canonical JSON, atomic replacement, digest-based stale-writer detection, and immutable IDs. The stores preserve raw evidence and metrics rather than only a summary score. The explicit developer entry point is `scripts/run_phase115_benchmark.py`; the existing interactive `fodci` CLI remains unchanged because it is the Agent runtime boundary rather than an argument-based model-management CLI.
+
+
+## Phase 11.6 — Regression and Model Acceptance
+
+Phase 11.6 consumes Phase 11.5 evidence only:
+
+```text
+BenchmarkRunStore + BenchmarkComparisonStore
+                    ↓
+        ModelAcceptanceEvaluator
+          ├── completeness checks
+          ├── reproducibility checks
+          ├── contamination checks
+          ├── regression analysis
+          └── configurable acceptance policy
+                    ↓
+              AcceptanceReport
+                    ↓
+             AcceptanceStore
+```
+
+The evaluator is deliberately offline and non-executing. It receives `AcceptanceRequest` with the persisted Base run, Candidate run, comparison, benchmark dataset, optional verified Phase 11.4 artifact, training configuration/fingerprint, and held-out-test declaration. It never calls `BenchmarkComparisonRunner`, never constructs a model runtime, and never modifies `BenchmarkRun` or `BenchmarkComparison`.
+
+`AcceptancePolicy` is a versioned immutable contract (`11.6-v1`). It contains explicit minimum rates, maximum failure/attempt limits, a maximum regression budget, minimum improvement magnitude, minimum number of improved metrics, tolerance, critical-regression delta, overfitting-gap threshold, held-out requirement, completeness/reproducibility requirements, and critical backend categories. At least two improved metrics are required by default, preventing a single-metric acceptance shortcut.
+
+`RegressionAnalysis` generates immutable `ModelRegressionFinding` objects. Findings are classified as capability, metric, tool, debugging, domain, overfitting, contamination, or reproducibility evidence. Task-level Base-pass/Candidate-fail transitions and category-level metric drops are retained independently of the overall aggregate. Critical backend categories include API endpoint, authentication, database, bug-fix/debugging, testing, security, and architecture by default.
+
+Reproducibility validation checks Base/Candidate model identities and fingerprints, dataset and benchmark identities, exact protocol, seed, evaluation configuration, training dataset fingerprint, training configuration, optional Model Artifact integrity, policy version, and explicit held-out-test identity. A single-run benchmark records a warning that variance and statistical significance are unavailable; the evaluator never invents significance. Training-to-test contamination is checked through the benchmark dataset’s fingerprint and source-ID interface.
+
+The decision is fail-closed:
+
+```text
+missing or mismatched critical metadata → INVALID_EVALUATION
+complete evidence + policy failure    → REJECT
+complete evidence + critical regression → REJECT
+complete evidence + safe improvement   → ACCEPT
+```
+
+`AcceptanceReport` is both machine-readable and human-renderable. It stores model lineage, benchmark/dataset/policy versions, fingerprints, metrics, findings, warnings, reproducibility checks, training configuration, checkpoint identity, evaluation ID, decision, reason, and timestamp. `AcceptanceStore` persists reports atomically and prevents different results from reusing an evaluation ID.
+
+Acceptance does not equal promotion. The report can make a Candidate eligible for a future explicit promotion operation, but Phase 11.6 never calls `ModelArtifactRegistry.set_current_official`, never changes the current official pointer, and never replaces the runtime model. Rejected and invalid candidates remain auditable in the acceptance store.
