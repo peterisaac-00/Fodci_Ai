@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 9.3 complete — bounded persistent global Long-Term Memory delivered; Phase 9.4+ not started.**
+> **Current status: Phase 9.4 complete — bounded persistent historical Experience Records delivered; Phase 9.5+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -705,4 +705,56 @@ Long-Term Memory writes are explicit and controlled. The autonomous loop receive
 
 Bounds cover memory count, content length, metadata size, and total serialized bytes. Values exceeding limits fail deterministically rather than being silently truncated. Redaction removes passwords, API keys, tokens, credentials, cookies, authorization values, private keys, and environment-style secret material before entry storage or serialization. Contradictory entries with the same explicit topic are preserved and marked `conflicted`; no memory is silently deleted.
 
-**Phase 9.3 implements global persistent reusable knowledge only. Experience records, semantic ranking, embeddings, RAG, vector databases, external storage, background agents, training, dataset generation, model-weight updates, and new execution permissions are not implemented.**
+**Phase 9.3 implements global persistent reusable knowledge only. Experience Records are a separate Phase 9.4 historical layer; semantic ranking, embeddings, RAG, vector databases, external storage, background agents, training, dataset generation, model-weight updates, and new execution permissions remain out of scope.**
+
+## Phase 9.4 — historical Experience Records
+
+Phase 9.4 adds a dedicated `ExperienceRecords` subsystem for historical data about what actually happened during an Agent task execution. It is not a memory replacement: `ShortTermMemory` holds current task context, `ProjectMemory` holds stable project facts, `LongTermMemory` holds reusable global knowledge, and Experience Records hold immutable historical attempts and outcomes.
+
+```text
+Task
+  ↓
+ExperienceSession.start_attempt()
+  ↓
+actions / observations / errors / corrections
+  ↓
+verification / existing evaluation result
+  ↓
+finalize(status, outcome)
+  ↓
+ExperienceRecordStore.save()
+```
+
+`ExperienceRecord` contains a typed project identity, task, timestamps, lifecycle status, bounded attempts, final solution and summary, verification, optional supplied evaluation, outcome, metadata, and schema version. Attempts contain explicit actions, observations, errors, corrections, and result information. The APIs are explicit; the system does not persist every observation or tool output automatically.
+
+The lifecycle is deterministic: `started → running → completed/failed/cancelled`. Finalization requires an actual outcome, and a `success` outcome requires recorded verification evidence. After finalization, the session rejects all writes and the historical record remains immutable. The loop integration only produces a passive snapshot; it does not grant Experience Records execution authority and does not change tool registries, policies, budgets, or permissions.
+
+Persistence is separate from both memory stores at:
+
+```text
+~/.fodci/experience_records.json
+```
+
+`ExperienceRecordStore` uses schema version `9.4`, canonical UTF-8 JSON, strict unknown-field and future-schema rejection, explicit missing/corrupted/invalid/unavailable load statuses, temporary-file `fsync`, atomic `os.replace`, symlink rejection, and SHA-256 stale-write protection. Basic retrieval supports `get`, deterministic listing, project filtering, lifecycle-status filtering, and bounded date filtering.
+
+The subsystem applies bounded limits to the number of experiences, attempts, actions, observations, errors, corrections, metadata, serialized records, and total storage. Secret redaction covers passwords, API keys, access and refresh tokens, credentials, cookies, authorization material, private keys, environment secrets, and Bearer/Basic values in text and nested metadata. Limit violations are rejected deterministically rather than silently truncating historical evidence.
+
+`AutonomousToolLoop` accepts an optional `ExperienceRecords` owner. When explicitly supplied, the loop records bounded action and observation summaries, structured errors, recovery corrections, verification, and any existing completion evaluation, then finalizes the historical record. Persistence remains explicit: callers choose when to call `ExperienceRecordStore.save()`.
+
+Experience Records are **not training data yet**. The intended future pipeline is:
+
+```text
+Experience Records
+  ↓
+future filtering/evaluation
+  ↓
+dataset candidates
+  ↓
+future training data
+  ↓
+future model improvement
+```
+
+That pipeline is not implemented in Phase 9.4. No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset.
+
+**Phase 9.4 implements historical Experience Records only. Embeddings, semantic retrieval, vector databases, RAG, dataset generation, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**

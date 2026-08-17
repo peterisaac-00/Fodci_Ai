@@ -1477,3 +1477,49 @@ Long-Term Memory writes are explicit and controlled. The autonomous loop receive
 Bounds cover memory count, content length, metadata size, and total serialized bytes. Values exceeding limits fail deterministically rather than being silently truncated. Redaction removes passwords, API keys, tokens, credentials, cookies, authorization values, private keys, and environment-style secret material before entry storage or serialization. Contradictory entries with the same explicit topic are preserved and marked `conflicted`; no memory is silently deleted.
 
 **Phase 9.3 implements global persistent reusable knowledge only. Experience records, semantic ranking, embeddings, RAG, vector databases, external storage, background agents, training, dataset generation, model-weight updates, and new execution permissions are not implemented.**
+
+## Phase 9.4 — historical Experience Records
+
+Phase 9.4 adds a dedicated `ExperienceRecords` subsystem for historical data about what actually happened during an Agent task execution. It is not a memory replacement: `ShortTermMemory` holds current task context, `ProjectMemory` holds stable project facts, `LongTermMemory` holds reusable global knowledge, and Experience Records hold immutable historical attempts and outcomes.
+
+```text
+Task
+  ↓
+ExperienceSession.start_attempt()
+  ↓
+actions / observations / errors / corrections
+  ↓
+verification / existing evaluation result
+  ↓
+finalize(status, outcome)
+  ↓
+ExperienceRecordStore.save()
+```
+
+`ExperienceRecord` contains a typed project identity, task, timestamps, lifecycle status, bounded attempts, final solution and summary, verification, optional supplied evaluation, outcome, metadata, and schema version. Attempts contain explicit actions, observations, errors, corrections, and result information. The APIs are explicit; the system does not persist every observation or tool output automatically.
+
+The lifecycle is deterministic: `started → running → completed/failed/cancelled`. Finalization requires an actual outcome, and a `success` outcome requires recorded verification evidence. After finalization, the session rejects all writes and the historical record remains immutable. The loop integration only produces a passive snapshot; it does not grant Experience Records execution authority and does not change tool registries, policies, budgets, or permissions.
+
+Persistence is separate from both memory stores at:
+
+```text
+~/.fodci/experience_records.json
+```
+
+`ExperienceRecordStore` uses schema version `9.4`, canonical UTF-8 JSON, strict unknown-field and future-schema rejection, explicit missing/corrupted/invalid/unavailable load statuses, temporary-file `fsync`, atomic `os.replace`, symlink rejection, and SHA-256 stale-write protection. Basic retrieval supports `get`, deterministic listing, project filtering, lifecycle-status filtering, and bounded date filtering.
+
+Experience Records are **not training data yet**. The intended future pipeline is deliberately documented but not implemented:
+
+```text
+Experience Records
+  ↓
+future filtering/evaluation
+  ↓
+dataset candidates
+  ↓
+future training data
+  ↓
+future model improvement
+```
+
+No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset. Embeddings, semantic retrieval, vector databases, RAG, external storage, background agents, new tools, and new execution permissions remain outside this phase.

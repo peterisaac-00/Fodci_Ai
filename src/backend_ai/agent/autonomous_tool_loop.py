@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from enum import Enum
 import json
 from pathlib import Path
@@ -54,6 +55,7 @@ from backend_ai.agent.regression_protection import RegressionProtection, Regress
 from backend_ai.agent.final_verification import FinalVerificationRequest, FinalVerificationResult, verify_final_state
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
 from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
+from backend_ai.agent.experience_records import ExperienceEvaluation, ExperienceLifecycleStatus, ExperienceOutcomeStatus, ExperienceProjectIdentity, ExperienceRecord, ExperienceRecordError, ExperienceRecords, ExperienceSession, ExperienceVerification
 from backend_ai.agent.long_term_memory import LongTermMemory, LongTermMemoryEntry, LongTermMemoryError
 from backend_ai.agent.project_memory import ProjectMemory, ProjectMemoryError, ProjectMemorySnapshot
 from backend_ai.agent.short_term_memory import MemoryImportance, MemoryLifecycle, MemorySnapshot, ShortTermMemory, ShortTermMemoryError
@@ -228,6 +230,7 @@ class AutonomousLoopRequest:
     long_term_memory: LongTermMemory | None = None
     long_term_query: str | None = None
     long_term_memory_limit: int = 3
+    experience_records: ExperienceRecords | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.task, str) or not self.task.strip():
@@ -252,9 +255,11 @@ class AutonomousLoopRequest:
             raise ValueError("long_term_query must contain text when provided")
         if not isinstance(self.long_term_memory_limit, int) or isinstance(self.long_term_memory_limit, bool) or not 1 <= self.long_term_memory_limit <= 16:
             raise ValueError("long_term_memory_limit must be between 1 and 16")
+        if self.experience_records is not None and not isinstance(self.experience_records, ExperienceRecords):
+            raise ValueError("experience_records must be ExperienceRecords")
 
     def to_dict(self) -> dict[str, Any]:
-        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None, "short_term_memory_task_id": self.short_term_memory.task_id if self.short_term_memory else None, "project_memory_id": self.project_memory.project_id if self.project_memory else None, "has_long_term_memory": self.long_term_memory is not None, "long_term_query": self.long_term_query, "long_term_memory_limit": self.long_term_memory_limit}
+        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None, "short_term_memory_task_id": self.short_term_memory.task_id if self.short_term_memory else None, "project_memory_id": self.project_memory.project_id if self.project_memory else None, "has_long_term_memory": self.long_term_memory is not None, "long_term_query": self.long_term_query, "long_term_memory_limit": self.long_term_memory_limit, "has_experience_records": self.experience_records is not None}
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,6 +325,7 @@ class AutonomousLoopState:
     short_term_memory: MemorySnapshot | None = None
     project_memory: ProjectMemorySnapshot | None = None
     long_term_memories: tuple[LongTermMemoryEntry, ...] = ()
+    experience_record: ExperienceRecord | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -343,6 +349,7 @@ class AutonomousLoopState:
             "short_term_memory": self.short_term_memory.to_dict() if self.short_term_memory else None,
             "project_memory": self.project_memory.to_dict() if self.project_memory else None,
             "long_term_memories": [item.to_dict() for item in self.long_term_memories],
+            "experience_record": self.experience_record.to_dict() if self.experience_record else None,
         }
 
 
@@ -370,6 +377,7 @@ class AutonomousLoopResult:
     short_term_memory: MemorySnapshot | None = None
     project_memory: ProjectMemorySnapshot | None = None
     long_term_memories: tuple[LongTermMemoryEntry, ...] = ()
+    experience_record: ExperienceRecord | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -393,6 +401,7 @@ class AutonomousLoopResult:
             "short_term_memory": self.short_term_memory.to_dict() if self.short_term_memory else None,
             "project_memory": self.project_memory.to_dict() if self.project_memory else None,
             "long_term_memories": [item.to_dict() for item in self.long_term_memories],
+            "experience_record": self.experience_record.to_dict() if self.experience_record else None,
         }
 
 
@@ -513,6 +522,16 @@ class AutonomousToolLoop:
         except (TypeError, ValueError) as exc:
             return self._failure_result(str(exc), LoopStatus.FAILED, LoopFailureCode.INVALID_ACTION.value, task="")
 
+        experience_session: ExperienceSession | None = None
+        experience_recording_error: str | None = None
+        if request.experience_records is not None:
+            try:
+                project_id = request.project_memory.project_id if request.project_memory is not None else f"root:{request.project_root}"
+                experience_session = request.experience_records.start_experience(request.task, project_identity=ExperienceProjectIdentity(project_id, str(request.project_root)), metadata={"source": "AutonomousToolLoop"})
+                experience_session.start_attempt()
+            except ExperienceRecordError as exc:
+                experience_recording_error = str(exc)
+
         memory = request.short_term_memory or ShortTermMemory.for_task(request.task, request.project_root)
         project_memory = request.project_memory or ProjectMemory.for_project(request.project_root)
         try:
@@ -527,6 +546,8 @@ class AutonomousToolLoop:
         history: list[AgentMessage] = []
         warnings: list[str] = []
         errors: list[str] = []
+        if experience_recording_error:
+            warnings.append(f"experience recording unavailable: {experience_recording_error}")
         long_term_memories: tuple[LongTermMemoryEntry, ...] = ()
         if request.long_term_memory is not None and request.long_term_query is not None:
             try:
@@ -598,6 +619,25 @@ class AutonomousToolLoop:
                 finish_state = replace(finish_state, short_term_memory=memory.snapshot())
             except ShortTermMemoryError:
                 pass
+            if experience_session is not None:
+                try:
+                    test_calls = [(call, result) for call, result in zip(finish_calls, finish_results) if call.name in {"run_tests", "parse_test_result"}]
+                    tests_executed = len(test_calls)
+                    tests_passed = sum(1 for _, result in test_calls if result.success)
+                    tests_failed = tests_executed - tests_passed
+                    experience_session.record_verification(ExperienceVerification(tests_executed, tests_passed, tests_failed, verification.state.value, verification.message, _utc_now_for_experience(), {"loop_status": status.value}))
+                    if completion_result is not None:
+                        completion_summary = completion_result.decision.value
+                        if completion_result.blocking_conditions:
+                            completion_summary += ": " + "; ".join(completion_result.blocking_conditions[:2])
+                        experience_session.record_evaluation(ExperienceEvaluation(None, completion_result.decision.value, completion_summary, tuple(item.to_dict() for item in completion_result.items), {"source": "TaskCompletionVerifier"}))
+                    lifecycle = ExperienceLifecycleStatus.COMPLETED if status is LoopStatus.COMPLETED else ExperienceLifecycleStatus.FAILED
+                    outcome = ExperienceOutcomeStatus.SUCCESS if status is LoopStatus.COMPLETED else ExperienceOutcomeStatus.FAILURE if status in {LoopStatus.FAILED, LoopStatus.INVALID_ACTION, LoopStatus.TOOL_EXECUTION_FAILED} else ExperienceOutcomeStatus.INCOMPLETE
+                    experience_session.record_attempt_result(status.value, status="completed" if lifecycle is ExperienceLifecycleStatus.COMPLETED else "failed")
+                    finalized_experience = experience_session.finalize(status=lifecycle, outcome=outcome, final_solution=answer if answer else None, final_summary=stop_evaluation.reason.value if stop_evaluation and stop_evaluation.reason else status.value)
+                    finish_state = replace(finish_state, experience_record=finalized_experience)
+                except ExperienceRecordError as exc:
+                    finish_errors = tuple(finish_errors) + (f"experience recording failure: {exc}",)
             return self._finalize(_request, status, answer, finish_plan, finish_context, finish_state, finish_steps, finish_calls, finish_results, finish_usage, finish_warnings, finish_errors, stop_evaluation=stop_evaluation, execution_budget=budget_ledger.snapshot(), recovery=recovery_result, completion=completion_result)
 
         try:
@@ -622,6 +662,14 @@ class AutonomousToolLoop:
                 bootstrap_result = self._dispatch(bootstrap_call)
                 calls.append(bootstrap_call)
                 results.append(bootstrap_result)
+                if experience_session is not None:
+                    try:
+                        experience_session.record_action(bootstrap_call.name, "project context tool dispatched", status="success" if bootstrap_result.success else "failed")
+                        experience_session.record_observation(bootstrap_result.message or ("project context returned structured data" if bootstrap_result.success else "project context returned failure"), source=bootstrap_call.name)
+                        if not bootstrap_result.success:
+                            experience_session.record_error(bootstrap_result.error_code or "TOOL_EXECUTION_FAILED", bootstrap_result.message or "project context failed", source=bootstrap_call.name)
+                    except ExperienceRecordError as exc:
+                        warnings.append(f"experience action recording unavailable: {exc}")
                 try:
                     memory.record_tool_result(bootstrap_result, tool_name=bootstrap_call.name, related_step="context-1", importance=MemoryImportance.IMPORTANT)
                 except ShortTermMemoryError as exc:
@@ -873,6 +921,14 @@ class AutonomousToolLoop:
                 tool_result = self._dispatch(call)
                 calls.append(call)
                 results.append(tool_result)
+                if experience_session is not None:
+                    try:
+                        experience_session.record_action(call.name, "tool action dispatched", status="success" if tool_result.success else "failed", attempt_id=None)
+                        experience_session.record_observation(tool_result.message or ("tool returned structured success" if tool_result.success else "tool returned failure"), source=call.name)
+                        if not tool_result.success:
+                            experience_session.record_error(tool_result.error_code or "TOOL_EXECUTION_FAILED", tool_result.message or "tool execution failed", source=call.name)
+                    except ExperienceRecordError as exc:
+                        warnings.append(f"experience action recording unavailable: {exc}")
                 try:
                     memory.record_tool_result(tool_result, tool_name=call.name, related_step=current_step_id, importance=MemoryImportance.IMPORTANT if not tool_result.success else MemoryImportance.NORMAL)
                 except ShortTermMemoryError as exc:
@@ -896,6 +952,11 @@ class AutonomousToolLoop:
                     safety_blocked = recovery_result.decision.classification.safety_or_policy_boundary
                     recovery_action = recovery_result.decision.action.value
                     warnings.extend(recovery_result.decision.warnings)
+                    if experience_session is not None and recovery_result.decision.status is RecoveryStatus.CONTINUE:
+                        try:
+                            experience_session.record_correction(recovery_result.decision.reason, recovery_action, error_id=None)
+                        except ExperienceRecordError as exc:
+                            warnings.append(f"experience correction recording unavailable: {exc}")
                     if recovery_result.decision.status is RecoveryStatus.CONTINUE and plan_index + 1 < len(plan.steps):
                         if current_step_id:
                             completed_step_ids.append(current_step_id)
@@ -1071,7 +1132,7 @@ class AutonomousToolLoop:
         return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
     def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None, recovery: RecoveryResult | None = None, completion: TaskCompletionResult | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories)
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str, short_term_memory: ShortTermMemory | None = None) -> AutonomousLoopResult:
         snapshot = short_term_memory.snapshot() if short_term_memory is not None else None
@@ -1083,6 +1144,10 @@ def create_autonomous_tool_loop(engine: Any, *, registry: ToolRegistry | None = 
     """Create an explicitly opt-in autonomous loop; defaults remain read-only."""
 
     return AutonomousToolLoop(engine, registry=registry, config=config)
+
+
+def _utc_now_for_experience() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _memory_close_outcome(status: LoopStatus) -> MemoryLifecycle:
