@@ -51,6 +51,15 @@ from backend_ai.evaluation.benchmark_validation import (
     BenchmarkHealth, BenchmarkValidationResult, BenchmarkValidator, IssueLevel,
     ValidationIssue as BenchmarkValidationIssue, ValidationStatus, validate_benchmark,
 )
+from backend_ai.evaluation.baseline import (
+    BASELINE_DATASET_FORMAT, BASELINE_DATASET_VERSION, BASELINE_EVALUATION_FORMAT,
+    BASELINE_EVALUATION_PROTOCOL_VERSION, AutonomousToolLoopBenchmarkRuntime,
+    BaselineAggregateReport, BaselineEvaluationConfig, BaselineEvaluationConflictError,
+    BaselineEvaluationDataset, BaselineEvaluationError, BaselineEvaluationRun,
+    BaselineEvaluationRunner, BaselineEvaluationStatus, BaselineEvaluationStore,
+    BaselineTaskResult, ModelIdentity, create_current_model_runtime,
+    load_evaluation_dataset, model_identity_from_checkpoint,
+)
 from backend_ai.evaluation.task_model import (
     AllowedScope, ChangeType, EvaluationConstraint, EvaluationDifficulty,
     EvaluationTask, EvaluationTaskCategory, EvaluationTaskValidationResult,
@@ -90,4 +99,11 @@ __all__ = [
     "RegressionVerdict", "RegressionEvaluationResult", "evaluate_regression",
     "BenchmarkHealth", "BenchmarkValidationResult", "BenchmarkValidator",
     "BenchmarkValidationIssue", "IssueLevel", "ValidationStatus", "validate_benchmark",
+    "BASELINE_DATASET_FORMAT", "BASELINE_DATASET_VERSION", "BASELINE_EVALUATION_FORMAT",
+    "BASELINE_EVALUATION_PROTOCOL_VERSION", "AutonomousToolLoopBenchmarkRuntime",
+    "BaselineAggregateReport", "BaselineEvaluationConfig", "BaselineEvaluationConflictError",
+    "BaselineEvaluationDataset", "BaselineEvaluationError", "BaselineEvaluationRun",
+    "BaselineEvaluationRunner", "BaselineEvaluationStatus", "BaselineEvaluationStore",
+    "BaselineTaskResult", "ModelIdentity", "create_current_model_runtime",
+    "load_evaluation_dataset", "model_identity_from_checkpoint",
 ]

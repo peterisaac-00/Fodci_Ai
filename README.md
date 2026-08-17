@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 10.6 complete — deterministic immutable Dataset Versioning delivered; Phase 11+ not started.**
+> **Current status: Phase 11.1 complete — reproducible Baseline Model Evaluation delivered; Phase 11.2+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -1051,3 +1051,36 @@ Immutability and collision rules are strict. Creating the same version name with
 Resource limits cover maximum versions, records per version, manifest bytes, metadata bytes, lineage depth, comparison output, and record ID length. Security checks prevent passwords, API keys, tokens, credentials, cookies, authorization values, private keys, and environment secrets from entering manifests, metadata, lineage, diagnostics, or fingerprint inputs.
 
 **Phase 10.6 does not implement** dataset publishing, cloud/network storage, artifact publishing, tokenization, embeddings, semantic search, RAG, LLM evaluation, training, fine-tuning, checkpoints, model updates, automatic self-training, background agents, or automatic dataset mutation. The final Phase 10 boundary is an immutable reproducible local dataset manifest, not a training or publishing pipeline.
+
+
+## Phase 11.1 — Baseline Model Evaluation
+
+Phase 11.1 adds the first reproducible baseline evaluation of the current local Fodci model before any fine-tuning. The evaluation dataset is deliberately separate from the training and versioned DatasetRecord pipeline:
+
+```text
+Evaluation-only task dataset
+        ↓
+Existing EvaluationTask validation
+        ↓
+Explicit AutonomousToolLoop runtime
+        ↓
+Existing BenchmarkRunner evidence
+        ↓
+Objective baseline metrics
+        ↓
+Immutable historical evaluation run
+```
+
+The evaluation-only dataset is `src/backend_ai/evaluation/datasets/phase111_backend_tasks.json`, version `evaluation-v1`, protocol `11.1`, and contains six backend-engineering tasks spanning API inspection, authentication boundaries, persistence, testing, debugging evidence, and architecture boundaries. It is not a training dataset, is not passed to `DatasetSplitter` or `DatasetVersioner`, and does not create model-learning artifacts.
+
+`BaselineEvaluationRunner` reuses `EvaluationTask`, `EvaluationTaskValidator`, `BenchmarkRunner`, and existing structured AgentLoop evidence. The actual runtime adapter is explicit: `AutonomousToolLoopBenchmarkRuntime` uses the current `AutonomousToolLoop` and `ToolRegistry.default()` read-only registry. The factory `create_current_model_runtime()` loads an existing local checkpoint through `InferenceEngine`, applies deterministic CPU decoding, and applies finite `ExecutionBudget` limits. No weights, optimizer, checkpoint, or project files are changed.
+
+The structured result records model identity, model version, checkpoint path and SHA-256 fingerprint when a checkpoint is used, tokenizer version, agent version, evaluation protocol, evaluation dataset version/fingerprint, configuration, per-task statuses, tool/test/recovery evidence, failure reasons, and aggregate metrics. Missing evidence remains unavailable rather than becoming a fabricated score. Code correctness is `null` when the evaluation task does not include an applicable code-change/test criterion.
+
+Reported metrics include task success rate, test pass rate where tests were actually evaluated, tool success rate, recovery success rate where recovery was actually encountered, code-correctness rate where applicable, average attempts, average duration, failure rate, failure-reason counts, and success rates by task category and difficulty. These are objective execution/evidence metrics; no subjective answer-quality or semantic similarity score is introduced.
+
+Historical runs are persisted only when an explicit local store path is supplied, using `BaselineEvaluationStore` and atomic replacement. Evaluation IDs are immutable: an identical rerun is idempotent, while a different result under an existing ID raises `BaselineEvaluationConflictError`. The persisted store is bounded, structured JSON and does not silently overwrite prior baseline evidence.
+
+The first actual baseline run was executed against the local `fodci-tiny-v1` checkpoint with model fingerprint `sha256:8af6a5d0792ba5df77a16da262abf94e64b83a3ca17a700278310a5fc26d5314` and tokenizer version `1`. It completed all six tasks with `task_success_rate = 0.0`; all six tasks reached the bounded budget failure path (`accumulated budget dimension is exhausted`). No test executions were applicable, so `test_pass_rate` and `code_correctness_rate` are unavailable. The run is preserved in `artifacts/evaluation/baseline_runs.json` under evaluation ID `baseline-fodci-tiny-v1-2026-08-17-1`.
+
+Phase 11.1 ends at baseline measurement and historical evidence. It does not implement fine-tuning, optimizer updates, gradient steps, training data loading, checkpoint creation, model comparison gates, automatic model updates, semantic evaluation, embeddings, RAG, network access, background agents, or self-improvement.

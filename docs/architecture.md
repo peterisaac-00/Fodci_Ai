@@ -1874,3 +1874,40 @@ A version name is immutable. Registering the same name and byte-equivalent manif
 Resource limits bound maximum versions, records per version, manifest bytes, metadata bytes, lineage depth, comparison output, and record ID length. Manifest, metadata, provenance, lineage, and fingerprint inputs use the existing secret detector plus JSON-quoted key protection; passwords, API keys, tokens, credentials, cookies, authorization values, private keys, and environment secrets cannot enter the version identity or persisted manifest.
 
 Phase 10.6 ends at an immutable reproducible local dataset manifest. It does not publish datasets, upload artifacts, tokenize, embed, search semantically, use RAG or LLM evaluation, train, fine-tune, create checkpoints, update model weights, create background agents, or mutate datasets automatically.
+
+
+## Phase 11.1 — Baseline Model Evaluation
+
+Phase 11.1 introduces a baseline-only evaluation boundary above the existing declarative evaluation and benchmark infrastructure. It does not extend the training dataset pipeline and does not use `DatasetRecord`, `DatasetSplitter`, or `DatasetVersioner` as an evaluation source.
+
+```text
+phase111_backend_tasks.json
+        ↓
+BaselineEvaluationDataset
+        ↓
+EvaluationTaskValidator
+        ↓
+BaselineEvaluationRunner
+        ↓
+BenchmarkRunner + explicit AutonomousToolLoopBenchmarkRuntime
+        ↓
+BaselineTaskResult / BaselineAggregateReport
+        ↓
+BaselineEvaluationRun / BaselineEvaluationStore
+```
+
+`BaselineEvaluationDataset` is evaluation-only by contract. Its canonical identity includes the dataset version, protocol version, evaluation-only marker, sorted `EvaluationTask` JSON, and a SHA-256 fingerprint. The loader rejects unknown top-level fields, invalid tasks, duplicate task IDs, unsupported versions, and fingerprint mismatches. This keeps benchmark tasks independent from future training and release datasets.
+
+`AutonomousToolLoopBenchmarkRuntime` is an explicit adapter around the current bounded `AutonomousToolLoop`. It receives a caller-supplied runtime engine and registry; when the current local model factory is used, the factory loads `FodciModel` through `InferenceEngine` from an existing checkpoint and supplies `ToolRegistry.default()`, which remains read-only. `ExecutionBudget` is configured explicitly for baseline limits. The runtime records actual loop status, tool calls/results, test evidence, completion evidence, verification evidence, stop evidence, recovery state, and budget state without mutating model or project state.
+
+`BaselineEvaluationRunner` delegates task sequencing and isolated workspace behavior to `BenchmarkRunner`. It preserves task-level failures while continuing the bounded benchmark when `continue_on_task_failure` is enabled. A run can therefore be `COMPLETED` as an evaluation process while its aggregate task success rate is zero or partial; this distinction separates run completion from model/task success.
+
+`BaselineTaskResult` contains only structured facts: status, success, test counts when tests actually ran, tool operation counts, recovery evidence, bounded attempts/duration, failure reason, and the original benchmark evidence. `BaselineAggregateReport` computes task success, test pass, tool success, recovery success, code correctness where applicable, average attempts/duration, failure rate, failure-reason counts, and category/difficulty slices. Rates are `null` when the relevant evidence set is empty. No subjective quality score or semantic similarity metric is inferred.
+
+`ModelIdentity` records model name/version, explicit checkpoint path, file SHA-256 fingerprint, and tokenizer version. `BaselineEvaluationRun` additionally records agent version, evaluation protocol, evaluation dataset version/fingerprint, configuration, UTC timestamp supplied by the runner, benchmark evidence, and environment facts limited to whether a project root was supplied. No random/environment/timing field is used as a content identity.
+
+`BaselineEvaluationStore` is an optional local historical persistence boundary. It uses a strict JSON header, explicit local path, atomic temporary-file replacement, bounded structured results, and immutable evaluation IDs. Saving the same ID and byte-equivalent result is idempotent; saving a different result under the same ID raises a conflict and never overwrites history. The store performs no network, package installation, cloud upload, or external database operation.
+
+The actual Phase 11.1 run used the local `fodci-tiny-v1` checkpoint and read-only registry. It completed all six evaluation tasks, but the current model produced zero successful tasks; each task ended through the bounded budget-failure path. No tests were executed by the evaluation-only task set, so test pass and code-correctness metrics remained unavailable. The historical JSON result is kept at `artifacts/evaluation/baseline_runs.json`.
+
+Phase 11.1 deliberately ends before fine-tuning. No gradient, optimizer, training loop, dataset split, checkpoint write, model comparison, model selection, automatic model update, LLM judge, embedding, RAG, network, background execution, or self-improvement is introduced.

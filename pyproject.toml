@@ -42,6 +42,9 @@ Repository = "https://github.com/peterisaac-00/Fodci_Ai"
 where = ["src"]
 include = ["backend_ai*"]
 
+[tool.setuptools.package-data]
+backend_ai = ["evaluation/datasets/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
