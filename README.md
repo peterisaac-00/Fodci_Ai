@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 10.5 complete — deterministic Dataset Validation delivered; Phase 10.6+ not started.**
+> **Current status: Phase 10.6 complete — deterministic immutable Dataset Versioning delivered; Phase 11+ not started.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -757,7 +757,7 @@ future model improvement
 
 That pipeline is not implemented in Phase 9.4. No Experience Record is automatically converted into Long-Term Memory, Project Memory, or a training dataset.
 
-**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Phase 10.3 adds deterministic Dataset Filtering & Quality Gates with ACCEPT/REVIEW/REJECT decisions. Phase 10.4 adds deterministic train/validation/test partitioning for accepted canonical Dataset Records. Phase 10.5 adds read-only deterministic Dataset Validation over canonical records and split manifests, including schema/provenance/security/consistency/integrity/quality-decision/leakage checks with structured diagnostics. Embeddings, semantic retrieval, vector databases, RAG, dataset release versioning, dataset artifact publishing, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
+**Phase 9.4 implements historical Experience Records only. Phase 9.5 adds a unified deterministic retrieval/orchestration layer over existing memory sources. Phase 9.6 adds a deterministic Memory Quality & Governance decision layer above retrieval. Phase 10.1 adds extraction-only conversion from finalized Experience Records to derived Dataset Candidates. Phase 10.2 adds the strict versioned canonical Dataset Schema and DatasetRecord contract. Phase 10.3 adds deterministic Dataset Filtering & Quality Gates with ACCEPT/REVIEW/REJECT decisions. Phase 10.4 adds deterministic train/validation/test partitioning for accepted canonical Dataset Records. Phase 10.5 adds read-only deterministic Dataset Validation over canonical records and split manifests, including schema/provenance/security/consistency/integrity/quality-decision/leakage checks with structured diagnostics. Phase 10.6 adds explicit immutable Dataset Versioning with content fingerprints, canonical manifests, local atomic registry persistence, collision protection, lineage, comparison, and reproducibility verification. Embeddings, semantic retrieval, vector databases, RAG, training, fine-tuning, model-weight updates, external LLM APIs, network storage, background agents, automatic memory conversion, new tools, and new execution permissions remain out of scope.**
 
 ## Phase 9.5 — unified Memory Retrieval
 
@@ -1006,3 +1006,48 @@ When a `DatasetSplitResult` is supplied, the validator verifies train/validation
 `DatasetValidationResult` reports `VALID`, `VALID_WITH_WARNINGS`, or `INVALID`, along with validation version, schema version, total/valid/invalid record counts, warning/error counts, deterministic summary, diagnostics, and provenance. Results and nested diagnostic/provenance collections are immutable. Resource limits bound record count, diagnostic count and size, total bytes inspected, and schema work. Exceeding a limit produces explicit `resource_limit_exceeded` rather than silently stopping.
 
 **Phase 10.5 is read-only and side-effect free.** It does not write files, mutate records, modify Experience Records or quality assessments, change split assignments, execute commands, access the network, install packages, modify Git, invoke an LLM, create background processes, publish datasets, manage releases, tokenize, use embeddings, perform semantic search, train, fine-tune, update checkpoints, or change model weights. It validates dataset integrity only; it does not publish or improve the model.
+
+## Phase 10.6 — Dataset Versioning
+
+Phase 10.6 adds `DatasetVersioner` as the final Phase 10 layer after Dataset Validation. It creates explicit immutable, auditable dataset versions from canonical records, an internally valid `DatasetSplitResult`, and a `VALID` `DatasetValidationResult`.
+
+```text
+DatasetRecord
+      ↓
+Quality Gates
+      ↓
+Dataset Split
+      ↓
+Dataset Validation
+      ↓
+DatasetVersioner
+      ↓
+Immutable DatasetVersion / DatasetVersionManifest
+```
+
+The concepts are intentionally distinct:
+
+| Concept | Example | Meaning |
+|---|---|---|
+| Dataset Schema version | `1.0` | Shape and validation contract of one DatasetRecord |
+| Dataset Split version | `1.0` | Split algorithm/manifest contract |
+| Dataset release/version | `dataset-v1` | Human-readable immutable release identity |
+| Dataset content fingerprint | `sha256:<64 hex>` | Cryptographic identity of the actual version inputs |
+
+The version name accepts the simple deterministic format `dataset-vN` or `dataset-vN.M`. The name is not the content identity. A version is created only through an explicit `create_version(...)` call; versions are never generated automatically from mutations.
+
+The fingerprint is SHA-256 over canonical UTF-8 JSON with sorted keys, stable compact separators, stable enum values, and no creation time or random metadata. Its identity payload includes sorted canonical DatasetRecord IDs and complete record content, Dataset Schema version, split version, seed, grouping policy, train/validation/test membership, quality policy and version, validation status/schema/count summary, and caller metadata. Input ordering does not affect the result, while meaningful record content, split membership, schema/split metadata, quality policy, or validation identity changes do.
+
+`DatasetVersionManifest` records the exact dataset identity and audit context: version/version ID, fingerprint, schema version, record count, sorted record IDs, per-record content fingerprints, partition memberships, split version/seed/grouping policy, quality policy/version, validation state/summary, source provenance, optional parent version, bounded metadata, and non-identity creation metadata. It is canonical JSON, strict on round-trip, immutable through frozen dataclasses and immutable nested mappings, and protected by secret detection.
+
+A version requires canonical records with unique IDs, a valid internal split covering exactly those records, a `VALID` validation result with no errors or invalid records, matching schema/count metadata, valid provenance, and safe bounded metadata. Invalid datasets are rejected explicitly and never repaired.
+
+`DatasetVersionRegistry` is a local-only registry that may be backed by an explicitly supplied path such as `.fodci/datasets.json`. It uses atomic temporary-file replacement, flush/fsync, directory fsync where supported, digest-based stale-writer conflict detection, bounded manifests/version counts, symlink rejection, strict reload validation, and no network or cloud storage. In-memory use is available when no path is supplied. Registry creation is explicit; there is no automatic dataset persistence.
+
+Immutability and collision rules are strict. Creating the same version name with the same canonical manifest is idempotent. Creating the same name with a different fingerprint or manifest raises `DatasetVersionConflictError`; the existing manifest is never overwritten. Parent versions must already exist, cannot self-reference, and are checked for bounded acyclic lineage. A parent reference is provenance only and does not imply that the child contains the parent records.
+
+`verify_version(...)` recomputes current record fingerprints, exact partition membership, schema/split/quality/validation identity, and the complete dataset fingerprint. It returns structured checks for extra/missing/changed records, partition membership changes, schema/split/policy/validation changes, and fingerprint mismatch without mutating current data. `compare_versions(...)` reports added, removed, and changed record IDs, partition changes, schema/split/quality/validation changes, and fingerprint differences; it never compares only record counts.
+
+Resource limits cover maximum versions, records per version, manifest bytes, metadata bytes, lineage depth, comparison output, and record ID length. Security checks prevent passwords, API keys, tokens, credentials, cookies, authorization values, private keys, and environment secrets from entering manifests, metadata, lineage, diagnostics, or fingerprint inputs.
+
+**Phase 10.6 does not implement** dataset publishing, cloud/network storage, artifact publishing, tokenization, embeddings, semantic search, RAG, LLM evaluation, training, fine-tuning, checkpoints, model updates, automatic self-training, background agents, or automatic dataset mutation. The final Phase 10 boundary is an immutable reproducible local dataset manifest, not a training or publishing pipeline.

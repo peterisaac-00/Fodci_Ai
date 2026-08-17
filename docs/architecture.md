@@ -1834,3 +1834,43 @@ Dataset validation sorts inputs and diagnostics by stable identifiers. It detect
 Split validation consumes an existing split result and verifies partition existence, record disjointness, manifest counts, record IDs, group IDs, requested/actual ratios, seed, split version, schema version, and policy metadata. It separately detects record overlap and experience/project group leakage according to the manifest's grouping mode. It also compares the split against the supplied canonical dataset and Phase 10.3 quality assessments: only `ACCEPT` records may be eligible, `REVIEW`/`REJECT` records cannot enter the split, assessment provenance must match the record, scores must stay within `[0, 1]`, and an `ACCEPT` assessment cannot contain a hard-gate failure.
 
 The validator is deterministic: it uses only source timestamps for comparison, stable identifiers for ordering, canonical JSON for exact identity, and no random value, UUID, current timestamp, environment identifier, model, or external service. Diagnostics are bounded and secret-safe; messages never include secret payloads. Validation is side-effect free and does not write files, modify records, persist results, execute processes, access network resources, modify Git, invoke an LLM, create background work, publish datasets, manage releases, tokenize, embed, search semantically, train, fine-tune, checkpoint, or update model weights.
+
+## Phase 10.6 — Dataset Versioning
+
+Phase 10.6 is a separate versioning layer after the validated Dataset Split pipeline:
+
+```text
+DatasetRecord
+      ↓
+DatasetQualityEvaluator
+      ↓
+DatasetSplitter
+      ↓
+DatasetValidator
+      ↓
+DatasetVersioner
+      ├── canonical fingerprint
+      ├── immutable release manifest
+      ├── collision-protected local registry
+      ├── bounded parent lineage
+      ├── reproducibility verification
+      └── deterministic version comparison
+      ↓
+DatasetVersion
+```
+
+`DatasetVersioner` does not add versioning behavior to `DatasetRecord`, `DatasetQualityEvaluator`, `DatasetSplitter`, `DatasetValidator`, `ExperienceRecord`, or memory retrieval. Version creation is explicit and requires canonical `DatasetRecord` objects, a valid `DatasetSplitResult` covering exactly those records, and a `DatasetValidationResult` with `VALID` status, zero errors, zero invalid records, matching schema/count metadata, and safe provenance. Invalid inputs produce structured `DatasetVersionError` values and are never repaired.
+
+`DatasetVersionManifest` is the canonical immutable release contract. It contains the human-readable `dataset-vN` or `dataset-vN.M` name, matching version ID, `sha256:<64 hex>` content fingerprint, Dataset Schema version, record count, sorted record IDs, per-record canonical content fingerprints, train/validation/test memberships, Dataset Split version/seed/grouping policy, quality policy/version, validation status/summary, provenance, optional parent, bounded metadata, and non-identity creation metadata. Nested mappings are frozen, JSON uses UTF-8, sorted keys, compact separators, stable enum values, and strict field/version validation.
+
+The content fingerprint is computed from an explicit canonical identity payload rather than arbitrary JSON serialization. The payload contains an identity-version marker, Dataset Schema version, sorted record IDs and complete canonical record content, split version/seed/grouping policy and sorted partition memberships, quality policy/version, validation status/schema/count summary, and caller metadata. Creation metadata is deliberately excluded from identity, so human audit timestamps cannot change content identity. The resulting SHA-256 digest is prefixed with `sha256:`. Input order is irrelevant; meaningful content, split membership/configuration, schema, quality policy, validation identity, or metadata changes the digest.
+
+`DatasetVersionRegistry` is an optional local persistence boundary. With an explicit path such as `.fodci/datasets.json`, it uses strict JSON headers, bounded version/manifest sizes, symlink rejection, digest-based stale-writer conflict detection, temporary-file replacement, fsync, and directory fsync where supported. Reload validates every manifest and the complete parent graph. Without a path, the registry is intentionally in-memory. No cloud storage, network, external database, or competing persistence mechanism is introduced.
+
+A version name is immutable. Registering the same name and byte-equivalent manifest is idempotent. Registering the same name with a different fingerprint or any different manifest raises `DatasetVersionConflictError` and never overwrites the old version. Parent versions must already exist, cannot self-reference, and are checked for bounded acyclic lineage. Parent metadata does not imply inherited records; the child manifest's record IDs and fingerprint remain authoritative.
+
+`verify_version` recomputes record fingerprints, exact record coverage, partition membership, schema/split/seed/grouping identity, quality policy/version, validation status/schema/count identity, and the full fingerprint. It returns an immutable structured result with checks for extra, missing, or changed records; train/validation/test membership changes; schema/split/quality/validation changes; and fingerprint mismatch. `compare_versions` reports added, removed, and changed record IDs, partition changes, schema/split/quality/validation differences, and fingerprint differences. Both operations are read-only and never compare only record counts.
+
+Resource limits bound maximum versions, records per version, manifest bytes, metadata bytes, lineage depth, comparison output, and record ID length. Manifest, metadata, provenance, lineage, and fingerprint inputs use the existing secret detector plus JSON-quoted key protection; passwords, API keys, tokens, credentials, cookies, authorization values, private keys, and environment secrets cannot enter the version identity or persisted manifest.
+
+Phase 10.6 ends at an immutable reproducible local dataset manifest. It does not publish datasets, upload artifacts, tokenize, embed, search semantically, use RAG or LLM evaluation, train, fine-tune, create checkpoints, update model weights, create background agents, or mutate datasets automatically.
