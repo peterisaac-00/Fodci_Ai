@@ -1,0 +1,8 @@
+### Instruction
+Why should a backend avoid relying on implicit row order?
+
+### Input
+None
+
+### Response
+Relational tables have no guaranteed order without ORDER BY, so implicit order makes pagination and tests unstable.

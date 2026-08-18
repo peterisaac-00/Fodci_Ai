@@ -1,0 +1,8 @@
+### Instruction
+Why should an application rule also be represented by a database constraint when possible?
+
+### Input
+None
+
+### Response
+The constraint protects integrity across all writers and turns an implicit assumption into an enforceable schema rule.

@@ -207,3 +207,34 @@ PYTHONPATH=src python scripts/benchmark_stage1.py \
 ```
 
 The benchmark remains a conservative keyword-coverage proxy. In the bounded run, the objective validation loss improved while the generation output remained empty, so the result validates the training path but does not establish conversational or semantic programming ability.
+
+
+## Phase 13.5 — SQL & Database Reasoning
+
+`generate_phase135_data.py` creates the SQL and database reasoning corpus under `training_data/sql_database`, with separate train, validation, and held-out evaluation data. The curriculum covers SQL querying, joins and aggregation, schema design, constraints, indexes, transactions, concurrency, and migrations.
+
+```text
+python scripts/generate_phase135_data.py
+```
+
+`train_phase135_sql_database.py` continues from `artifacts/checkpoints/fodci-python-backend-v1.pt` and writes the SQL specialist checkpoint `artifacts/checkpoints/fodci-sql-database-v1.pt`. The default bounded run uses CPU, one epoch, twelve maximum steps, batch size two, learning rate `2e-4`, and a 64-token training window chosen to retain every short SQL instruction record.
+
+```text
+PYTHONPATH=src python scripts/train_phase135_sql_database.py
+```
+
+The workflow writes `artifacts/evaluation/phase135_sql_database_training.json` and `docs/experiments/phase135_sql_database_training.md`. It validates checkpoint lineage, dataset coverage, finite objective loss, parameter changes, checkpoint existence, and reload consistency.
+
+The held-out SQL benchmark is run with:
+
+```text
+PYTHONPATH=src python scripts/benchmark_stage1.py \
+  --dataset training_data/sql_database/evaluation/phase_135.jsonl \
+  --checkpoint artifacts/checkpoints/fodci-sql-database-v1.pt \
+  --model-version fodci-sql-database-v1 \
+  --run-prefix phase135-sql-database \
+  --report artifacts/evaluation/phase135_sql_database_benchmark.json \
+  --markdown docs/experiments/phase135_sql_database_benchmark.md
+```
+
+The benchmark is a deterministic keyword-coverage and non-empty-output diagnostic. It must not be interpreted as a semantic SQL judge; objective loss, held-out tasks, and later execution-aware evaluation remain separate evidence.

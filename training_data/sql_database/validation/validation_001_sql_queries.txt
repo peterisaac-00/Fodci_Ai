@@ -1,0 +1,8 @@
+### Instruction
+How should a backend safely filter users by an optional email value?
+
+### Input
+None
+
+### Response
+Use a fixed query shape with a parameter for the email and handle the absent filter explicitly; never concatenate the value into SQL.

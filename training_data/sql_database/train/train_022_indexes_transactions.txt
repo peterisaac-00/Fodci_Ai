@@ -1,0 +1,8 @@
+### Instruction
+How can optimistic concurrency prevent lost updates?
+
+### Input
+None
+
+### Response
+Read a version or updated timestamp, include it in the update predicate, and reject the update when the stored version changed.

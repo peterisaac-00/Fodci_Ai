@@ -1,0 +1,8 @@
+### Instruction
+Why should a query select only the columns required by the endpoint?
+
+### Input
+None
+
+### Response
+Selecting required columns reduces transfer and memory costs, avoids leaking fields, and makes the response contract explicit.

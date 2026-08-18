@@ -1,0 +1,8 @@
+### Instruction
+Why should a query use a stable cursor for large pagination?
+
+### Input
+None
+
+### Response
+A cursor based on an indexed, ordered key avoids large offsets and reduces duplicates or omissions when earlier rows change.

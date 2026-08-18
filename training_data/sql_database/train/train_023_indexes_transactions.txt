@@ -1,0 +1,8 @@
+### Instruction
+How should a service respond to a deadlock victim error?
+
+### Input
+None
+
+### Response
+Rollback the transaction, retry the complete bounded operation when safe, and use backoff; never retry only one statement outside its transaction semantics.

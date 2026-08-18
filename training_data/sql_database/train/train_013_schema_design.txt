@@ -1,0 +1,8 @@
+### Instruction
+When should a column be NOT NULL?
+
+### Input
+None
+
+### Response
+Use NOT NULL when every valid row must have a value for the field and the absence of a value has no valid meaning.

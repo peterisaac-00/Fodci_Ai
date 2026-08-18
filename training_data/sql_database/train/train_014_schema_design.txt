@@ -1,0 +1,8 @@
+### Instruction
+Why should a natural business identifier often have a UNIQUE constraint even with a surrogate primary key?
+
+### Input
+None
+
+### Response
+The surrogate key identifies the row internally, while UNIQUE protects the business rule that the natural identifier cannot repeat.

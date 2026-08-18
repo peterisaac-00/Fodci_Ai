@@ -1,0 +1,8 @@
+### Instruction
+How can SQL count orders per customer while retaining customers with no orders?
+
+### Input
+None
+
+### Response
+Use a LEFT JOIN from customers to orders, group by the customer identity, and count a nullable order column rather than counting every joined row.

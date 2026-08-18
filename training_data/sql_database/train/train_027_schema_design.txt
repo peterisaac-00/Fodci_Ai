@@ -1,0 +1,8 @@
+### Instruction
+Why should timestamps have an explicit timezone policy?
+
+### Input
+None
+
+### Response
+A documented timezone policy prevents ambiguous comparisons and makes auditing and cross-region behavior consistent.

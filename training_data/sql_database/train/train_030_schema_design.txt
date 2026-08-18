@@ -1,0 +1,8 @@
+### Instruction
+Why should a database constraint enforce a rule that must always hold?
+
+### Input
+None
+
+### Response
+A database constraint protects integrity for every writer, including scripts and future services that may bypass application validation.

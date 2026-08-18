@@ -1,0 +1,8 @@
+### Instruction
+How should a service safely retry a deadlock?
+
+### Input
+None
+
+### Response
+Rollback the entire transaction and retry the complete operation with a bounded attempt count and backoff when the operation is safe to repeat.

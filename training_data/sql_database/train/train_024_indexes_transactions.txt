@@ -1,0 +1,8 @@
+### Instruction
+Why should a database upsert have an explicit conflict rule?
+
+### Input
+None
+
+### Response
+An explicit conflict rule defines whether a duplicate becomes an update, no-op, or error and prevents accidental data replacement.

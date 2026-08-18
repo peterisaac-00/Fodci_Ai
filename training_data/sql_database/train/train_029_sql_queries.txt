@@ -1,0 +1,8 @@
+### Instruction
+What is the difference between WHERE and ON conditions in an outer join?
+
+### Input
+None
+
+### Response
+ON controls which rows match during the join, while WHERE filters the joined result and can accidentally remove NULL-preserved rows.

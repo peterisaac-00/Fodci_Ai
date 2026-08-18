@@ -1,0 +1,8 @@
+### Instruction
+How should a query test whether a nullable column has no value?
+
+### Input
+None
+
+### Response
+Use `IS NULL` or `IS NOT NULL`; equality with NULL does not produce the intended SQL truth result.

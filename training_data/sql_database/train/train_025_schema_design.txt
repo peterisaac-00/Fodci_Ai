@@ -1,0 +1,8 @@
+### Instruction
+Why should relationship cardinality be documented in a schema design?
+
+### Input
+None
+
+### Response
+Cardinality states whether each side is one-to-one, one-to-many, or many-to-many and guides constraints, joins, and API behavior.

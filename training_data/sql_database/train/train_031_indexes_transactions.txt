@@ -1,0 +1,8 @@
+### Instruction
+Why should transaction scope be kept small?
+
+### Input
+None
+
+### Response
+Short transactions hold locks for less time, reduce contention and deadlock risk, and release resources sooner.

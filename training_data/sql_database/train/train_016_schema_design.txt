@@ -1,0 +1,8 @@
+### Instruction
+Why should database migrations be backward compatible during a rolling deployment?
+
+### Input
+None
+
+### Response
+Old and new application versions may run together, so an intermediate schema must support both until the rollout is complete.

@@ -1,0 +1,8 @@
+### Instruction
+Why should indexes be added selectively?
+
+### Input
+None
+
+### Response
+Indexes accelerate some reads but consume storage and slow writes, so each index should support a measured access pattern.

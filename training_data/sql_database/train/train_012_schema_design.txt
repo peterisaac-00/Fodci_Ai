@@ -1,0 +1,8 @@
+### Instruction
+Why is normalization useful in transactional database design?
+
+### Input
+None
+
+### Response
+Normalization reduces duplicated facts and update anomalies by storing each fact in an appropriate related table.

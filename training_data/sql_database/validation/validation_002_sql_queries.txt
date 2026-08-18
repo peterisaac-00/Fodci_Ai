@@ -1,0 +1,8 @@
+### Instruction
+How can an endpoint list customers with their order totals including zero-order customers?
+
+### Input
+None
+
+### Response
+Start with customers, LEFT JOIN orders, aggregate with GROUP BY, and use a zero-preserving count or COALESCE as appropriate.

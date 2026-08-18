@@ -1,0 +1,8 @@
+### Instruction
+How should a product-tag many-to-many relationship be stored?
+
+### Input
+None
+
+### Response
+Create a product_tag junction table with product_id and tag_id foreign keys and a unique or composite primary key on both IDs.

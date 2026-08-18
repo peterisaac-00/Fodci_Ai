@@ -1,0 +1,8 @@
+### Instruction
+Why can moving an outer-join condition from ON to WHERE change results?
+
+### Input
+None
+
+### Response
+A WHERE condition can remove rows whose joined side is NULL, changing an intended outer join into inner-like behavior.

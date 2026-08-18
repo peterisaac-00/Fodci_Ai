@@ -1,0 +1,8 @@
+### Instruction
+When does an index improve a backend query?
+
+### Input
+None
+
+### Response
+An index helps when its leading columns narrow the search or support ordering enough to cost less than scanning the table.

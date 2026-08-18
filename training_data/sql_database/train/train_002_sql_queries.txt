@@ -1,0 +1,8 @@
+### Instruction
+How should a query return the newest ten orders with deterministic pagination?
+
+### Input
+None
+
+### Response
+Use an explicit `ORDER BY created_at DESC, id DESC` and then apply `LIMIT 10`; the unique ID makes ties deterministic.

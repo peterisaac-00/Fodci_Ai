@@ -1,0 +1,8 @@
+### Instruction
+What does a foreign key guarantee?
+
+### Input
+None
+
+### Response
+A foreign key constrains a child value to reference an existing parent key, preserving referential integrity according to the configured delete behavior.

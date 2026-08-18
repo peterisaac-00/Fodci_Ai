@@ -1,0 +1,8 @@
+### Instruction
+What is the leftmost-prefix rule for a composite index?
+
+### Input
+None
+
+### Response
+A composite index on `(tenant_id, status, created_at)` is most directly useful for predicates or ordering that begin with tenant_id and then follow the index order.

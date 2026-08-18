@@ -1,0 +1,8 @@
+### Instruction
+What should a schema consider before using soft deletion?
+
+### Input
+None
+
+### Response
+Define the deleted state, filtering rules, uniqueness behavior, retention policy, and how administrators can restore or permanently remove data.

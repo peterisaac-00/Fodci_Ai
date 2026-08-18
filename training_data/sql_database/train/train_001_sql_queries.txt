@@ -1,0 +1,8 @@
+### Instruction
+Why should backend SQL queries use parameters instead of string concatenation?
+
+### Input
+None
+
+### Response
+Parameters separate SQL code from values, preventing injection and allowing the database driver to encode values correctly.

@@ -1,0 +1,8 @@
+### Instruction
+What is the role of a primary key in a relational table?
+
+### Input
+None
+
+### Response
+A primary key uniquely identifies each row, provides a stable reference target for foreign keys, and must not be NULL.

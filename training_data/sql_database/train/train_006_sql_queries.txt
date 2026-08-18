@@ -1,0 +1,8 @@
+### Instruction
+When is EXISTS useful in a backend query?
+
+### Input
+None
+
+### Response
+EXISTS checks whether a related row exists without needing to return or count every matching related row, which is useful for authorization or membership checks.

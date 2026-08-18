@@ -1,0 +1,8 @@
+### Instruction
+Why does transaction isolation matter?
+
+### Input
+None
+
+### Response
+Isolation controls which concurrent changes a transaction can observe and helps balance consistency, locking, and throughput.

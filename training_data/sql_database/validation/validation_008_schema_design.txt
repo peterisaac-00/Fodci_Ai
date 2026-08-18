@@ -1,0 +1,8 @@
+### Instruction
+How should a rolling deployment add a required database field?
+
+### Input
+None
+
+### Response
+Add it in a compatible nullable or defaulted form, deploy code that writes it, backfill safely, then enforce requiredness after old code is gone.

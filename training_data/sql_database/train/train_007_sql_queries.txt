@@ -1,0 +1,8 @@
+### Instruction
+How should a backend update only a permitted set of fields?
+
+### Input
+None
+
+### Response
+Build a fixed SQL statement for the permitted columns, pass values as parameters, and verify the affected row belongs to the authorized resource.

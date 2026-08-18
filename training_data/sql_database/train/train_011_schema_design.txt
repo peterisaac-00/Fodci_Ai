@@ -1,0 +1,8 @@
+### Instruction
+How should a many-to-many relationship be represented relationally?
+
+### Input
+None
+
+### Response
+Use a junction table with one foreign key to each entity and a composite primary key or unique constraint across the pair.

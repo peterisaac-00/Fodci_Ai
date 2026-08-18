@@ -1,0 +1,8 @@
+### Instruction
+Why should an engineer inspect the query plan instead of guessing about an index?
+
+### Input
+None
+
+### Response
+The query plan shows whether the optimizer scans, seeks, joins, or sorts, providing evidence for an index decision.

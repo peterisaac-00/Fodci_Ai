@@ -1,0 +1,8 @@
+### Instruction
+What does a database transaction provide?
+
+### Input
+None
+
+### Response
+A transaction groups operations into one atomic unit with defined commit and rollback behavior, so partial updates do not become visible as success.

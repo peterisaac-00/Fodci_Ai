@@ -1,0 +1,8 @@
+### Instruction
+How should an engineer decide whether to add an index to a slow query?
+
+### Input
+None
+
+### Response
+Inspect the query plan and workload, then add an index whose leading columns support the predicate or ordering and verify the measured tradeoff.

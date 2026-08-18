@@ -1,0 +1,8 @@
+### Instruction
+What is the purpose of GROUP BY and HAVING in an aggregate query?
+
+### Input
+None
+
+### Response
+GROUP BY forms one result group per key, while HAVING filters groups after aggregation; WHERE filters rows before aggregation.
