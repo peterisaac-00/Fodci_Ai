@@ -163,3 +163,16 @@ PYTHONPATH=src python scripts/benchmark_stage1.py
 The benchmark dataset is `training_data/fundamentals/evaluation/stage_01.jsonl`. It is deliberately separate from the training split and contains 24 unique, versioned records across backend concepts, HTTP, REST, security, and architecture. The runner validates the JSONL schema and rejects duplicate IDs or questions before loading the model.
 
 The command writes `artifacts/evaluation/stage1_baseline.json` and `artifacts/evaluation/stage1_baseline.md`. Reports include the run ID, model parameter count, checkpoint and dataset SHA-256 fingerprints, protocol identity, per-question outputs, aggregate metrics, and category-level metrics. The deterministic keyword-coverage score is a conservative proxy for concept coverage; it is not a semantic judge. A baseline with empty outputs or zero keyword coverage is a valid diagnostic result and should be preserved rather than hidden. Future checkpoints must be evaluated with the same dataset, prompt, seed, decoding rule, and thresholds.
+
+
+## Phase 13.3 — Stage 1 Training & Pipeline Validation
+
+`train_stage1.py` runs a bounded local CPU training experiment on `training_data/fundamentals`. It reserves the final 20 percent of sorted instruction documents for validation, evaluates a fresh baseline, trains for four maximum optimizer steps by default, saves `artifacts/checkpoints/fodci-stage1-v1.pt`, reloads that checkpoint, and compares before/after validation loss.
+
+```text
+PYTHONPATH=src python scripts/train_stage1.py
+```
+
+Optional limits can be supplied explicitly, for example `--epochs 1 --max-steps 4 --batch-size 2 --learning-rate 3e-4`. The workflow validates that examples exist, both partitions are non-empty, training loss is finite, validation loss is available, parameters changed, the checkpoint exists, and checkpoint reload reproduces the trained validation loss. It writes `artifacts/evaluation/stage1_training.json` and the tracked report `docs/experiments/phase133_stage1_training.md`.
+
+This experiment validates dataset loading, response-only masking, forward/backward execution, optimizer updates, checkpoint compatibility, and objective evaluation. It does not perform generation, does not modify the normal interactive `fodci` command, and does not establish that the model is conversationally capable.
