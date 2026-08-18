@@ -1,0 +1,8 @@
+### Instruction
+Why should an API response schema be separate from an internal database model?
+
+### Input
+None
+
+### Response
+Separate schemas prevent persistence details from leaking into the public contract and let each boundary evolve independently.

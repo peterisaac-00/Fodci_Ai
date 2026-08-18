@@ -1,0 +1,8 @@
+### Instruction
+How should error handling preserve the original failure while adding context?
+
+### Input
+None
+
+### Response
+Catch the narrow exception, add operation context with exception chaining, and retain the original traceback for diagnostics.

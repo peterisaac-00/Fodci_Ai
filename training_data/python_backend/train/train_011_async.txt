@@ -1,0 +1,8 @@
+### Instruction
+When is `asyncio.gather` appropriate in a backend service?
+
+### Input
+None
+
+### Response
+Use gather for independent awaitables that can run concurrently, and handle cancellation and exceptions according to the required all-or-nothing policy.

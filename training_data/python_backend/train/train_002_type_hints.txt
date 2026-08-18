@@ -1,0 +1,8 @@
+### Instruction
+Write a typed Python function signature for creating a user and returning its integer ID.
+
+### Input
+None
+
+### Response
+Use a signature such as `def create_user(name: str, email: str) -> int:` and validate the values inside the function before persistence.

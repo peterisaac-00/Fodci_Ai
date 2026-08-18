@@ -1,0 +1,8 @@
+### Instruction
+How should an API validate a request body with Pydantic v2?
+
+### Input
+None
+
+### Response
+Define a BaseModel and call `Model.model_validate(payload)` at the boundary, then pass the validated model rather than the raw dict inward.

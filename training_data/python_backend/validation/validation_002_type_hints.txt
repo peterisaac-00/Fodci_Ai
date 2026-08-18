@@ -1,0 +1,8 @@
+### Instruction
+What is dependency injection through a typed Protocol?
+
+### Input
+None
+
+### Response
+The service receives an object implementing the Protocol, which makes the dependency explicit and permits alternate database or test implementations.

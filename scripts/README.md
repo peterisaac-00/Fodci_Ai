@@ -176,3 +176,34 @@ PYTHONPATH=src python scripts/train_stage1.py
 Optional limits can be supplied explicitly, for example `--epochs 1 --max-steps 4 --batch-size 2 --learning-rate 3e-4`. The workflow validates that examples exist, both partitions are non-empty, training loss is finite, validation loss is available, parameters changed, the checkpoint exists, and checkpoint reload reproduces the trained validation loss. It writes `artifacts/evaluation/stage1_training.json` and the tracked report `docs/experiments/phase133_stage1_training.md`.
 
 This experiment validates dataset loading, response-only masking, forward/backward execution, optimizer updates, checkpoint compatibility, and objective evaluation. It does not perform generation, does not modify the normal interactive `fodci` command, and does not establish that the model is conversationally capable.
+
+
+## Phase 13.4 — Python for Backend Specialist
+
+`generate_phase134_data.py` creates the reviewed Python backend specialist corpus under `training_data/python_backend`, with separate `train`, `validation`, and held-out `evaluation/phase_134.jsonl` outputs. The curriculum is balanced across type hints, async patterns, Pydantic, and error handling.
+
+```text
+python scripts/generate_phase134_data.py
+```
+
+`train_phase134_python_backend.py` continues from the verified Phase 13.3 checkpoint and runs a bounded CPU specialization experiment. It defaults to 12 maximum optimizer steps, batch size two, learning rate `2e-4`, response-only masking, and a deterministic validation split.
+
+```text
+PYTHONPATH=src python scripts/train_phase134_python_backend.py
+```
+
+The workflow writes `artifacts/checkpoints/fodci-python-backend-v1.pt`, `artifacts/evaluation/phase134_python_backend_training.json`, and `docs/experiments/phase134_python_backend_training.md`. It verifies base-checkpoint lineage, non-empty partitions, finite loss, parameter changes, checkpoint compatibility, and reload consistency.
+
+The held-out specialist benchmark uses the shared runner:
+
+```text
+PYTHONPATH=src python scripts/benchmark_stage1.py \
+  --dataset training_data/python_backend/evaluation/phase_134.jsonl \
+  --checkpoint artifacts/checkpoints/fodci-python-backend-v1.pt \
+  --model-version fodci-python-backend-v1 \
+  --run-prefix phase134-python-backend \
+  --report artifacts/evaluation/phase134_python_backend_benchmark.json \
+  --markdown docs/experiments/phase134_python_backend_benchmark.md
+```
+
+The benchmark remains a conservative keyword-coverage proxy. In the bounded run, the objective validation loss improved while the generation output remained empty, so the result validates the training path but does not establish conversational or semantic programming ability.

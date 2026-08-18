@@ -1,0 +1,8 @@
+### Instruction
+Why should an API map internal exceptions at one boundary?
+
+### Input
+None
+
+### Response
+Central mapping keeps handlers consistent, avoids duplicated try/except code, and prevents tracebacks or implementation details from reaching clients.

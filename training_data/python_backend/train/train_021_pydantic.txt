@@ -1,0 +1,8 @@
+### Instruction
+How should nested API data be represented with Pydantic?
+
+### Input
+None
+
+### Response
+Define a nested BaseModel for the child object and use it as the parent field type so nested validation is applied recursively.

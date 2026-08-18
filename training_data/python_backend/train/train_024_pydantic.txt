@@ -1,0 +1,8 @@
+### Instruction
+How can Pydantic prevent unexpected fields in a strict request model?
+
+### Input
+None
+
+### Response
+Configure the model to forbid or explicitly handle extra fields so clients cannot silently send data the endpoint does not understand.

@@ -1,0 +1,8 @@
+### Instruction
+How should an endpoint handle a request with an invalid page size?
+
+### Input
+None
+
+### Response
+Let the boundary schema reject it with a structured validation error and a safe client-facing 4xx response.

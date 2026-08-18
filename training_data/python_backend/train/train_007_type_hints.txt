@@ -1,0 +1,8 @@
+### Instruction
+What does `TypeVar` enable in a reusable backend helper?
+
+### Input
+None
+
+### Response
+TypeVar lets a generic helper preserve the relationship between an input type and its corresponding output type instead of collapsing both to object.

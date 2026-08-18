@@ -1,0 +1,8 @@
+### Instruction
+How should a validated Pydantic model be converted into a response payload?
+
+### Input
+None
+
+### Response
+Return `model_dump()` or the framework-supported serialization of the validated response model, not an unvalidated internal object.

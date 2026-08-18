@@ -1,0 +1,8 @@
+### Instruction
+Why must blocking file or database work not run directly in an async request handler?
+
+### Input
+None
+
+### Response
+Blocking work stops the event loop and delays unrelated requests; use an async driver or explicitly move unavoidable blocking work to a bounded worker.

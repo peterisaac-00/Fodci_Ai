@@ -1,0 +1,8 @@
+### Instruction
+Why should validation errors be returned as client errors rather than internal errors?
+
+### Input
+None
+
+### Response
+Invalid client input is expected boundary failure and should produce a safe structured 4xx response without exposing an internal traceback.

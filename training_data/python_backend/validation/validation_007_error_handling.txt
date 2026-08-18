@@ -1,0 +1,8 @@
+### Instruction
+How should a backend distinguish an authorization failure from a database outage?
+
+### Input
+None
+
+### Response
+Map authorization failure to a safe client response without retrying, while classify the database outage separately as a dependency failure that may be retried within bounds.

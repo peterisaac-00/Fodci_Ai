@@ -1,0 +1,8 @@
+### Instruction
+How should a custom backend exception carry an HTTP-safe error code?
+
+### Input
+None
+
+### Response
+Define a domain exception with a stable code and safe public message, then map it at the API boundary without exposing internal details.

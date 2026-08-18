@@ -1,0 +1,8 @@
+### Instruction
+When is `str | None` appropriate in backend Python?
+
+### Input
+None
+
+### Response
+Use `str | None` when a value is legitimately either a string or None; do not use it to hide an unhandled missing-value bug.

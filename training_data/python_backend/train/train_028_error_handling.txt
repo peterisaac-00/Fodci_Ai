@@ -1,0 +1,8 @@
+### Instruction
+What belongs in a `finally` block in a backend operation?
+
+### Input
+None
+
+### Response
+Put mandatory cleanup such as releasing a lock or closing a resource in finally so it runs on both success and failure.

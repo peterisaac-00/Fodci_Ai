@@ -1,0 +1,8 @@
+### Instruction
+What is the role of an async context manager for a database connection?
+
+### Input
+None
+
+### Response
+It acquires the connection on entry and reliably releases or rolls it back on exit, including when the request raises an exception.

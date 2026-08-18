@@ -1,0 +1,8 @@
+### Instruction
+What problem does a Pydantic BaseModel solve at an API boundary?
+
+### Input
+None
+
+### Response
+It defines a typed schema and validates incoming data before business logic consumes it, producing structured validation errors.

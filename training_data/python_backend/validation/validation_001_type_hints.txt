@@ -1,0 +1,8 @@
+### Instruction
+How should a typed service represent a function that may return a user or no match?
+
+### Input
+None
+
+### Response
+Annotate the return as `User | None` and make callers handle the no-match case explicitly instead of assuming a User always exists.

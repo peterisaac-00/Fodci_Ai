@@ -1,0 +1,8 @@
+### Instruction
+Why is a broad exception handler dangerous at the top of a request handler?
+
+### Input
+None
+
+### Response
+It can hide programming defects, mislabel failures, and return misleading success or client errors; a boundary handler must log safely and preserve failure status.

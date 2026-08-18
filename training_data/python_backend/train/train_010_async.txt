@@ -1,0 +1,8 @@
+### Instruction
+What does `await` do in an asynchronous Python function?
+
+### Input
+None
+
+### Response
+Await suspends the current coroutine until the awaitable completes, allowing the event loop to run other ready tasks.

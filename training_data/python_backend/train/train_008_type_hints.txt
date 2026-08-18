@@ -1,0 +1,8 @@
+### Instruction
+How should a function accepting only specific operation names be annotated?
+
+### Input
+None
+
+### Response
+Use `Literal`, for example `Literal['create', 'update']`, when the accepted values are a small fixed set.

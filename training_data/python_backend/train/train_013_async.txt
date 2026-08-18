@@ -1,0 +1,8 @@
+### Instruction
+Why should async network calls have timeouts?
+
+### Input
+None
+
+### Response
+Timeouts bound resource consumption and turn an indefinitely stalled dependency into a controlled failure that recovery logic can classify.

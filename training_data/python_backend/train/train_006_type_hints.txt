@@ -1,0 +1,8 @@
+### Instruction
+Why should a backend avoid using `Any` for every external payload?
+
+### Input
+None
+
+### Response
+Any disables useful static checks and lets malformed data spread; use a precise model, TypedDict, Protocol, or validated boundary type instead.

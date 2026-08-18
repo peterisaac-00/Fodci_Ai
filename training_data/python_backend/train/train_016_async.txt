@@ -1,0 +1,8 @@
+### Instruction
+What is an async generator useful for in a backend API?
+
+### Input
+None
+
+### Response
+It yields records incrementally with `async for`, reducing memory pressure while allowing each fetch to await an asynchronous source.

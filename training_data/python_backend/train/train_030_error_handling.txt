@@ -1,0 +1,8 @@
+### Instruction
+Which failures are usually retryable?
+
+### Input
+None
+
+### Response
+Transient timeouts, temporary unavailability, and rate limits may be retryable with bounded backoff; validation and authorization failures are not.

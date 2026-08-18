@@ -1,0 +1,8 @@
+### Instruction
+Why should backend code catch specific exceptions instead of a bare `except`?
+
+### Input
+None
+
+### Response
+Specific handlers preserve the distinction between expected domain failures, retryable dependency failures, and programming bugs.

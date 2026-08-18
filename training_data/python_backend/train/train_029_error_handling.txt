@@ -1,0 +1,8 @@
+### Instruction
+How should a backend log an exception without leaking credentials?
+
+### Input
+None
+
+### Response
+Log the exception type, correlation ID, operation, and safe context, but redact tokens, passwords, authorization headers, and private payloads.

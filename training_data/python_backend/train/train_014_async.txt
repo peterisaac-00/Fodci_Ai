@@ -1,0 +1,8 @@
+### Instruction
+How should an async handler treat task cancellation?
+
+### Input
+None
+
+### Response
+Allow `asyncio.CancelledError` to propagate after required cleanup; swallowing cancellation can prevent graceful shutdown and request cancellation.

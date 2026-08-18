@@ -219,6 +219,8 @@ def main() -> None:
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--markdown", type=Path, default=DEFAULT_MARKDOWN)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--model-version", default="fodci-tiny-v1")
+    parser.add_argument("--run-prefix", default="stage1-baseline")
     parser.add_argument("--max-new-tokens", type=int, default=32)
     args = parser.parse_args()
     if args.seed < 0 or args.max_new_tokens <= 0:
@@ -232,9 +234,9 @@ def main() -> None:
     evaluation = evaluate(records, model, tokenizer, max_new_tokens=args.max_new_tokens)
     dataset_fingerprint = sha256_file(args.dataset)
     checkpoint_fingerprint = sha256_file(args.checkpoint)
-    identity = {"version": "fodci-tiny-v1", "parameter_count": parameter_count, "checkpoint": str(args.checkpoint), "checkpoint_sha256": checkpoint_fingerprint}
+    identity = {"version": args.model_version, "parameter_count": parameter_count, "checkpoint": str(args.checkpoint), "checkpoint_sha256": checkpoint_fingerprint}
     protocol = {"seed": args.seed, "decoding": "greedy_argmax", "temperature": 0.0, "max_new_tokens": args.max_new_tokens, "prompt_template": "instruction-input-response-v1", "device": "cpu"}
-    run_id = "stage1-baseline-" + hashlib.sha256(canonical_json({"model": identity, "dataset_sha256": dataset_fingerprint, "protocol": protocol}).encode("utf-8")).hexdigest()[:16]
+    run_id = args.run_prefix + "-" + hashlib.sha256(canonical_json({"model": identity, "dataset_sha256": dataset_fingerprint, "protocol": protocol}).encode("utf-8")).hexdigest()[:16]
     report = {"format": "fodci.stage1_baseline", "schema_version": "1.0", "run_id": run_id, "created_at": datetime.now(timezone.utc).isoformat(), "model": identity, "dataset": {"path": str(args.dataset), "sha256": dataset_fingerprint, "records": len(records), "split": "benchmark"}, "protocol": protocol, "evaluation": evaluation}
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

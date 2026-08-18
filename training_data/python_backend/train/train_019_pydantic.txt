@@ -1,0 +1,8 @@
+### Instruction
+Why should a Pydantic model use Field constraints for an email or page size?
+
+### Input
+None
+
+### Response
+Field constraints make boundary rules executable and consistent, such as minimum length, maximum page size, or a required format.

@@ -1,0 +1,8 @@
+### Instruction
+How can a repository protocol decouple service code from a database implementation?
+
+### Input
+None
+
+### Response
+Define a `Protocol` with the methods the service needs, type the service against that protocol, and inject a concrete repository at the boundary.

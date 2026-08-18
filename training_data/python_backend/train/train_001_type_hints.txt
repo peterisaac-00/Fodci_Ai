@@ -1,0 +1,8 @@
+### Instruction
+Why should a backend function annotate both its input and output types?
+
+### Input
+None
+
+### Response
+Type annotations make the contract explicit, improve editor and static-checker feedback, and expose accidental None or wrong return values before runtime.

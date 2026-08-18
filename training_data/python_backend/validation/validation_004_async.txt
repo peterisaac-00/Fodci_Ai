@@ -1,0 +1,8 @@
+### Instruction
+When should independent async operations be run sequentially instead of together?
+
+### Input
+None
+
+### Response
+Run sequentially when order, shared mutation, rate limits, or failure semantics make concurrency unsafe; concurrency is not automatically better.

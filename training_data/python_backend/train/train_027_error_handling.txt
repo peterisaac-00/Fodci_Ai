@@ -1,0 +1,8 @@
+### Instruction
+What is the purpose of `raise NewError(...) from exc`?
+
+### Input
+None
+
+### Response
+Exception chaining preserves the original cause for diagnostics while exposing a domain-specific error to the caller.

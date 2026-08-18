@@ -1,0 +1,8 @@
+### Instruction
+What is the difference between `model_dump` and `model_validate` in Pydantic v2?
+
+### Input
+None
+
+### Response
+model_validate constructs a model from input data; model_dump serializes a validated model into a dictionary for transport or persistence.

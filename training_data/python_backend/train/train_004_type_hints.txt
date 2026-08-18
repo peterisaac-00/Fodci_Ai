@@ -1,0 +1,8 @@
+### Instruction
+What is the purpose of `TypedDict` in an API response contract?
+
+### Input
+None
+
+### Response
+TypedDict describes the expected keys and value types of dictionary-shaped data while keeping the runtime value a normal dict.

@@ -1,0 +1,8 @@
+### Instruction
+How should an async endpoint protect itself from a slow upstream dependency?
+
+### Input
+None
+
+### Response
+Use an awaited timeout around the call, classify timeout as a controlled dependency failure, and release resources in cleanup.
