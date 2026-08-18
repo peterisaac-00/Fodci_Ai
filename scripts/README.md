@@ -387,3 +387,11 @@ PYTHONPATH=src python scripts/run_phase1312_final_evaluation.py \
 ```
 
 The command writes `artifacts/evaluation/phase1312_final_evaluation.json` and the tracked report `docs/experiments/phase1312_final_evaluation.md`. Benchmark pass rates and non-empty rates remain diagnostic evidence; zero values are reported honestly and do not invalidate structurally correct benchmark reports. The stable release remains `fodci-testing-qa-v1` at 11,424,400 parameters, while `fodci-scaling-25m-experimental-v1` remains inactive.
+
+The stable checkpoint is distributed as the GitHub Release asset `v13.12-stable/fodci-testing-qa-v1.pt` because its 137MB size exceeds GitHub's normal 100MB per-file Git limit. After `git pull origin main`, run the repository-provided PowerShell downloader from the project root:
+
+```powershell
+.\scripts\download_phase1312_checkpoint.ps1
+```
+
+The script downloads the asset, verifies SHA-256 `3af5d2b6009f5a0fd0ff98644d9666bd0c30f0dfe8994f91524ae6df11433bfa`, and places it at `artifacts\\checkpoints\\fodci-testing-qa-v1.pt`. The CLI now prefers this stable checkpoint and falls back to `fodci-tiny-v1.pt` only when the stable asset is absent.

@@ -11,7 +11,18 @@ from backend_ai.core import ProjectContext, bootstrap, resolve_project_context
 from backend_ai.terminal import InteractiveSession, StdinInputProvider
 
 ProviderFactory = Callable[[Path], Any]
-DEFAULT_CHECKPOINT_RELATIVE_PATH = Path("artifacts") / "checkpoints" / "fodci-tiny-v1.pt"
+DEFAULT_CHECKPOINT_RELATIVE_PATH = Path("artifacts") / "checkpoints" / "fodci-testing-qa-v1.pt"
+LEGACY_CHECKPOINT_RELATIVE_PATH = Path("artifacts") / "checkpoints" / "fodci-tiny-v1.pt"
+
+
+def resolve_checkpoint_path(project_root: Path) -> Path:
+    """Prefer the stable specialist checkpoint and fall back to Tiny v1."""
+
+    candidates = (
+        project_root / DEFAULT_CHECKPOINT_RELATIVE_PATH,
+        project_root / LEGACY_CHECKPOINT_RELATIVE_PATH,
+    )
+    return next((path for path in candidates if path.is_file()), candidates[0])
 
 
 class Application:
@@ -38,7 +49,7 @@ class Application:
         self.project_context = resolve_project_context(self.settings)
         self.session.project_context = self.project_context
         if self.provider is None and self._provider_factory is not None:
-            checkpoint_path = self.project_context.root / DEFAULT_CHECKPOINT_RELATIVE_PATH
+            checkpoint_path = resolve_checkpoint_path(self.project_context.root)
             self.provider = self._provider_factory(checkpoint_path)
             self.session.set_provider(self.provider)
         return self.settings

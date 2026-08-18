@@ -43,10 +43,10 @@
 
 | Field | Value |
 |---|---:|
-| Full regression tests passed | `1064` |
+| Full regression tests passed | `1071` |
 | Pytest warnings | `12` |
 | Compileall | `True` |
-| Git HEAD at evaluation | `3cf51ebecd89423241a3b523a397fff2fe388d97` |
+| Git HEAD at evaluation | `2045dcedd802fdc1f18f30c4644be98b066bea30` |
 | Repository clean at evaluation | `False` |
 
 ## Stable-release interpretation

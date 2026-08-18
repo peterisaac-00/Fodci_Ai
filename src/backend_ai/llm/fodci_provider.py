@@ -58,14 +58,23 @@ class FodciLocalProvider:
             )
 
         try:
+            from backend_ai.checkpoint import CheckpointManager
             from backend_ai.inference import InferenceConfig, InferenceEngine
             from backend_ai.model import FodciModel
             from backend_ai.tokenizer import FodciTokenizer
 
-            config = inference_config or InferenceConfig(
-                device="cpu",
-                checkpoint_path=path,
-            )
+            if inference_config is None:
+                checkpoint_metadata = CheckpointManager(
+                    path.parent,
+                    model_version="checkpoint-inspection",
+                ).inspect(path).metadata
+                config = InferenceConfig(
+                    device="cpu",
+                    model_version=checkpoint_metadata.model_version,
+                    checkpoint_path=path,
+                )
+            else:
+                config = inference_config
             if config.device != "cpu":
                 config = replace(config, device="cpu")
             if config.checkpoint_path != path:
