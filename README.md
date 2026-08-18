@@ -1399,3 +1399,23 @@ Bounded Re-planner when assumptions change
 The normal `fodci` interactive session remains unchanged. The planning-aware state is integrated into the existing opt-in `AutonomousToolLoop`, exposed on `AutonomousLoopState` and `AutonomousLoopResult`, and rendered concisely by the existing autonomous-loop developer smoke workflow. The planner never dispatches tools, executes commands, reads files, or modifies the repository.
 
 Phase 12.1 intentionally does not implement better codebase understanding, long context, parallel tool execution, advanced error recovery, advanced memory, multi-agent architecture, or unrestricted autonomy. The existing read-only default registry, explicit project root boundary, execution budgets, verification gates, and mutation opt-in rules remain authoritative.
+
+
+## Phase 12.2 Better Codebase Understanding
+
+Phase 12.2 adds a bounded, deterministic, task-aware `CodebaseUnderstanding` layer for the explicit project root. It composes the existing read-only `project_structure`, `project_context`, `read_file`, and `search_code` boundaries; it does not execute project code, import target-project modules, modify source files, install packages, access the network, mutate Git, or create a parallel tool framework.
+
+The result is an immutable evidence record containing detected project type and frameworks, entry points, important directories/files, backend components, Python AST and JavaScript/TypeScript symbol records, import/reference relationships, module dependencies, conservative architecture layers, ranked task-relevant files, confidence/completeness metadata, warnings, and explicit truncation information. Each detected symbol, relationship, ranking, and architecture claim carries bounded source-path evidence rather than an invented certainty.
+
+`CodebaseUnderstandingBuilder` enforces finite file, byte, symbol, reference, dependency, relevant-file, and evidence budgets. `update_from_tool_result()` can merge new `ProjectStructureResult`, `SearchCodeResult`, or `ReadFileResult` evidence without rescanning unrelated files. `compact_summary()` exposes only bounded repository facts for planner context. Arabic and other UTF-8 source text remains readable through the existing exact reader.
+
+The planner accepts the optional understanding record and uses its evidence to prioritize relevant project areas, enrich inspection rationale, preserve repository-specific assumptions, and add explicit evidence-backed constraints. `AutonomousToolLoop` constructs understanding after bounded context establishment when the caller did not supply it, passes it into planning and bounded replanning, merges later read-only tool evidence, and exposes it through `AutonomousLoopState`, `AutonomousLoopResult`, and serialization. The default `ToolRegistry` remains read-only and no Phase 12.3 long-context or parallel-execution system is introduced.
+
+| Boundary | Phase 12.2 behavior |
+| --- | --- |
+| Discovery | Reuses bounded deterministic project structure/context tools |
+| Source analysis | Reads only targeted regular UTF-8 files; Python AST and conservative JS/TS patterns |
+| Planner input | Optional immutable evidence record and bounded summary |
+| Runtime safety | No shell, subprocess, network, package, Git, mutation, or target-project execution |
+| Completeness | Explicit `complete`, `partial`, or `uncertain` evidence state with warnings |
+| Future scope | Long context, parallel tool execution, and multi-agent behavior remain unimplemented |

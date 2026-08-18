@@ -20,6 +20,7 @@ import re
 from typing import Any
 
 from backend_ai.agent.budget import ContextBudget, ContextBudgetError
+from backend_ai.agent.codebase_understanding import CodebaseUnderstanding, CodebaseUnderstandingBuilder
 from backend_ai.agent.execution_budget import (
     BudgetDimension,
     BudgetDecision,
@@ -239,6 +240,7 @@ class AutonomousLoopRequest:
     long_term_memory_limit: int = 3
     experience_records: ExperienceRecords | None = None
     memory_retrieval_request: MemoryRetrievalRequest | None = None
+    codebase_understanding: CodebaseUnderstanding | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.task, str) or not self.task.strip():
@@ -267,9 +269,14 @@ class AutonomousLoopRequest:
             raise ValueError("experience_records must be ExperienceRecords")
         if self.memory_retrieval_request is not None and not isinstance(self.memory_retrieval_request, MemoryRetrievalRequest):
             raise ValueError("memory_retrieval_request must be MemoryRetrievalRequest")
+        if self.codebase_understanding is not None:
+            if not isinstance(self.codebase_understanding, CodebaseUnderstanding):
+                raise ValueError("codebase_understanding must be CodebaseUnderstanding")
+            if self.codebase_understanding.root != root:
+                raise ValueError("codebase_understanding.root must equal the explicit project_root")
 
     def to_dict(self) -> dict[str, Any]:
-        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None, "short_term_memory_task_id": self.short_term_memory.task_id if self.short_term_memory else None, "project_memory_id": self.project_memory.project_id if self.project_memory else None, "has_long_term_memory": self.long_term_memory is not None, "long_term_query": self.long_term_query, "long_term_memory_limit": self.long_term_memory_limit, "has_experience_records": self.experience_records is not None, "has_memory_retrieval_request": self.memory_retrieval_request is not None}
+        return {"task": self.task, "project_root": str(self.project_root), "has_project_context": self.project_context is not None, "short_term_memory_task_id": self.short_term_memory.task_id if self.short_term_memory else None, "project_memory_id": self.project_memory.project_id if self.project_memory else None, "has_long_term_memory": self.long_term_memory is not None, "long_term_query": self.long_term_query, "long_term_memory_limit": self.long_term_memory_limit, "has_experience_records": self.experience_records is not None, "has_memory_retrieval_request": self.memory_retrieval_request is not None, "has_codebase_understanding": self.codebase_understanding is not None}
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,6 +345,7 @@ class AutonomousLoopState:
     experience_record: ExperienceRecord | None = None
     memory_retrieval: MemoryRetrievalResult | None = None
     plan_execution: PlanExecutionState | None = None
+    codebase_understanding: CodebaseUnderstanding | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -364,6 +372,7 @@ class AutonomousLoopState:
             "experience_record": self.experience_record.to_dict() if self.experience_record else None,
             "memory_retrieval": self.memory_retrieval.to_dict() if self.memory_retrieval else None,
             "plan_execution": self.plan_execution.to_dict() if self.plan_execution else None,
+            "codebase_understanding": self.codebase_understanding.to_dict() if self.codebase_understanding else None,
         }
 
 
@@ -394,6 +403,7 @@ class AutonomousLoopResult:
     experience_record: ExperienceRecord | None = None
     memory_retrieval: MemoryRetrievalResult | None = None
     plan_execution: PlanExecutionState | None = None
+    codebase_understanding: CodebaseUnderstanding | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -420,6 +430,7 @@ class AutonomousLoopResult:
             "experience_record": self.experience_record.to_dict() if self.experience_record else None,
             "memory_retrieval": self.memory_retrieval.to_dict() if self.memory_retrieval else None,
             "plan_execution": self.plan_execution.to_dict() if self.plan_execution else None,
+            "codebase_understanding": self.codebase_understanding.to_dict() if self.codebase_understanding else None,
         }
 
 
@@ -585,6 +596,8 @@ class AutonomousToolLoop:
                 warnings.append(f"long-term memory retrieval unavailable: {exc}")
         usage = AgentUsage()
         context = request.project_context
+        codebase_understanding = request.codebase_understanding
+        codebase_builder = CodebaseUnderstandingBuilder()
         plan: ExecutionPlan | None = None
         plan_execution_state: PlanExecutionState | None = None
         current_selection: ToolSelectionDecision | None = None
@@ -613,7 +626,7 @@ class AutonomousToolLoop:
         failed_action_signatures: list[str] = []
 
         def snapshot() -> AutonomousLoopState:
-            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result, plan_execution_state)
+            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result, plan_execution_state, codebase_understanding)
 
         def update_plan_step(step_id: str | None, status: PlanStepStatus, *, reason: str, evidence: Sequence[str] = ()) -> None:
             nonlocal plan, plan_execution_state
@@ -633,7 +646,7 @@ class AutonomousToolLoop:
             if plan_execution_state.replan_count >= self.config.max_replans:
                 warnings.append("replan budget exhausted; preserving the current plan")
                 return False
-            replanned = self.replanner.replan(ReplanRequest(request.task, plan, plan_execution_state, context, reason))
+            replanned = self.replanner.replan(ReplanRequest(request.task, plan, plan_execution_state, context, reason, codebase_understanding))
             if replanned.plan is None or not replanned.validation.valid:
                 warnings.extend(replanned.validation.errors or ("replanning produced no valid plan",))
                 return False
@@ -709,7 +722,7 @@ class AutonomousToolLoop:
                 bootstrap = self._bootstrap_context(request.task)
                 bootstrap_selection = self.selector.select(ToolSelectionRequest(bootstrap, registry=self.registry))
                 if not bootstrap_selection.decisions or bootstrap_selection.decisions[0].selected_tool != "project_context":
-                    return finish(request, LoopStatus.TOOL_UNAVAILABLE, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors + ("project_context is unavailable for initial bounded context construction",))
+                    return finish(request, LoopStatus.TOOL_UNAVAILABLE, "", None, None, snapshot(), steps, calls, results, usage, warnings, errors + ["project_context is unavailable for initial bounded context construction"])
                 bootstrap_decision = bootstrap_selection.decisions[0]
                 machine.transition(LoopLifecycleState.SELECTING_TOOL)
                 machine.transition(LoopLifecycleState.VALIDATING_ACTION)
@@ -762,7 +775,12 @@ class AutonomousToolLoop:
                 except ProjectMemoryError as exc:
                     warnings.append(f"project memory context update unavailable: {exc}")
 
-            plan_result = self.planner.plan(PlannerRequest(request.task, context))
+            if codebase_understanding is None:
+                try:
+                    codebase_understanding = codebase_builder.build(request.task, request.project_root, project_context=context)
+                except Exception as exc:
+                    warnings.append(f"codebase understanding unavailable: {exc}")
+            plan_result = self.planner.plan(PlannerRequest(request.task, context, codebase_understanding=codebase_understanding))
             if plan_result.plan is None:
                 errors.extend(plan_result.errors or plan_result.warnings)
                 return finish(request, LoopStatus.FAILED, "", plan_result.plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
@@ -1001,6 +1019,11 @@ class AutonomousToolLoop:
                 except ShortTermMemoryError as exc:
                     errors.append(f"short-term memory tool update failed: {exc}")
                 last_call, last_result = call, tool_result
+                if codebase_understanding is not None:
+                    try:
+                        codebase_understanding = codebase_builder.update_from_tool_result(codebase_understanding, call.name, tool_result.data)
+                    except (TypeError, ValueError) as exc:
+                        warnings.append(f"codebase understanding update unavailable: {exc}")
                 budget_ledger.complete_tool()
                 machine.transition(LoopLifecycleState.OBSERVING_RESULT)
                 bounded_observation = self._safe_result_text(tool_result)
@@ -1215,7 +1238,7 @@ class AutonomousToolLoop:
         return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
     def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None, recovery: RecoveryResult | None = None, completion: TaskCompletionResult | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval, state.plan_execution)
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval, state.plan_execution, state.codebase_understanding)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str, short_term_memory: ShortTermMemory | None = None) -> AutonomousLoopResult:
         snapshot = short_term_memory.snapshot() if short_term_memory is not None else None

@@ -1,7 +1,8 @@
 """Deterministic, side-effect-free planning for Phase 6.1.
 
-The planner consumes only the caller's task, optional ProjectContext, and explicit
-configuration. It creates a structured plan and never selects or executes tools.
+The planner consumes only the caller's task, optional ProjectContext,
+optional CodebaseUnderstanding, and explicit configuration. It creates a structured
+plan and never selects or executes tools.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import re
 from typing import Any
 from types import MappingProxyType
 
+from backend_ai.agent.codebase_understanding import CodebaseUnderstanding
 from backend_ai.tools.project_context import ProjectContext
 
 
@@ -112,6 +114,7 @@ class PlannerRequest:
     task: str
     project_context: ProjectContext | None = None
     config: PlannerConfig = PlannerConfig()
+    codebase_understanding: CodebaseUnderstanding | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.task, str):
@@ -120,6 +123,8 @@ class PlannerRequest:
             raise ValueError("PlannerRequest.config must be PlannerConfig")
         if self.project_context is not None and not isinstance(self.project_context, ProjectContext):
             raise ValueError("PlannerRequest.project_context must be ProjectContext or None")
+        if self.codebase_understanding is not None and not isinstance(self.codebase_understanding, CodebaseUnderstanding):
+            raise ValueError("PlannerRequest.codebase_understanding must be CodebaseUnderstanding or None")
 
 
 @dataclass(frozen=True, slots=True)
@@ -430,10 +435,13 @@ class ReplanRequest:
     execution_state: PlanExecutionState
     project_context: ProjectContext | None
     reason: str
+    codebase_understanding: CodebaseUnderstanding | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.reason, str) or not self.reason.strip():
             raise ValueError("replan reason must contain text")
+        if self.codebase_understanding is not None and not isinstance(self.codebase_understanding, CodebaseUnderstanding):
+            raise ValueError("replan codebase_understanding must be CodebaseUnderstanding or None")
 
 
 @dataclass(frozen=True, slots=True)
@@ -452,7 +460,7 @@ class PlanReplanner:
         self.planner = planner or Planner()
 
     def replan(self, request: ReplanRequest) -> ReplanResult:
-        result = self.planner.plan(PlannerRequest(request.task, request.project_context))
+        result = self.planner.plan(PlannerRequest(request.task, request.project_context, codebase_understanding=request.codebase_understanding))
         validation = getattr(result, "validation", None)
         if not isinstance(validation, PlanValidationResult):
             validation = PlanValidator().validate(result.plan) if result.plan is not None else PlanValidationResult(False, ("replanner returned no plan",))
@@ -516,13 +524,16 @@ class TaskAnalyzer:
             warnings.append("ProjectContext was not supplied; project-aware assumptions remain unconfirmed")
         elif context.completeness == "partial" or context.truncated:
             warnings.append("ProjectContext is partial; missing project evidence must be inspected later")
+        understanding = request.codebase_understanding
+        if understanding is not None and (understanding.completeness.value != "complete" or understanding.truncated):
+            warnings.append("CodebaseUnderstanding is partial; unobserved repository areas remain unconfirmed")
         if task_type is PlannerTaskType.UNKNOWN:
             warnings.append("task category is ambiguous; the plan preserves ambiguity instead of inventing implementation details")
         if _is_ambiguous(normalized):
             warnings.append("task is ambiguous or underspecified; clarification may be required before implementation")
-        constraints = _build_constraints(task_type, context)
+        constraints = _build_constraints(task_type, context, understanding)
         verification = _verification_strategy(task_type)
-        relevant = _relevant_project_areas(task_type, context)
+        relevant = _relevant_project_areas(task_type, context, understanding)
         dependencies = _analysis_dependencies(task_type)
         requirements = _analysis_requirements(task_type, normalized)
         return TaskAnalysis(
@@ -537,8 +548,8 @@ class TaskAnalyzer:
             dependencies=tuple(_bounded_items(dependencies, config.max_constraints, warnings, "dependencies")),
             verification_criteria=tuple(_bounded_items(verification, config.max_constraints, warnings, "verification_criteria")),
             risks=tuple(_bounded_risks(_build_risks(task_type, context, normalized), config.max_risks, warnings)),
-            confidence=_confidence(task_type, context, normalized),
-            completeness=_completeness(task_type, context, normalized),
+            confidence=_confidence(task_type, context, normalized, understanding),
+            completeness=_completeness(task_type, context, normalized, understanding),
             warnings=tuple(_bounded_items(_unique_sorted(warnings), config.max_warnings, warnings, "warnings")),
         )
 
@@ -613,9 +624,10 @@ class Planner:
         task: str | PlannerRequest,
         *,
         project_context: ProjectContext | None = None,
+        codebase_understanding: CodebaseUnderstanding | None = None,
         config: PlannerConfig | None = None,
     ) -> ExecutionPlan:
-        request = task if isinstance(task, PlannerRequest) else PlannerRequest(task, project_context, config or self.config)
+        request = task if isinstance(task, PlannerRequest) else PlannerRequest(task, project_context, config or self.config, codebase_understanding)
         result = self.plan(request)
         if result.plan is None:
             raise ValueError("Planner could not create a plan: " + "; ".join(result.errors))
@@ -636,14 +648,15 @@ class Planner:
         task_type = analysis.task_type
         warnings: list[str] = list(analysis.warnings)
         context = request.project_context
-        steps = _build_steps(task_type, context, normalized, config.max_plan_text_length)
-        assumptions = _build_assumptions(task_type, context, normalized)
-        constraints = _build_constraints(task_type, context)
+        understanding = request.codebase_understanding
+        steps = _build_steps(task_type, context, normalized, config.max_plan_text_length, understanding)
+        assumptions = _build_assumptions(task_type, context, normalized, understanding)
+        constraints = _build_constraints(task_type, context, understanding)
         risks = _build_risks(task_type, context, normalized)
         expected_changes = _expected_changes(task_type)
         verification = _verification_strategy(task_type)
-        confidence = _confidence(task_type, context, normalized)
-        completeness = _completeness(task_type, context, normalized)
+        confidence = _confidence(task_type, context, normalized, understanding)
+        completeness = _completeness(task_type, context, normalized, understanding)
         plan = ExecutionPlan(
             task=task,
             normalized_task=normalized,
@@ -683,11 +696,12 @@ def create_plan(
     task: str,
     *,
     project_context: ProjectContext | None = None,
+    codebase_understanding: CodebaseUnderstanding | None = None,
     config: PlannerConfig | None = None,
 ) -> ExecutionPlan:
     """Convenience API for deterministic plan creation."""
 
-    return Planner(config=config).create_plan(task, project_context=project_context)
+    return Planner(config=config).create_plan(task, project_context=project_context, codebase_understanding=codebase_understanding)
 
 
 def _normalize_task(task: str) -> str:
@@ -755,8 +769,9 @@ def _goal(task_type: PlannerTaskType, task: str) -> str:
     return f"Deliver the requested {task_type.value.casefold().replace('_', ' ')} while preserving the existing project architecture and conventions."
 
 
-def _build_steps(task_type: PlannerTaskType, context: ProjectContext | None, task: str, text_limit: int) -> list[PlanStep]:
+def _build_steps(task_type: PlannerTaskType, context: ProjectContext | None, task: str, text_limit: int, understanding: CodebaseUnderstanding | None = None) -> list[PlanStep]:
     context_label = context.stack_summary if context and context.stack_summary else "the supplied project context"
+    understanding_label = understanding.compact_summary() if understanding is not None else "no repository-specific understanding was supplied"
     steps: list[PlanStep] = [
         PlanStep("step-1", "Bound the task", "Clarify the requested outcome, scope, and acceptance conditions.", "Planning must preserve ambiguity instead of inventing requirements.", "A bounded engineering objective and explicit open questions.", risk_level=PlanRiskLevel.UNKNOWN, status=PlanStepStatus.NEEDS_CLARIFICATION if _is_ambiguous(task) else PlanStepStatus.PLANNED),
     ]
@@ -774,7 +789,7 @@ def _build_steps(task_type: PlannerTaskType, context: ProjectContext | None, tas
         ])
     else:
         steps.extend([
-            PlanStep("step-2", "Inspect existing conventions", f"Inspect the existing {context_label} architecture, relevant components, and project conventions before deciding implementation details.", "Inspection-first planning prevents invented filenames, dependencies, and architecture.", "Affected areas, existing patterns, and confirmed constraints are identified.", ("step-1",), PlanRiskLevel.MEDIUM),
+            PlanStep("step-2", "Inspect existing conventions", f"Inspect the existing {context_label} architecture, relevant components, and project conventions before deciding implementation details.", f"Inspection-first planning prevents invented filenames, dependencies, and architecture. Current bounded evidence: {understanding_label}", "Affected areas, existing patterns, and confirmed constraints are identified.", ("step-1",), PlanRiskLevel.MEDIUM),
             PlanStep("step-3", "Design the minimal change", "Define the smallest change that satisfies the bounded task and reuses existing abstractions.", "Minimal targeted changes reduce regression and compatibility risk.", "A reviewable change boundary and acceptance conditions are defined.", ("step-2",), _step_risk(task_type)),
             PlanStep("step-4", "Implement the requested change", "Apply the required source, test, configuration, dependency, or documentation changes within the confirmed change boundary.", "Implementation details must follow inspection evidence rather than assumptions.", "The requested behavior or content is implemented with no unrelated changes.", ("step-3",), _step_risk(task_type)),
             PlanStep("step-5", "Add or update verification coverage", "Add or update relevant tests or other verification evidence using the project's existing conventions.", "Verification should cover the requested behavior and protect existing behavior.", "Relevant verification coverage is present or an explicit reason is documented.", ("step-4",), PlanRiskLevel.MEDIUM),
@@ -796,12 +811,17 @@ def _limit_step_text(step: PlanStep, limit: int) -> PlanStep:
     return PlanStep(step.step_id, _bounded_text(step.title, limit), _bounded_text(step.objective, limit), _bounded_text(step.rationale, limit), _bounded_text(step.expected_result, limit), step.dependencies, step.risk_level, step.verification_required, step.status)
 
 
-def _build_assumptions(task_type: PlannerTaskType, context: ProjectContext | None, task: str) -> list[str]:
+def _build_assumptions(task_type: PlannerTaskType, context: ProjectContext | None, task: str, understanding: CodebaseUnderstanding | None = None) -> list[str]:
     assumptions = ["The exact affected files and implementation details are not confirmed until inspection."]
     if context is None:
         assumptions.append("The project structure, conventions, and available dependencies are not confirmed because ProjectContext was not supplied.")
     elif context.completeness == "partial" or context.truncated:
         assumptions.append("The supplied ProjectContext is partial, so unobserved project areas remain unconfirmed.")
+    if understanding is not None:
+        paths = ", ".join(item.path for item in understanding.relevant_files[:6]) or "no files confirmed"
+        assumptions.append(f"Repository-specific evidence currently prioritizes: {paths}.")
+        if understanding.completeness.value != "complete" or understanding.truncated:
+            assumptions.append("Repository understanding is bounded or partial; exact affected files still require inspection.")
     if task_type is PlannerTaskType.DEPENDENCY_CHANGE:
         assumptions.append("Dependency compatibility and lockfile policy require confirmation from the existing project evidence.")
     if _is_ambiguous(task):
@@ -809,7 +829,7 @@ def _build_assumptions(task_type: PlannerTaskType, context: ProjectContext | Non
     return assumptions
 
 
-def _build_constraints(task_type: PlannerTaskType, context: ProjectContext | None) -> list[str]:
+def _build_constraints(task_type: PlannerTaskType, context: ProjectContext | None, understanding: CodebaseUnderstanding | None = None) -> list[str]:
     constraints = [
         "Do not invent filenames, modules, dependencies, or architecture before inspection.",
         "Prefer minimal targeted changes and preserve backward-compatible existing behavior where relevant.",
@@ -824,6 +844,10 @@ def _build_constraints(task_type: PlannerTaskType, context: ProjectContext | Non
             constraints.append(f"Prefer the supplied test-framework evidence when designing verification: {names}.")
         if context.warnings:
             constraints.append("Treat all ProjectContext warnings as unresolved constraints during later inspection.")
+    if understanding is not None:
+        constraints.append(f"Use only evidence-backed repository understanding ({understanding.confidence.value} confidence); do not treat rankings as proof.")
+        if understanding.relevant_files:
+            constraints.append("Prioritize the bounded relevant-file ranking before broad inspection: " + ", ".join(item.path for item in understanding.relevant_files[:6]) + ".")
     if task_type is PlannerTaskType.DOCUMENTATION_CHANGE:
         constraints.append("Avoid unnecessary code execution for documentation-only work.")
     return constraints
@@ -877,22 +901,26 @@ def _verification_strategy(task_type: PlannerTaskType) -> list[str]:
     ]
 
 
-def _confidence(task_type: PlannerTaskType, context: ProjectContext | None, task: str) -> PlannerConfidence:
+def _confidence(task_type: PlannerTaskType, context: ProjectContext | None, task: str, understanding: CodebaseUnderstanding | None = None) -> PlannerConfidence:
     if task_type is PlannerTaskType.UNKNOWN:
         return PlannerConfidence.UNKNOWN
     if _is_ambiguous(task):
         return PlannerConfidence.LOW
-    if context is None:
+    if context is None and understanding is None:
         return PlannerConfidence.LOW
-    if context.completeness == "partial" or context.truncated:
+    if context is None or context.completeness == "partial" or context.truncated:
+        return PlannerConfidence.MEDIUM
+    if understanding is not None and understanding.confidence.value in {"low", "unknown"}:
         return PlannerConfidence.MEDIUM
     return PlannerConfidence.HIGH
 
 
-def _completeness(task_type: PlannerTaskType, context: ProjectContext | None, task: str) -> PlanCompleteness:
+def _completeness(task_type: PlannerTaskType, context: ProjectContext | None, task: str, understanding: CodebaseUnderstanding | None = None) -> PlanCompleteness:
     if task_type is PlannerTaskType.UNKNOWN or _is_ambiguous(task):
         return PlanCompleteness.REQUIRES_CLARIFICATION
     if context is None or context.completeness == "partial" or context.truncated:
+        return PlanCompleteness.PARTIAL
+    if understanding is not None and understanding.completeness.value != "complete":
         return PlanCompleteness.PARTIAL
     return PlanCompleteness.COMPLETE
 
@@ -913,8 +941,11 @@ def _analysis_dependencies(task_type: PlannerTaskType) -> list[str]:
     return ["Establish the affected project area before applying a change."]
 
 
-def _relevant_project_areas(task_type: PlannerTaskType, context: ProjectContext | None) -> list[str]:
+def _relevant_project_areas(task_type: PlannerTaskType, context: ProjectContext | None, understanding: CodebaseUnderstanding | None = None) -> list[str]:
     areas: list[str] = []
+    if understanding is not None:
+        areas.extend(item.path for item in understanding.relevant_files[:8])
+        areas.extend(item.name for item in understanding.architecture[:8])
     if context is not None:
         areas.extend(context.source_directories[:4])
         areas.extend(context.test_directories[:4])

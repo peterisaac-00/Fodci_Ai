@@ -2133,3 +2133,37 @@ Task Analysis → Planner → Plan Validator → ExecutionPlan
 ```
 
 Phase 12.1 does not add parallel execution, long-context handling, new tool capabilities, network access, shell bypasses, automatic Git mutation, model training, memory retrieval architecture, multi-agent orchestration, or production autonomy. `ToolRegistry.default()` remains read-only and the normal `fodci` interactive runtime remains separate from the autonomous developer workflow.
+
+
+## Phase 12.2 better codebase understanding
+
+Phase 12.2 adds repository-specific understanding as a bounded read-only layer between project context and planning:
+
+```text
+explicit task + project_root
+             ↓
+ProjectContext / ProjectStructure
+             ↓
+CodebaseUnderstandingBuilder
+  ├── bounded relevant-file ranking
+  ├── targeted UTF-8 reads
+  ├── Python AST symbols
+  ├── conservative JS/TS symbols
+  ├── imports, references, and dependencies
+  ├── architecture-layer heuristics
+  └── evidence + confidence + completeness
+             ↓
+immutable CodebaseUnderstanding
+             ↓
+PlannerRequest
+             ↓
+repository-specific declarative ExecutionPlan
+             ↓
+explicit AutonomousToolLoop and supplied ToolRegistry
+```
+
+`CodebaseUnderstanding` is intentionally not a second project scanner, long-context store, embedding index, LLM call, or agent. The builder composes the existing `project_structure`, `project_context`, `read_file`, and `search_code` tools and keeps every result immutable and bounded. It reads only regular files under the explicit root, skips sensitive paths through the existing structural boundary, preserves UTF-8/Arabic content, and represents missing or truncated evidence explicitly.
+
+The planner remains side-effect-free. When supplied with understanding, it uses ranked relevant paths, detected symbols, architecture labels, and confidence/completeness facts to improve inspection rationale, assumptions, constraints, and relevant project areas. It still does not select or execute tools. The autonomous loop constructs understanding after context bootstrap when needed, supplies it to initial and recovery replans, merges later structured read-only tool results, and exposes it in immutable state/result records. `ToolRegistry.default()` remains read-only; mutation, command, package, network, Git, parallel, long-context, and multi-agent capabilities are outside this phase.
+
+The boundary is deliberately conservative: a high-confidence path ranking is a prioritization signal, not proof of the exact implementation location. Later execution phases must inspect the relevant files and preserve the understanding warnings, truncation metadata, and evidence provenance before applying changes.

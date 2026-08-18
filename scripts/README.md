@@ -85,3 +85,12 @@ python scripts/run_fodci_autonomous_tool_loop_smoke.py
 ```
 
 The planning layer performs typed task analysis, creates dependency-aware steps, validates the plan before selection, records `pending`, `in_progress`, `completed`, `failed`, `blocked`, and `skipped` states, and can trigger a bounded replan when the existing recovery policy reports a meaningful recoverable failure. It never dispatches tools itself, executes commands, modifies files, runs parallel operations, or bypasses the read-only default registry.
+
+
+## Phase 12.2 codebase understanding
+
+Phase 12.2 does not add a new production script or change the normal `fodci` command. The reusable API is `CodebaseUnderstandingBuilder.build(task, project_root)` and the autonomous-loop integration constructs it only inside the explicit bounded loop workflow. A caller may also construct `AutonomousLoopRequest` with a prebuilt `codebase_understanding` record.
+
+The builder is read-only and bounded. It reuses existing project discovery/context, targeted UTF-8 reads, and bounded search evidence; it never executes the target project, invokes a shell, installs packages, accesses the network, modifies files, mutates Git, or changes the default read-only registry. `update_from_tool_result()` is intended for later structured observations, while `compact_summary()` is the bounded planner-facing representation.
+
+The focused validation is kept in `tests/unit/test_phase122_codebase_understanding.py` and `tests/integration/test_phase122_codebase_understanding_integration.py`. Phase 12.3 long-context behavior is not included.
