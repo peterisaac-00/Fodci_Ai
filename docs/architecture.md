@@ -2531,3 +2531,9 @@ The output guard rejects empty, overlong, excessively repetitive, or non-backend
 Phase 14.6 compares stable Fodci 11M and experimental Qwen 0.5B on the identical Phase 14.1 dataset and verifies the published stable checkpoint SHA-256. Qwen improved the understandable heuristic rate from `0.0000` to `0.9167`, average keyword coverage from `0.0000` to `0.7188`, and reduced repeated-token rate from `0.3278` to `0.2366`. These are readability and diagnostic improvements, not proof of semantic backend correctness.
 
 The final decision is `adopt_qwen_as_experimental_backend_with_backend_policy`: keep `fodci-testing-qa-v1` as stable, expose Qwen only through an explicitly selected provider wrapped by `BackendScopedProvider`, and require execution-aware correctness tests before any future activation. Q4 quantization was not validated, the 1.5B fallback is not needed now, and no stable checkpoint was replaced.
+
+## Phase 15.1 — Teacher–Student Data Contract
+
+Phase 15.1 introduces `TeacherStudentExample`, an immutable provenance-rich contract for future Qwen-to-Fodci learning. Each record includes the prompt, response, backend domain, teacher identity and fingerprint, source, quality and verification status, split, redaction status, approval, execution evidence, metadata, timestamp, and deterministic record ID.
+
+Raw records remain buffer-only and are not training-eligible. Acceptance requires positive verification, secret review, and explicit train/validation/test assignment. The phase performs no automatic training and does not change the stable runtime.

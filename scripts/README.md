@@ -484,3 +484,11 @@ PYTHONPATH=src python scripts/run_phase146_final_decision.py
 ```
 
 The decision is to keep `fodci-testing-qa-v1` stable and use Qwen only as an experimental provider behind `BackendScopedProvider`. Readability improved substantially, but semantic correctness is not proven and Q4 quantization was not validated.
+
+## Phase 15.1 — Teacher–Student Data Contract
+
+`run_phase151_contract.py` validates the immutable Teacher–Student JSONL-safe record contract. Raw interactions stay in the buffer and are not training-eligible until verification, redaction, and split assignment pass.
+
+```text
+PYTHONPATH=src python scripts/run_phase151_contract.py
+```

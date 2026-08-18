@@ -1,0 +1,24 @@
+{
+  "accepted_record_id": "sha256:73c405b7bf0ab8bb4a7f00ab7344fcd41472b0f22b7e4404ed4a5a182249c382",
+  "accepted_training_eligible": true,
+  "automatic_training_performed": false,
+  "blocked_unverified_acceptance_rejected": true,
+  "external_api_used": false,
+  "format": "fodci.phase151_contract",
+  "phase": "15.1",
+  "phase_gates": {
+    "backend_domain_only": true,
+    "no_automatic_training": true,
+    "provenance_present": true,
+    "raw_record_not_training_eligible": true,
+    "record_id_is_sha256": true,
+    "round_trip_preserved": true,
+    "unverified_acceptance_rejected": true
+  },
+  "phase_gates_passed": true,
+  "raw_record_id": "sha256:73c405b7bf0ab8bb4a7f00ab7344fcd41472b0f22b7e4404ed4a5a182249c382",
+  "raw_training_eligible": false,
+  "record_id_stable_after_verification": true,
+  "round_trip_preserved": true,
+  "schema_version": "1.0"
+}
