@@ -1,0 +1,8 @@
+### Instruction
+How should an OAuth2 access token scope be used?
+
+### Input
+None
+
+### Response
+Scopes should express the minimum delegated capability and the resource server must enforce them for each operation. Receiving a scope is not permission to ignore object ownership or tenant boundaries.

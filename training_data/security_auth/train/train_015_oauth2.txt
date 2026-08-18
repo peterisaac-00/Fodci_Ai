@@ -1,0 +1,8 @@
+### Instruction
+Why should an API distinguish an authentication failure from an insufficient scope?
+
+### Input
+None
+
+### Response
+Missing or invalid credentials are authentication failures, while a valid principal lacking permission is an authorization failure. Stable status and error semantics help clients recover without leaking sensitive detail.

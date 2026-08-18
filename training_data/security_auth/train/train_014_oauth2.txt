@@ -1,0 +1,8 @@
+### Instruction
+How should an OAuth2 refresh token be protected?
+
+### Input
+None
+
+### Response
+Store it securely, transmit it only over TLS, rotate it on use when appropriate, detect reuse, scope it narrowly, and revoke the token family after suspicious reuse or account compromise.

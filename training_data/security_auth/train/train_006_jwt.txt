@@ -1,0 +1,8 @@
+### Instruction
+How should JWT signing keys be rotated safely?
+
+### Input
+None
+
+### Response
+Publish key identifiers, accept the current and still-valid previous key during a bounded overlap, rotate signing privately, and retire old keys only after their token lifetime and recovery window expire.

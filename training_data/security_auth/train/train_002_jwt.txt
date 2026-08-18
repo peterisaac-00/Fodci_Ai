@@ -1,0 +1,8 @@
+### Instruction
+Why is accepting an arbitrary JWT algorithm unsafe?
+
+### Input
+None
+
+### Response
+An arbitrary algorithm can enable algorithm-confusion or unsigned-token acceptance. Use an explicit allowlist and a key type that matches the configured algorithm.

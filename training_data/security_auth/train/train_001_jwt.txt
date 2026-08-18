@@ -1,0 +1,8 @@
+### Instruction
+What must a backend validate before trusting a JWT?
+
+### Input
+None
+
+### Response
+Validate the signature with an approved key, the algorithm allowlist, issuer, audience, expiration, not-before time when used, and required claims. Treat an unverified decoded payload as untrusted input.

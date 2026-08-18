@@ -1,0 +1,8 @@
+### Instruction
+Why should middleware avoid logging Authorization headers?
+
+### Input
+None
+
+### Response
+Bearer credentials grant access to whoever obtains them. Redact the header and tokens completely while retaining only safe metadata such as scheme, route classification, and correlation ID.

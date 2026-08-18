@@ -1,0 +1,8 @@
+### Instruction
+How should a service handle an expired JWT?
+
+### Input
+None
+
+### Response
+Reject it with a stable authentication error and do not silently extend its lifetime. A separate refresh flow may issue a new access token after validating the refresh-token policy.

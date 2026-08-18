@@ -1,0 +1,8 @@
+### Instruction
+How should security middleware expose errors to clients?
+
+### Input
+None
+
+### Response
+Return stable, minimal error categories with correlation IDs and appropriate status codes. Keep stack traces, token details, provider responses, and internal policy decisions out of public responses.

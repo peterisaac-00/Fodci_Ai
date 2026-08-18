@@ -1,0 +1,8 @@
+### Instruction
+How should OAuth2 provider errors be logged?
+
+### Input
+None
+
+### Response
+Record a correlation identifier, provider and flow stage, safe error category, and timing, but redact authorization codes, client secrets, access tokens, refresh tokens, and personal payloads.

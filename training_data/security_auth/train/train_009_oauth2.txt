@@ -1,0 +1,8 @@
+### Instruction
+What is the recommended OAuth2 flow for a server-side web application?
+
+### Input
+None
+
+### Response
+Use Authorization Code with a confidential client, protect the redirect flow with state, authenticate the client securely, and use PKCE where supported. Never place a client secret in browser code.

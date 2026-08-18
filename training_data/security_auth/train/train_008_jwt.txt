@@ -1,0 +1,8 @@
+### Instruction
+How can an API reduce replay risk for bearer access tokens?
+
+### Input
+None
+
+### Response
+Use short-lived access tokens, TLS, narrow scopes, secure storage, revocation or rotation controls where required, and sender-constrained tokens when the threat model demands them.

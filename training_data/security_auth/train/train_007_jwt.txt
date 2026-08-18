@@ -1,0 +1,8 @@
+### Instruction
+What should be avoided in JWT claims?
+
+### Input
+None
+
+### Response
+Avoid passwords, secrets, unnecessary personal data, and mutable authorization facts that remain valid too long. JWT payloads are usually readable by their holder even when they are signed.

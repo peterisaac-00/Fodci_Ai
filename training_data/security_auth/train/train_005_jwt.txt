@@ -1,0 +1,8 @@
+### Instruction
+What is the difference between JWT authentication and authorization?
+
+### Input
+None
+
+### Response
+Authentication verifies that a token represents a valid principal. Authorization then checks whether that principal has the required role, scope, ownership, or policy for the specific action.

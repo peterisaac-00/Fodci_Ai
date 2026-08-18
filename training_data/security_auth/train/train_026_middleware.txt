@@ -1,0 +1,8 @@
+### Instruction
+How should security middleware order be chosen?
+
+### Input
+None
+
+### Response
+Establish trusted proxy and transport assumptions carefully, then apply request limits and correlation, authentication, authorization, input validation, and business handling in an explicit documented order.

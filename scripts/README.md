@@ -298,3 +298,31 @@ PYTHONPATH=src python scripts/benchmark_stage1.py \
 ```
 
 The benchmark uses deterministic greedy decoding and keyword coverage as a conservative diagnostic. A non-empty rate of 1.0 with zero keyword coverage is valid evidence that the checkpoint emits text but has not yet demonstrated reliable debugging semantics; it must not be presented as successful autonomous repair.
+
+## Phase 13.8 — Security & Authentication Patterns
+
+`generate_phase138_data.py` creates the security specialist corpus under `training_data/security_auth`, with 32 training records, 8 validation records, and 8 held-out benchmark records. The balanced curriculum covers JWT validation, OAuth2 flows, password hashing, and authentication middleware.
+
+```text
+python scripts/generate_phase138_data.py
+```
+
+`train_phase138_security_auth.py` continues from `artifacts/checkpoints/fodci-debugging-v1.pt` and writes `artifacts/checkpoints/fodci-security-auth-v1.pt`. The default CPU-only run is bounded to twelve optimizer steps, uses response-only loss masking and a short-record-safe context window, and validates lineage, non-empty splits, finite loss, parameter changes, checkpoint existence, and reload consistency.
+
+```text
+PYTHONPATH=src python scripts/train_phase138_security_auth.py
+```
+
+The workflow writes `artifacts/evaluation/phase138_security_auth_training.json` and the tracked report `docs/experiments/phase138_security_auth_training.md`. The held-out security benchmark is run with:
+
+```text
+PYTHONPATH=src python scripts/benchmark_stage1.py \
+  --dataset training_data/security_auth/evaluation/phase_138.jsonl \
+  --checkpoint artifacts/checkpoints/fodci-security-auth-v1.pt \
+  --model-version fodci-security-auth-v1 \
+  --run-prefix phase138-security-auth \
+  --report artifacts/evaluation/phase138_security_auth_benchmark.json \
+  --markdown docs/experiments/phase138_security_auth_benchmark.md
+```
+
+The benchmark uses deterministic greedy decoding and keyword coverage as a conservative diagnostic. It does not establish that the model can implement secure authentication, and security claims require threat modeling, code review, and execution-aware tests.

@@ -1,0 +1,8 @@
+### Instruction
+How should an authenticated API configure CORS for browser clients?
+
+### Input
+Origin=https://trusted.example; credentials=true
+
+### Response
+Use an explicit allowlist of trusted origins and required headers and methods, allow credentials only with explicit origins, and do not treat CORS as a substitute for authentication or authorization.

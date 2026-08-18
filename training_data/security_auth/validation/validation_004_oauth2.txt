@@ -1,0 +1,8 @@
+### Instruction
+What is the minimum safe behavior when a public client starts OAuth2 login?
+
+### Input
+A mobile client cannot keep a confidential secret.
+
+### Response
+Use Authorization Code with PKCE, an exact registered redirect URI, an unpredictable state value, and no embedded client secret. Validate the issuer and token response before creating a local session.

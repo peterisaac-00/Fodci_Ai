@@ -1,0 +1,8 @@
+### Instruction
+What belongs in authentication middleware rather than business handlers?
+
+### Input
+None
+
+### Response
+Middleware can extract credentials, validate them, attach a typed principal, apply consistent failure responses, and add safe correlation context. Resource-specific authorization still belongs at the policy or handler boundary.

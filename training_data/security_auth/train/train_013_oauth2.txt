@@ -1,0 +1,8 @@
+### Instruction
+What is the role of state in an OAuth2 login?
+
+### Input
+None
+
+### Response
+State binds the callback to the initiating browser session and helps prevent login CSRF. Generate it unpredictably, store it safely, and compare it before accepting the authorization response.

@@ -1,0 +1,8 @@
+### Instruction
+How should a callback handle an OAuth2 authorization response with a mismatched state?
+
+### Input
+callback state=unexpected-value; session state=stored-value
+
+### Response
+Reject the callback and do not exchange or accept the code. The state mismatch indicates that the response is not bound to the initiating session; log a redacted correlation event and require a fresh authorization attempt.

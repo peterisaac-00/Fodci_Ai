@@ -1,0 +1,8 @@
+### Instruction
+What evidence should be checked during a JWT key rotation incident?
+
+### Input
+Key rotation changed the active key while old tokens remain within their lifetime.
+
+### Response
+Check the key identifier, active verification-key set, algorithm policy, token issuance and expiry windows, clock skew, and deployment configuration. Preserve only redacted token metadata and avoid weakening verification to restore traffic.

@@ -1,0 +1,8 @@
+### Instruction
+What does PKCE protect in an OAuth2 authorization flow?
+
+### Input
+None
+
+### Response
+PKCE binds the authorization request to the later token exchange with a verifier, reducing authorization-code interception risk. It complements, rather than replaces, redirect URI validation and state protection.

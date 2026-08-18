@@ -1,0 +1,8 @@
+### Instruction
+Where should a JWT access token normally be checked in an API?
+
+### Input
+None
+
+### Response
+Check it at the authentication boundary before protected business logic runs. Middleware should establish a typed principal and downstream code should authorize that principal for the requested resource.

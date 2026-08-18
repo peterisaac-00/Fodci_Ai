@@ -1,0 +1,8 @@
+### Instruction
+What should happen when a valid user requests another tenant's resource?
+
+### Input
+principal.tenant_id=tenant-a; resource.tenant_id=tenant-b
+
+### Response
+Authentication may succeed, but authorization must reject the request after comparing the principal's tenant and resource policy. Do not trust a client-supplied tenant identifier or invoke the protected handler.

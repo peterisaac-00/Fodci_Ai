@@ -1,0 +1,8 @@
+### Instruction
+How can middleware prevent confused-deputy access across tenants?
+
+### Input
+None
+
+### Response
+Resolve the principal and tenant context from trusted authenticated data, require the requested resource tenant to match policy, and do not accept a client-supplied tenant header as authority.

@@ -1,0 +1,8 @@
+### Instruction
+What should be tested for a protected route middleware stack?
+
+### Input
+None
+
+### Response
+Test missing, malformed, expired, valid, insufficient-scope, cross-tenant, and valid-owner cases. Assert both the response contract and that protected business logic is not called when authentication or authorization fails.

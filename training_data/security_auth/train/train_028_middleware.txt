@@ -1,0 +1,8 @@
+### Instruction
+How should authentication middleware handle malformed credentials?
+
+### Input
+None
+
+### Response
+Fail closed with a stable authentication response, avoid exception details in the public body, record a redacted diagnostic, and ensure malformed input cannot bypass later authorization checks.

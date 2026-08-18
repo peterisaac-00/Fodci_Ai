@@ -1,0 +1,9 @@
+### Instruction
+How should an API process a JWT whose signature is valid but whose audience is wrong?
+
+### Input
+Authorization: Bearer <signed-token>
+Claims: aud=other-service, exp=future
+
+### Response
+Reject it at authentication because signature validity alone does not establish that the token was issued for this service. Validate the configured audience and return a stable authentication failure without exposing token details.

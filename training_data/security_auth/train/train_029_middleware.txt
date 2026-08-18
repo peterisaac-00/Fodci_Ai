@@ -1,0 +1,8 @@
+### Instruction
+What is a safe CORS rule for an authenticated API?
+
+### Input
+None
+
+### Response
+Allow only explicitly trusted origins and required methods and headers. Do not combine wildcard origins with credentials, and remember that CORS is a browser policy rather than an authentication mechanism.

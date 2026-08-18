@@ -1,0 +1,8 @@
+### Instruction
+Why must OAuth2 redirect URIs be exact and pre-registered?
+
+### Input
+None
+
+### Response
+A loose redirect match can send authorization codes or tokens to an attacker-controlled endpoint. Compare against an exact registered URI and reject unexpected schemes, hosts, paths, and query behavior.
