@@ -464,3 +464,13 @@ PYTHONPATH=src python scripts/run_phase144_qwen_benchmark.py --max-new-tokens 64
 ```
 
 The recorded experiment uses the standard safetensors representation and is not a Q4 benchmark. It showed a strong readability improvement over Fodci 11M, but manual review found likely backend inaccuracies. Qwen is not activated as stable, and the 1.5B fallback remains unselected.
+
+## Phase 14.5 — Backend Domain Policy and Output Guard
+
+`BackendScopedProvider` wraps any language provider with a deterministic Backend allowlist and bounded output guard. The runner validates that in-scope requests reach the inner provider, out-of-scope requests are blocked before it, and repetitive output is rejected.
+
+```text
+PYTHONPATH=src python scripts/run_phase145_backend_scope.py
+```
+
+This runtime policy specializes behavior but does not erase general knowledge from pretrained weights. The default Fodci application remains unchanged until a later acceptance decision.

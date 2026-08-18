@@ -2519,3 +2519,9 @@ Phase 14.4 evaluates the locally cached `Qwen/Qwen2.5-Coder-0.5B-Instruct` model
 Qwen improved the understandable heuristic rate from the Fodci 11M baseline of `0.0000` to `0.9167`, and average keyword coverage from `0.0000` to `0.7188`. This is evidence of readable language improvement, not semantic backend correctness. Manual review found likely issues such as a Flask-style `jsonify` suggestion for FastAPI, an `aiohttp` example for an asynchronous database question, imprecise password hashing terminology, and an irrelevant `pytest-django` recommendation for FastAPI.
 
 The evaluated artifact is standard safetensors and is recorded as `none-fp16-safetensors`; it is not a Q4 quantized run. A dynamic INT8 conversion attempt was terminated under constrained memory and is not counted as a successful quantized result. No Qwen activation or stable-runtime replacement is permitted until the domain policy, output guard, and final comparison phases complete.
+
+## Phase 14.5 — Backend Domain Policy and Output Guard
+
+Phase 14.5 adds `BackendDomainPolicy`, `BackendOutputGuard`, and `BackendScopedProvider` around the optional language-provider boundary. The deterministic policy allows Python backend, FastAPI, REST/HTTP, SQL/PostgreSQL, authentication, testing, debugging, and backend architecture, while blocking explicit Unity, Android, frontend-only, and unrelated topics before they reach the inner provider.
+
+The output guard rejects empty, overlong, excessively repetitive, or non-backend responses. Five contract probes passed: two backend requests were accepted, two out-of-scope requests were blocked before the provider, and one repetitive response was rejected. The default Fodci application and stable runtime remain unchanged. This is runtime specialization, not deletion of general knowledge from pretrained weights.

@@ -1,0 +1,63 @@
+{
+  "default_fodci_provider_changed": false,
+  "format": "fodci.phase145_backend_scope",
+  "guard": "BackendOutputGuard",
+  "inner_provider_calls": 3,
+  "out_of_scope_calls_blocked_before_provider": true,
+  "passed_probe_count": 5,
+  "phase": "14.5",
+  "phase_gates": {
+    "all_probes_passed": true,
+    "inner_provider_not_called_for_blocked": true,
+    "out_of_scope_blocking": true,
+    "output_guard_rejection": true,
+    "stable_runtime_preserved": true
+  },
+  "phase_gates_passed": true,
+  "policy": "BackendDomainPolicy",
+  "probe_count": 5,
+  "probes": [
+    {
+      "expected": "accepted",
+      "label": "backend",
+      "observed": "accepted",
+      "passed": true,
+      "prompt": "How should FastAPI validate JWT request data?",
+      "response": "Use FastAPI with Pydantic validation and a parameterized SQL query for the backend request."
+    },
+    {
+      "expected": "accepted",
+      "label": "backend",
+      "observed": "accepted",
+      "passed": true,
+      "prompt": "How do I optimize a PostgreSQL query?",
+      "response": "Use FastAPI with Pydantic validation and a parameterized SQL query for the backend request."
+    },
+    {
+      "expected": "blocked",
+      "label": "out-of-scope",
+      "observed": "blocked",
+      "passed": true,
+      "prompt": "How do I make a Unity game?",
+      "response": "I specialize in backend engineering, so I cannot help with that topic. Please ask about Python backend services, FastAPI, REST, SQL, authentication, testing, debugging, or backend architecture."
+    },
+    {
+      "expected": "blocked",
+      "label": "out-of-scope",
+      "observed": "blocked",
+      "passed": true,
+      "prompt": "How do I build an Android app?",
+      "response": "I specialize in backend engineering, so I cannot help with that topic. Please ask about Python backend services, FastAPI, REST, SQL, authentication, testing, debugging, or backend architecture."
+    },
+    {
+      "expected": "guarded",
+      "label": "bad-output",
+      "observed": "guarded",
+      "passed": true,
+      "prompt": "Give a repetitive backend answer.",
+      "response": "I could not produce a reliable backend answer for that request."
+    }
+  ],
+  "schema_version": "1.0",
+  "stable_runtime_replaced": false
+}
