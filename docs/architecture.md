@@ -2511,3 +2511,11 @@ The measured non-empty rate was `1.0000`, but the understandable heuristic rate 
 Phase 14.3 adds `PretrainedCodeProvider` behind the existing typed `LLMProvider` boundary. The provider is optional and lazy: the default Fodci import path does not import Transformers, download weights, call external APIs, or replace the stable provider. Explicit loading uses local-files-only mode and disables remote code by default; generation is CPU-bounded through a validated `PretrainedProviderConfig`.
 
 The phase was validated with injected tokenizer/model doubles rather than a real model artifact. Typed request formatting, response decoding, invalid-conversation rejection, and bounded generation settings all passed. A concrete local/cache Qwen artifact is deferred to Phase 14.4, and no stable runtime activation is permitted before benchmark evidence.
+
+## Phase 14.4 — Qwen 0.5B Backend Benchmark
+
+Phase 14.4 evaluates the locally cached `Qwen/Qwen2.5-Coder-0.5B-Instruct` model through `PretrainedCodeProvider` on the exact 24-case Phase 14.1 benchmark. The run is CPU-only, uses greedy decoding with a 64-token bound, disables remote code, and loads only local files. It completed all cases and preserved the stable Fodci checkpoint.
+
+Qwen improved the understandable heuristic rate from the Fodci 11M baseline of `0.0000` to `0.9167`, and average keyword coverage from `0.0000` to `0.7188`. This is evidence of readable language improvement, not semantic backend correctness. Manual review found likely issues such as a Flask-style `jsonify` suggestion for FastAPI, an `aiohttp` example for an asynchronous database question, imprecise password hashing terminology, and an irrelevant `pytest-django` recommendation for FastAPI.
+
+The evaluated artifact is standard safetensors and is recorded as `none-fp16-safetensors`; it is not a Q4 quantized run. A dynamic INT8 conversion attempt was terminated under constrained memory and is not counted as a successful quantized result. No Qwen activation or stable-runtime replacement is permitted until the domain policy, output guard, and final comparison phases complete.

@@ -453,3 +453,14 @@ PYTHONPATH=src python scripts/run_phase143_provider_contract.py
 ```
 
 The provider loads Transformers lazily only when explicitly requested, uses local-files-only loading, disables remote code by default, and keeps the existing typed `LLMProvider` boundary. Phase 14.4 supplies a concrete local/cache model artifact for evaluation.
+
+## Phase 14.4 — Qwen 0.5B Backend Benchmark
+
+`download_phase144_qwen_model.py` downloads the explicitly selected Qwen model into the ignored local artifact directory. `run_phase144_qwen_benchmark.py` evaluates that local model on the exact Phase 14.1 benchmark.
+
+```text
+PYTHONPATH=src python scripts/download_phase144_qwen_model.py
+PYTHONPATH=src python scripts/run_phase144_qwen_benchmark.py --max-new-tokens 64
+```
+
+The recorded experiment uses the standard safetensors representation and is not a Q4 benchmark. It showed a strong readability improvement over Fodci 11M, but manual review found likely backend inaccuracies. Qwen is not activated as stable, and the 1.5B fallback remains unselected.
