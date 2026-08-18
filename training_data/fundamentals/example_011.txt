@@ -1,0 +1,8 @@
+### Instruction
+Explain HTTP Status Code 404 Not Found.
+
+### Input
+None
+
+### Response
+The HTTP 404 Not Found status code indicates that the origin server did not find a current representation for the target resource or is not willing to disclose that one exists. This is commonly seen when a URL is mistyped or a resource has been deleted.

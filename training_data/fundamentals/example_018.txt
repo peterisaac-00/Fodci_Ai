@@ -1,0 +1,8 @@
+### Instruction
+Explain the concept of Statelessness in REST APIs.
+
+### Input
+None
+
+### Response
+Statelessness means that the server does not store any state about the client session on the server-side. Each request from the client to the server must contain all the information necessary to understand and complete the request. This improves scalability because the server doesn't need to remember previous requests.

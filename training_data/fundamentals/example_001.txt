@@ -1,0 +1,11 @@
+### Instruction
+What are the primary components of a typical Backend architecture?
+
+### Input
+None
+
+### Response
+A typical backend architecture consists of three main parts:
+1. The Server: The computer that receives requests.
+2. The App: The application running on the server that processes requests and contains the business logic.
+3. The Database: Where data is persistently stored and retrieved.

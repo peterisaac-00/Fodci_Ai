@@ -1,0 +1,8 @@
+### Instruction
+Explain HTTP Status Code 401 Unauthorized.
+
+### Input
+None
+
+### Response
+The HTTP 401 Unauthorized status code indicates that the request has not been applied because it lacks valid authentication credentials for the target resource. It means 'I don't know who you are, or your credentials are invalid'.

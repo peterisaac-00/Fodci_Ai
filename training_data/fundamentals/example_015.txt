@@ -1,0 +1,11 @@
+### Instruction
+Why should you use POST instead of GET for creating a user?
+
+### Input
+A developer wants to create a new user account by sending the username and password.
+
+### Response
+You should use POST because:
+1. Semantics: GET is intended for retrieving data, while POST is for creating/modifying data.
+2. Security: GET parameters are visible in the URL, browser history, and server logs, which is unsafe for sensitive data like passwords. POST sends data in the request body.
+3. Data Limits: URLs have length limits, while the POST body can handle much larger amounts of data.

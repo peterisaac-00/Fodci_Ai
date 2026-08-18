@@ -1,0 +1,8 @@
+### Instruction
+What is JSON and why is it popular in Backend development?
+
+### Input
+None
+
+### Response
+JSON (JavaScript Object Notation) is a lightweight data-interchange format. It is easy for humans to read and write and easy for machines to parse and generate. It is popular in backend development because it is language-independent, highly portable, and serves as the standard format for data exchange in modern web APIs.

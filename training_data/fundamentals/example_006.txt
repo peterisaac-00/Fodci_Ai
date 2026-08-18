@@ -1,0 +1,8 @@
+### Instruction
+Explain HTTP Status Code 200 OK.
+
+### Input
+None
+
+### Response
+The HTTP 200 OK status code indicates that the request has succeeded. The information returned with the response is dependent on the method used in the request (e.g., the entity corresponding to the requested resource for GET, or an entity describing the result of the action for POST).

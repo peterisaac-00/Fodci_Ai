@@ -1,0 +1,8 @@
+### Instruction
+Explain what a Backend is in the context of web development.
+
+### Input
+None
+
+### Response
+The backend (or server-side) of a web application is the part that users don't see. It is responsible for storing and organizing data, and ensuring everything on the client-side (frontend) actually works. The backend communicates with the frontend, sending and receiving information to be displayed as a web page. It typically consists of a server, an application, and a database.

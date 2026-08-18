@@ -1,0 +1,8 @@
+### Instruction
+Explain HTTP Status Code 500 Internal Server Error.
+
+### Input
+None
+
+### Response
+The HTTP 500 Internal Server Error status code indicates that the server encountered an unexpected condition that prevented it from fulfilling the request. This is a generic 'catch-all' error for server-side crashes or unhandled exceptions.

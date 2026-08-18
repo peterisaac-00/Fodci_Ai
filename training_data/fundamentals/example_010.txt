@@ -1,0 +1,8 @@
+### Instruction
+Explain HTTP Status Code 403 Forbidden.
+
+### Input
+None
+
+### Response
+The HTTP 403 Forbidden status code indicates that the server understood the request but refuses to authorize it. Unlike 401, the client's identity is known to the server, but they do not have permission to access the resource.

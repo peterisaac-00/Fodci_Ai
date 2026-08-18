@@ -1,0 +1,8 @@
+### Instruction
+What is the difference between Authentication and Authorization?
+
+### Input
+None
+
+### Response
+Authentication is the process of verifying who a user is (e.g., checking a username and password). Authorization is the process of verifying what a user has access to (e.g., checking if a logged-in user is an administrator allowed to delete a resource).

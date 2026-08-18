@@ -1,0 +1,8 @@
+### Instruction
+What is an API Endpoint?
+
+### Input
+None
+
+### Response
+An API endpoint is a specific URL where an API can be accessed by a client application. It represents a specific resource or function provided by the API. For example, 'https://api.example.com/v1/users' might be an endpoint to retrieve or manage user data.

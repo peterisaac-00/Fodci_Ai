@@ -1,0 +1,8 @@
+### Instruction
+Explain HTTP Status Code 201 Created.
+
+### Input
+None
+
+### Response
+The HTTP 201 Created status code indicates that the request has been fulfilled and has resulted in one or more new resources being created. This is the standard response for a successful POST request.

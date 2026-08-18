@@ -1,0 +1,13 @@
+### Instruction
+List common HTTP methods and their intended use in a RESTful API.
+
+### Input
+None
+
+### Response
+The common HTTP methods are:
+- GET: Retrieve a resource or a collection of resources.
+- POST: Create a new resource.
+- PUT: Update an existing resource (full replacement).
+- PATCH: Partially update an existing resource.
+- DELETE: Remove a resource.

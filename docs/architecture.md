@@ -2365,3 +2365,27 @@ Phase 12.8 introduces the final **Advanced Autonomy & Control** layer (`Autonomy
 ```
 
 `AutonomyController` manages explicit task lifecycles (`CREATED` → `ANALYZING` → `PLANNING` → `EXECUTING` → `TESTING` → `EVALUATING` → `RECOVERING` → `REPLANNING` → `VERIFYING` → `COMPLETED`), enforces configurable `AutonomyBudget` bounds, detects pathological loops (`LoopDetector`), maintains execution checkpoints, supports human control (`pause`, `resume`, `cancel`), and passes through an explicit verification gate before terminal success. All 1025 tests pass successfully, and the project is fully feature-complete.
+
+## Phase 13 — Model Training & Specialization Curriculum
+
+Phase 13 establishes the structured, curriculum-based model specialization pipeline for the Fodci AI Backend Engineering Agent, transitioning from general language representations to specialized backend engineering capabilities.
+
+```text
+                 Raw Backend Curriculum
+                           ↓
+                   Dataset Architecture
+                           ↓
+               Instruction Dataset Pipeline
+                           ↓
+                   Baseline Evaluation
+                           ↓
+                   Iterative Training
+                           ↓
+                   Stage Checkpoints
+                           ↓
+                    Benchmark Suite
+                           ↓
+                    Model Comparison
+```
+
+The curriculum is structured into progressive stages (starting with **Stage 1: Backend Fundamentals**, covering HTTP, REST, status codes, and client-server concepts), evaluated via rigorous benchmark suites, and optimized iteratively using `FodciTrainer` while maintaining full backward compatibility and zero external runtime dependencies.

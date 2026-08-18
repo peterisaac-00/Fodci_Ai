@@ -1,0 +1,8 @@
+### Instruction
+What is a REST API?
+
+### Input
+None
+
+### Response
+REST (Representational State Transfer) is an architectural style for designing networked applications. A REST API is an application programming interface that uses HTTP requests to GET, PUT, POST, and DELETE data. It is based on resources, which are identified by URLs, and typically uses JSON for data exchange.

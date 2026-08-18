@@ -1,0 +1,8 @@
+### Instruction
+What is a Middleware in a Backend application?
+
+### Input
+None
+
+### Response
+Middleware is software that acts as a bridge between an operating system or database and applications, especially on a network. In backend frameworks, middleware functions are functions that have access to the request object, the response object, and the next middleware function in the application’s request-response cycle. They are used for tasks like logging, authentication, and parsing request bodies.

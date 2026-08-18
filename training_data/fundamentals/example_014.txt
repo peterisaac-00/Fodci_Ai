@@ -1,0 +1,14 @@
+### Instruction
+Describe the typical flow of a Backend request.
+
+### Input
+None
+
+### Response
+The typical flow is:
+1. Client sends an HTTP Request to a specific URL.
+2. The Web Server receives the request and routes it to the Application.
+3. The Application processes the request (Authentication, Validation, Business Logic).
+4. The Application interacts with the Database if needed.
+5. The Application constructs an HTTP Response (e.g., JSON data + status code).
+6. The Web Server sends the response back to the Client.

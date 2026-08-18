@@ -142,3 +142,11 @@ Developers can instantiate `AgentOrchestrator(registry, memory_system)` and exec
 Phase 12.8 finalizes the Fodci AI Backend Engineering Agent with the `AutonomyController`. It provides robust execution budgets, loop detection, explicit task lifecycles, checkpoints, and human control hooks (`pause`, `resume`, `cancel`).
 
 Developers can instantiate `AutonomyController(orchestrator, memory_system, budget)` to execute end-to-end backend engineering tasks with guaranteed bounded termination, complete observability, and full regression test coverage (1025 tests).
+
+
+## Phase 13 Training & Curriculum Workflows
+
+Phase 13 introduces dedicated scripts for curriculum-based model specialization and benchmarking:
+- `generate_stage1_data.py`: Generates high-quality instruction dataset records for Stage 1 (Backend Fundamentals).
+- `benchmark_stage1.py`: Runs baseline evaluation and benchmarks model generation against stage-specific test questions.
+- `train_stage1.py`: Executes end-to-end training using `FodciTrainer` and `InstructionDatasetPipeline`, producing validated checkpoints.

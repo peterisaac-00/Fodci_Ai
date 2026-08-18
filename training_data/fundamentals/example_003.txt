@@ -1,0 +1,8 @@
+### Instruction
+Explain the difference between an HTTP Request and an HTTP Response.
+
+### Input
+None
+
+### Response
+An HTTP Request is sent by the client (e.g., a browser) to the server to initiate an action (like fetching a page or submitting a form). An HTTP Response is sent by the server back to the client, containing the result of the request (like the requested HTML, an image, or a JSON object) and a status code indicating success or failure.
