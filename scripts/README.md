@@ -523,3 +523,13 @@ PYTHONPATH=src python scripts/train_phase154_offline_distillation.py --max-steps
 ```
 
 Training is never started from a live interaction. The output checkpoint remains experimental until held-out response evaluation and controlled promotion gates pass.
+
+## Phase 15.5 — Held-out Evaluation and Regression
+
+`run_phase155_heldout_evaluation.py` evaluates the distilled candidate and stable checkpoint on the exact same 24-case benchmark.
+
+```text
+PYTHONPATH=src python scripts/run_phase155_heldout_evaluation.py --max-new-tokens 32
+```
+
+The Phase 15.4 candidate completed, but its held-out quality did not improve and its repetition rate became worse. It was not promoted; stable Fodci remains unchanged.

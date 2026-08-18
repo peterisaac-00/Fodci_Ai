@@ -2555,3 +2555,9 @@ The phase explicitly separates heuristic eligibility from semantic correctness. 
 Phase 15.4 trains an experimental stable-sized Fodci checkpoint from verified Teacher–Student records using a bounded CPU-only offline schedule. Eight reviewed Backend records were used for training and four separate records for validation over 32 steps. Validation loss improved from `2.805490` to `2.776224`; finite loss, parameter change, checkpoint reload, non-empty splits, and base-checkpoint lineage all passed.
 
 The distilled checkpoint is not activated automatically. Live interactions never start training, and the stable `fodci-testing-qa-v1` runtime remains unchanged until held-out response quality and controlled promotion gates pass.
+
+## Phase 15.5 — Held-out Evaluation and Regression
+
+Phase 15.5 evaluates the Phase 15.4 distilled candidate and stable Fodci on the identical 24-case Backend benchmark. Both runs completed, but readability and keyword coverage remained `0.0000` for both, while the candidate's repeated-token rate worsened from `0.3278` to `0.6970`.
+
+This negative result is treated as a successful safety decision: the candidate was not promoted, `fodci-testing-qa-v1` remains stable, and a lower offline validation loss is not treated as proof of response quality. More verified data, stronger formatting, and improved distillation are required before promotion.
