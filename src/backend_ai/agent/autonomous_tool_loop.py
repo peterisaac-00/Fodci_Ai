@@ -20,6 +20,7 @@ import re
 from typing import Any
 
 from backend_ai.agent.budget import ContextBudget, ContextBudgetError
+from backend_ai.agent.context_manager import ContextAssembly, ContextManager, ContextManagerConfig
 from backend_ai.agent.codebase_understanding import CodebaseUnderstanding, CodebaseUnderstandingBuilder
 from backend_ai.agent.execution_budget import (
     BudgetDimension,
@@ -203,6 +204,11 @@ class AutonomousLoopConfig:
         "or ACTION: FINAL with ARGS {\"message\": \"...\"}. Never emit prose commands."
     )
     execution_budget: ExecutionBudget = field(default_factory=ExecutionBudget.conservative_defaults)
+    context_max_items: int = 64
+    context_max_item_characters: int = 8_192
+    context_summary_threshold_characters: int = 1_600
+    context_max_summary_characters: int = 1_200
+    context_relevance_threshold: float = 0.0
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -212,18 +218,24 @@ class AutonomousLoopConfig:
             "max_history_items",
             "max_task_prompt_chars",
             "max_replans",
+            "context_max_items",
+            "context_max_item_characters",
+            "context_summary_threshold_characters",
+            "context_max_summary_characters",
         ):
             value = getattr(self, field_name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{field_name} must be a positive integer")
         if self.max_context_tokens <= self.reserve_response_tokens:
             raise ValueError("max_context_tokens must exceed reserve_response_tokens")
-        if self.max_tool_result_chars > 64_000 or self.max_history_items > 128 or self.max_task_prompt_chars > 16_384 or self.max_replans > 16:
+        if self.max_tool_result_chars > 64_000 or self.max_history_items > 128 or self.max_task_prompt_chars > 16_384 or self.max_replans > 16 or self.context_max_items > 512 or self.context_max_item_characters > 1_048_576 or self.context_summary_threshold_characters > 262_144 or self.context_max_summary_characters > 262_144:
             raise ValueError("Autonomous loop budget exceeds the safety ceiling")
         if not isinstance(self.system_prompt, str) or not self.system_prompt.strip():
             raise ValueError("system_prompt must contain text")
         if not isinstance(self.execution_budget, ExecutionBudget):
             raise ValueError("execution_budget must be ExecutionBudget")
+        if not isinstance(self.context_relevance_threshold, (int, float)) or isinstance(self.context_relevance_threshold, bool) or not 0.0 <= float(self.context_relevance_threshold) <= 1.0:
+            raise ValueError("context_relevance_threshold must be between 0 and 1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,6 +358,7 @@ class AutonomousLoopState:
     memory_retrieval: MemoryRetrievalResult | None = None
     plan_execution: PlanExecutionState | None = None
     codebase_understanding: CodebaseUnderstanding | None = None
+    context_assembly: ContextAssembly | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -373,6 +386,7 @@ class AutonomousLoopState:
             "memory_retrieval": self.memory_retrieval.to_dict() if self.memory_retrieval else None,
             "plan_execution": self.plan_execution.to_dict() if self.plan_execution else None,
             "codebase_understanding": self.codebase_understanding.to_dict() if self.codebase_understanding else None,
+            "context_assembly": self.context_assembly.to_dict() if self.context_assembly else None,
         }
 
 
@@ -404,6 +418,7 @@ class AutonomousLoopResult:
     memory_retrieval: MemoryRetrievalResult | None = None
     plan_execution: PlanExecutionState | None = None
     codebase_understanding: CodebaseUnderstanding | None = None
+    context_assembly: ContextAssembly | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -431,6 +446,7 @@ class AutonomousLoopResult:
             "memory_retrieval": self.memory_retrieval.to_dict() if self.memory_retrieval else None,
             "plan_execution": self.plan_execution.to_dict() if self.plan_execution else None,
             "codebase_understanding": self.codebase_understanding.to_dict() if self.codebase_understanding else None,
+            "context_assembly": self.context_assembly.to_dict() if self.context_assembly else None,
         }
 
 
@@ -544,6 +560,20 @@ class AutonomousToolLoop:
             system_prompt=self.config.system_prompt,
         )
         self._budget = ContextBudget(tokenizer, budget_config)
+        self._context_manager = ContextManager(
+            tokenizer=tokenizer,
+            config=ContextManagerConfig(
+                max_context_tokens=self.config.max_context_tokens,
+                reserve_output_tokens=self.config.reserve_response_tokens,
+                max_items=self.config.context_max_items,
+                max_item_characters=self.config.context_max_item_characters,
+                max_tool_output_characters=self.config.max_tool_result_chars,
+                summary_threshold_characters=self.config.context_summary_threshold_characters,
+                max_summary_characters=self.config.context_max_summary_characters,
+                relevance_threshold=self.config.context_relevance_threshold,
+            ),
+        )
+        self._last_context_assembly: ContextAssembly | None = None
 
     def run(self, request: AutonomousLoopRequest | str, project_root: Path | str | None = None) -> AutonomousLoopResult:
         """Run one bounded task with explicit, evidence-driven recovery decisions."""
@@ -606,6 +636,8 @@ class AutonomousToolLoop:
         last_result: ToolResult | None = None
         model_response = ""
         final_answer = ""
+        context_assembly: ContextAssembly | None = None
+        invalidated_paths: set[str] = set()
         context_truncated = False
         truncation_reason: str | None = None
         preserved_sections: tuple[str, ...] = ("task", "plan", "current_step", "tool_observation")
@@ -626,7 +658,7 @@ class AutonomousToolLoop:
         failed_action_signatures: list[str] = []
 
         def snapshot() -> AutonomousLoopState:
-            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result, plan_execution_state, codebase_understanding)
+            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result, plan_execution_state, codebase_understanding, context_assembly)
 
         def update_plan_step(step_id: str | None, status: PlanStepStatus, *, reason: str, evidence: Sequence[str] = ()) -> None:
             nonlocal plan, plan_execution_state
@@ -862,11 +894,12 @@ class AutonomousToolLoop:
                 machine.transition(LoopLifecycleState.VALIDATING_ACTION)
                 try:
                     if selection_failure and plan_step is not None and selection_result is not None:
-                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_selection_failure_prompt(request.task, plan_step, selection_result, context, tuple(history), long_term_memories, retrieval_result)
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_selection_failure_prompt(request.task, plan_step, selection_result, context, tuple(history), long_term_memories, retrieval_result, codebase_understanding=codebase_understanding, plan=plan, invalidated_paths=invalidated_paths)
                     elif plan_step is not None and current_selection is not None:
-                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_prompt(request.task, plan, plan_step, current_selection, context, tuple(history), long_term_memories, retrieval_result)
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_prompt(request.task, plan, plan_step, current_selection, context, tuple(history), long_term_memories, retrieval_result, codebase_understanding=codebase_understanding, invalidated_paths=invalidated_paths)
                     else:
-                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_completion_prompt(request.task, plan, context, tuple(history), long_term_memories, retrieval_result)
+                        prompt, prompt_tokens, prompt_truncated, prompt_warnings = self._render_completion_prompt(request.task, plan, context, tuple(history), long_term_memories, retrieval_result, codebase_understanding=codebase_understanding, invalidated_paths=invalidated_paths)
+                    context_assembly = self._last_context_assembly
                     context_truncated = prompt_truncated
                     if prompt_truncated:
                         truncation_reason = "ContextBudget compacted optional plan/history/tool context."
@@ -1019,6 +1052,8 @@ class AutonomousToolLoop:
                 except ShortTermMemoryError as exc:
                     errors.append(f"short-term memory tool update failed: {exc}")
                 last_call, last_result = call, tool_result
+                if tool_result.success:
+                    invalidated_paths.update(_tool_result_paths(call, tool_result))
                 if codebase_understanding is not None:
                     try:
                         codebase_understanding = codebase_builder.update_from_tool_result(codebase_understanding, call.name, tool_result.data)
@@ -1177,31 +1212,35 @@ class AutonomousToolLoop:
         step = PlanStep("context-1", "Build canonical project context", "Build canonical project context before selecting implementation tools.", "Context is required for bounded loop prompts.", "A ProjectContext is available.", (), PlanRiskLevel.LOW)
         return ExecutionPlan(task, task, "Build bounded project context.", PlannerTaskType.INVESTIGATION, (step,), (), ("project root is explicit",), (), (), ("context is available",), PlannerConfidence.MEDIUM, (), PlanCompleteness.PARTIAL)
 
-    def _render_prompt(self, task: str, plan: ExecutionPlan, step: PlanStep, selection: ToolSelectionDecision, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None) -> tuple[str, int, bool, tuple[str, ...]]:
-        plan_fragment = json.dumps({"task": task, "step": step.to_dict(), "selected_tool": selection.selected_tool, "prerequisites": list(selection.prerequisites), "expected_output": selection.expected_output}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    def _render_prompt(self, task: str, plan: ExecutionPlan, step: PlanStep, selection: ToolSelectionDecision, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None, *, codebase_understanding: CodebaseUnderstanding | None = None, invalidated_paths: Iterable[str] = ()) -> tuple[str, int, bool, tuple[str, ...]]:
         instruction = _bounded_text(
-            f"Task: {task}{_memory_retrieval_context_fragment(retrieval_result)}\nCurrent plan step: {step.step_id}\nPlan step detail: {plan_fragment}\nSelected tool: {selection.selected_tool}{_long_term_context_fragment(long_term_memories)}\nReturn exactly ACTION: TOOL with ARGS {{\"tool\": \"{selection.selected_tool}\", \"arguments\": {{...}}}} or ACTION: FINAL with ARGS {{\"message\": \"...\"}}.",
+            f"Current step: {step.step_id}. Selected tool: {selection.selected_tool}.{_memory_retrieval_context_fragment(retrieval_result)}{_long_term_context_fragment(long_term_memories)} Return exactly ACTION: TOOL with ARGS {{\"tool\": \"{selection.selected_tool}\", \"arguments\": {{...}}}} or ACTION: FINAL with ARGS {{\"message\": \"...\"}}.",
             self.config.max_task_prompt_chars,
         )
-        budgeted = self._budget.render(instruction, context, history)
-        return budgeted.prompt, budgeted.token_count, budgeted.truncated, budgeted.warnings
+        assembly = self._assemble_context(task, instruction, context, history, plan=plan, current_step=step, selection=selection, long_term_memories=long_term_memories, retrieval_result=retrieval_result, codebase_understanding=codebase_understanding, invalidated_paths=invalidated_paths)
+        return assembly.prompt, assembly.token_count, assembly.truncated, assembly.warnings
 
-    def _render_selection_failure_prompt(self, task: str, step: PlanStep, selection: ToolSelectionResult, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None) -> tuple[str, int, bool, tuple[str, ...]]:
+    def _render_selection_failure_prompt(self, task: str, step: PlanStep, selection: ToolSelectionResult, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None, *, codebase_understanding: CodebaseUnderstanding | None = None, plan: ExecutionPlan | None = None, invalidated_paths: Iterable[str] = ()) -> tuple[str, int, bool, tuple[str, ...]]:
         reason = selection.errors[0] if selection.errors else "The required capability is unavailable in the supplied registry."
         instruction = _bounded_text(
-            f"Task: {task}{_memory_retrieval_context_fragment(retrieval_result)}\nCurrent plan step: {step.step_id}\nSelection status: {selection.status.value}\nSelection reason: {reason}{_long_term_context_fragment(long_term_memories)}\nReturn exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request an unavailable tool.",
+            f"Current step: {step.step_id}. Selection status: {selection.status.value}. Selection reason: {reason}.{_memory_retrieval_context_fragment(retrieval_result)}{_long_term_context_fragment(long_term_memories)} Return exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request an unavailable tool.",
             self.config.max_task_prompt_chars,
         )
-        budgeted = self._budget.render(instruction, context, history)
-        return budgeted.prompt, budgeted.token_count, budgeted.truncated, budgeted.warnings
+        assembly = self._assemble_context(task, instruction, context, history, plan=plan, current_step=step, long_term_memories=long_term_memories, retrieval_result=retrieval_result, codebase_understanding=codebase_understanding, invalidated_paths=invalidated_paths)
+        return assembly.prompt, assembly.token_count, assembly.truncated, assembly.warnings
 
-    def _render_completion_prompt(self, task: str, plan: ExecutionPlan, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None) -> tuple[str, int, bool, tuple[str, ...]]:
+    def _render_completion_prompt(self, task: str, plan: ExecutionPlan, context: ProjectContext, history: tuple[AgentMessage, ...], long_term_memories: tuple[LongTermMemoryEntry, ...] = (), retrieval_result: MemoryRetrievalResult | None = None, *, codebase_understanding: CodebaseUnderstanding | None = None, invalidated_paths: Iterable[str] = ()) -> tuple[str, int, bool, tuple[str, ...]]:
         instruction = _bounded_text(
-            f"Task: {task}{_memory_retrieval_context_fragment(retrieval_result)}{_long_term_context_fragment(long_term_memories)}\nThe declarative plan steps have been observed. Return exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request another tool.",
+            f"The declarative plan steps have been observed.{_memory_retrieval_context_fragment(retrieval_result)}{_long_term_context_fragment(long_term_memories)} Return exactly ACTION: FINAL with ARGS {{\"message\": \"...\"}}. Do not request another tool.",
             self.config.max_task_prompt_chars,
         )
-        budgeted = self._budget.render(instruction, context, history)
-        return budgeted.prompt, budgeted.token_count, budgeted.truncated, budgeted.warnings
+        assembly = self._assemble_context(task, instruction, context, history, plan=plan, long_term_memories=long_term_memories, retrieval_result=retrieval_result, codebase_understanding=codebase_understanding, invalidated_paths=invalidated_paths)
+        return assembly.prompt, assembly.token_count, assembly.truncated, assembly.warnings
+
+    def _assemble_context(self, task: str, instruction: str, context: ProjectContext, history: tuple[AgentMessage, ...], *, plan: ExecutionPlan | None = None, current_step: PlanStep | None = None, selection: ToolSelectionDecision | None = None, long_term_memories: Sequence[LongTermMemoryEntry] = (), retrieval_result: MemoryRetrievalResult | None = None, codebase_understanding: CodebaseUnderstanding | None = None, invalidated_paths: Iterable[str] = ()) -> ContextAssembly:
+        assembly = self._context_manager.assemble(task=task, system_prompt=self.config.system_prompt, instruction=instruction, project_context=context, codebase_understanding=codebase_understanding, plan=plan, current_step=current_step, selection=selection, history=history, long_term_memories=long_term_memories, retrieval_result=retrieval_result, invalidated_paths=invalidated_paths)
+        self._last_context_assembly = assembly
+        return assembly
 
     def _bind_project_root(self, call: ToolCall, project_root: Path) -> ToolCall:
         registered = self.registry.metadata_for(call.name)
@@ -1234,11 +1273,11 @@ class AutonomousToolLoop:
             return ToolResult(call.call_id, call.name, False, error_code=LoopFailureCode.TOOL_EXECUTION_FAILED.value, message=str(exc))
 
     def _safe_result_text(self, result: ToolResult) -> str:
-        payload = _safe_value(result.to_dict())
-        return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
+        payload = _safe_value(result.to_dict(), preserve_tail=True)
+        return _bounded_tool_result_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
     def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None, recovery: RecoveryResult | None = None, completion: TaskCompletionResult | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval, state.plan_execution, state.codebase_understanding)
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval, state.plan_execution, state.codebase_understanding, state.context_assembly)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str, short_term_memory: ShortTermMemory | None = None) -> AutonomousLoopResult:
         snapshot = short_term_memory.snapshot() if short_term_memory is not None else None
@@ -1250,6 +1289,26 @@ def create_autonomous_tool_loop(engine: Any, *, registry: ToolRegistry | None = 
     """Create an explicitly opt-in autonomous loop; defaults remain read-only."""
 
     return AutonomousToolLoop(engine, registry=registry, config=config)
+
+
+def _tool_result_paths(call: ToolCall, result: ToolResult) -> set[str]:
+    paths: set[str] = set()
+    arguments = dict(call.arguments)
+    for key in ("path", "file", "relative_path", "target"):
+        value = arguments.get(key)
+        if isinstance(value, str) and value.strip():
+            paths.add(value.replace("\\", "/"))
+    data = result.data
+    if isinstance(data, Mapping):
+        for key in ("path", "relative_path", "file", "target"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                paths.add(value.replace("\\", "/"))
+    for key in ("relative_path", "path"):
+        value = getattr(data, key, None)
+        if isinstance(value, str) and value.strip():
+            paths.add(value.replace("\\", "/"))
+    return paths
 
 
 def _utc_now_for_experience() -> str:
@@ -1327,19 +1386,19 @@ def _contains_shell_payload(value: Any, key: str = "") -> bool:
     return False
 
 
-def _safe_value(value: Any, *, key: str = "") -> Any:
+def _safe_value(value: Any, *, key: str = "", preserve_tail: bool = False) -> Any:
     if _SECRET_KEY_RE.search(key):
         return "[REDACTED]"
     if isinstance(value, Mapping):
-        return {str(name): _safe_value(item, key=str(name)) for name, item in sorted(value.items(), key=lambda item: str(item[0]))}
+        return {str(name): _safe_value(item, key=str(name), preserve_tail=preserve_tail) for name, item in sorted(value.items(), key=lambda item: str(item[0]))}
     if isinstance(value, (list, tuple)):
-        return [_safe_value(item, key=key) for item in value[:64]]
+        return [_safe_value(item, key=key, preserve_tail=preserve_tail) for item in value[:64]]
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, (str, int, float, bool)) or value is None:
-        return _bounded_text(value, _MAX_TEXT_CHARS) if isinstance(value, str) else value
+        return _bounded_tool_result_text(value, _MAX_TEXT_CHARS) if preserve_tail and isinstance(value, str) else _bounded_text(value, _MAX_TEXT_CHARS) if isinstance(value, str) else value
     if hasattr(value, "to_dict"):
-        return _safe_value(value.to_dict(), key=key)
+        return _safe_value(value.to_dict(), key=key, preserve_tail=preserve_tail)
     return _bounded_text(str(value), _MAX_TEXT_CHARS)
 
 
@@ -1365,6 +1424,15 @@ def _bounded_text(value: str, limit: int) -> str:
         return value
     marker = f"\n[truncated: kept_first_{limit}_chars]"
     return value[: max(0, limit - len(marker))] + marker
+
+
+def _bounded_tool_result_text(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    marker = "\n[tool_result_middle_truncated]"
+    tail = value[-max(64, limit // 3):]
+    available = max(1, limit - len(marker) - len(tail))
+    return value[:available] + marker + tail
 
 
 def _unique(values: Sequence[str]) -> tuple[str, ...]:

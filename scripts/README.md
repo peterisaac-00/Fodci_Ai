@@ -94,3 +94,12 @@ Phase 12.2 does not add a new production script or change the normal `fodci` com
 The builder is read-only and bounded. It reuses existing project discovery/context, targeted UTF-8 reads, and bounded search evidence; it never executes the target project, invokes a shell, installs packages, accesses the network, modifies files, mutates Git, or changes the default read-only registry. `update_from_tool_result()` is intended for later structured observations, while `compact_summary()` is the bounded planner-facing representation.
 
 The focused validation is kept in `tests/unit/test_phase122_codebase_understanding.py` and `tests/integration/test_phase122_codebase_understanding_integration.py`. Phase 12.3 long-context behavior is not included.
+
+
+## Phase 12.3 long context
+
+Phase 12.3 does not add a new production script or change the normal `fodci` command. `ContextManager` is initialized by `AutonomousToolLoop` from the existing loop configuration and inference tokenizer, then assembles every action, selection-failure, and completion prompt. Developers can inspect `AutonomousLoopResult.context_assembly` and its serialized `ContextMetrics` during tests or explicit loop workflows.
+
+The manager keeps the current task, active execution state, failed-test/error evidence, and required verification information ahead of lower-priority context. It compresses large file/tool observations deterministically, preserves diagnostic tails, deduplicates repeated context, and marks file-dependent items invalidated after successful repository changes. It never runs commands, calls external APIs, stores hidden reasoning, creates parallel tool calls, or replaces the existing memory system.
+
+The focused coverage is in `tests/unit/test_phase123_context_manager.py` and `tests/integration/test_phase123_long_context_integration.py`. Phase 12.4 and later phases remain outside this workflow.

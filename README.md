@@ -1419,3 +1419,23 @@ The planner accepts the optional understanding record and uses its evidence to p
 | Runtime safety | No shell, subprocess, network, package, Git, mutation, or target-project execution |
 | Completeness | Explicit `complete`, `partial`, or `uncertain` evidence state with warnings |
 | Future scope | Long context, parallel tool execution, and multi-agent behavior remain unimplemented |
+
+
+## Phase 12.3 Long Context
+
+Phase 12.3 adds a bounded, model-independent `ContextManager` for information larger than the active model context window. It does not enlarge the Transformer context window. Instead, it collects typed candidates from the task, instructions, plan and current step, `CodebaseUnderstanding`, `ProjectContext`, relevant files/symbols, structured history, tool/test/error observations, and existing retrieval/memory results; deduplicates them; scores task relevance; assigns priority; compresses lower-value content; packs the result into a configurable input budget; and validates the final rendered prompt while reserving output space.
+
+The new `ContextItem` abstraction records source, context type, relevance, priority, token cost, exact/estimated/unknown token provenance, recency, dependencies, compression state, validity, and bounded metadata. Critical task, action instructions, active errors, and current execution state are protected from ordinary dropping. Large file content is summarized around task-relevant lines, large tool results preserve failure and traceback tails, and repeated content is deduplicated by context type and normalized content. No hidden chain-of-thought is stored or rendered.
+
+`ContextManager` supports progressive disclosure through compact repository and architecture summaries, relevant-file and symbol records, and later exact tool observations. `refresh()` marks file-dependent items invalidated or verified after repository changes. The autonomous loop now uses this manager for all action, selection-failure, and completion model inputs, carries `ContextAssembly` metrics in state/result serialization, and invalidates dependent context paths after successful repository operations. Existing tool dispatch, safety policy, execution budgets, memory stores, and the read-only default registry remain unchanged.
+
+| Context control | Phase 12.3 behavior |
+| --- | --- |
+| Input budget | `max_context_tokens - reserve_response_tokens`, configurable through `AutonomousLoopConfig` |
+| Selection | Deterministic task overlap, priority, recency, confidence, plan, and execution relevance |
+| Compression | Relevant-line summaries, structured failure tails, explicit compression metadata |
+| Staleness | Path-based invalidation after successful tool operations; explicit fresh/stale/invalidated/verified states |
+| Observability | Candidate, deduplication, selected, compressed, dropped, stale, token-kind, and budget metrics |
+| Safety boundary | Local only; no external APIs, vector database, parallel calls, multi-agent system, or advanced memory |
+
+Phase 12.3 does not implement Phase 12.4 parallel tool execution, Phase 12.5 new error recovery, Phase 12.6 advanced memory, Phase 12.7 multi-agent architecture, or Phase 12.8 advanced autonomy. The existing `ContextBudget` remains available for the legacy `AgentLoop`; the autonomous execution path is the actual integrated consumer of the new context pipeline.

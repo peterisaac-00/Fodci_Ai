@@ -2167,3 +2167,41 @@ explicit AutonomousToolLoop and supplied ToolRegistry
 The planner remains side-effect-free. When supplied with understanding, it uses ranked relevant paths, detected symbols, architecture labels, and confidence/completeness facts to improve inspection rationale, assumptions, constraints, and relevant project areas. It still does not select or execute tools. The autonomous loop constructs understanding after context bootstrap when needed, supplies it to initial and recovery replans, merges later structured read-only tool results, and exposes it in immutable state/result records. `ToolRegistry.default()` remains read-only; mutation, command, package, network, Git, parallel, long-context, and multi-agent capabilities are outside this phase.
 
 The boundary is deliberately conservative: a high-confidence path ranking is a prioritization signal, not proof of the exact implementation location. Later execution phases must inspect the relevant files and preserve the understanding warnings, truncation metadata, and evidence provenance before applying changes.
+
+
+## Phase 12.3 long context boundary
+
+Phase 12.3 extends the existing autonomous-loop prompt boundary with a controlled context pipeline rather than changing the model architecture:
+
+```text
+Large repository / execution history
+              ↓
+CodebaseUnderstanding + existing typed sources
+              ↓
+ContextManager.collect_candidates()
+              ↓
+ContextItem normalization and provenance
+              ↓
+deduplicate → relevance rank → priority assignment
+              ↓
+finite input budget minus reserved output
+              ↓
+relevant-line compression and structured tool/error summaries
+              ↓
+ContextAssembly.prompt + ContextMetrics
+              ↓
+AutonomousToolLoop.engine.generate()
+              ↓
+structured tool result / error / verification observation
+              ↓
+refresh and path invalidation
+              └──────────────→ next ContextManager assembly
+```
+
+`ContextItem` is the typed unit of active context. It identifies the source and context type, carries bounded content and metadata, records relevance and priority, tracks exact/estimated/unknown token cost, and exposes compression and validity states. The manager treats the user task, action instructions, current step, active errors, failed tests, and required execution state as protected information. Lower-priority repository summaries, history, memory, and tool output are eligible for deterministic omission or compression.
+
+The manager is initialized from existing `AutonomousLoopConfig` limits and the inference engine tokenizer when available. Exact counts are used only when `tokenizer.encode()` succeeds; otherwise the manager uses a conservative estimate and records the distinction. The final prompt is counted after assembly, so the budget applies to the actual model input rather than only to individual candidates. `ContextAssembly` exposes selected item IDs and bounded metrics for development/evaluation visibility without exposing hidden reasoning.
+
+The autonomous loop calls the manager for the normal action prompt, unavailable-selection prompt, and completion prompt. It passes Phase 12.2 understanding and existing memory retrieval into the same assembly. Successful tool results contribute path invalidations for file-dependent context, while structured result history is normalized into tool, test, error, observation, and verification items. Existing project mutation, command, test, recovery, budget, and registry boundaries remain authoritative; Phase 12.3 adds no new execution authority.
+
+The legacy `ContextBudget` remains compatible with the older `AgentLoop`. This is intentional: Phase 12.3 integrates the richer pipeline at the actual `AutonomousToolLoop` model-input boundary without breaking the earlier public contract.
