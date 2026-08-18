@@ -2232,3 +2232,25 @@ AutonomousToolLoop.run()
 `AutonomousToolLoop` groups independent tool calls into execution batches and dispatches parallel read-only tools concurrently using `ThreadPoolExecutor`. State transitions (`EXECUTING_TOOL` → `OBSERVING_RESULT`) are validated by the lifecycle state machine, and all memory records, codebase understanding updates, and budget ledger accounts remain thread-safe. `ParallelMetrics` are recorded and exposed on both `AutonomousLoopState` and `AutonomousLoopResult`.
 
 The layer maintains all previous project invariants: no process execution during scheduling, no shell execution, no network access, strict read-only tool registry preservation, immutable result records, and clean backward compatibility when parallel execution is disabled or unused.
+
+## Phase 12.5 Better Error Recovery
+
+Phase 12.5 introduces a structured, diagnostic-driven error recovery engine for the Fodci AI Backend Engineering Agent, shifting error management from blind retries to deterministic capture, normalization, classification, signature-based recurrence checking, and verification.
+
+```text
+Tool / Command / Test Failure
+        ↓
+ErrorNormalizer (NormalizedError)
+        ↓
+ErrorClassifier (ErrorCategory: TOOL_ERROR, COMMAND_ERROR, TEST_FAILURE, RUNTIME_ERROR, TIMEOUT, FILE_ERROR, DEPENDENCY_ERROR, etc.)
+        ↓
+Error Signature Computation (robust against volatile timestamps/IDs)
+        ↓
+RecoverabilityPolicy & RecoveryStrategy (RETRY_SAME, INSPECT_FILE, REPLAN, VERIFY, etc.)
+        ↓
+Bounded Recovery History & Metrics Tracking
+        ↓
+AutonomousToolLoop Verification & Continuation / Abort
+```
+
+`ErrorClassifier` and `NormalizedError` unify distinct failure outputs (tool exceptions, subprocess command failures, pytest assertions) into a common format. The recovery policy prevents infinite loops and blind retries by maintaining a signature-based failure history and bounded retry limits (`max_recovery_attempts`, `max_identical_failures`). Parallel tool execution failures are classified and handled independently without discarding successful parallel tool results. All recovery decisions require explicit verification before marking a recovery attempt successful.

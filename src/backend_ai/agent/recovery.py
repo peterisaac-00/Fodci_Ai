@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from types import MappingProxyType
 from typing import Any, Mapping
+import re
 
 from backend_ai.agent.execution_budget import BudgetDecision, ExecutionBudgetSnapshot
 from backend_ai.agent.models import ToolResult
@@ -33,6 +34,11 @@ class ErrorCategory(str, Enum):
     TEST_FAILURE = "TEST_FAILURE"
     TEST_ERROR = "TEST_ERROR"
     PARSE_FAILURE = "PARSE_FAILURE"
+    DEPENDENCY_ERROR = "DEPENDENCY_ERROR"
+    RUNTIME_ERROR = "RUNTIME_ERROR"
+    TIMEOUT = "TIMEOUT"
+    PERMISSION_ERROR = "PERMISSION_ERROR"
+    RESOURCE_ERROR = "RESOURCE_ERROR"
     BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
     CONTEXT_LIMIT = "CONTEXT_LIMIT"
     INTERNAL_ERROR = "INTERNAL_ERROR"
@@ -199,6 +205,10 @@ class ErrorClassifier:
         if "TEST" in code and any(x in code for x in ("FAIL", "NONZERO")): return ErrorCategory.TEST_FAILURE
         if "TEST" in code: return ErrorCategory.TEST_ERROR
         if "PARSE" in code: return ErrorCategory.PARSE_FAILURE
+        if "DEPENDENCY" in code or "MODULE" in code or "IMPORT" in code: return ErrorCategory.DEPENDENCY_ERROR
+        if "RUNTIME" in code or "TYPE" in code or "VALUE" in code or "KEY" in code or "ATTRIBUTE" in code or "TRACEBACK" in code: return ErrorCategory.RUNTIME_ERROR
+        if "TIMEOUT" in code or "EXCEEDED" in code: return ErrorCategory.TIMEOUT
+        if "PERMISSION" in code or "ACCES" in code: return ErrorCategory.PERMISSION_ERROR
         if "COMMAND" in code or "PROCESS" in code: return ErrorCategory.COMMAND_FAILURE
         if "ARGUMENT" in code or "INVALID" in code: return ErrorCategory.INVALID_ARGUMENT
         if "UNAVAILABLE" in code or "UNKNOWN_TOOL" in code: return ErrorCategory.TOOL_UNAVAILABLE
@@ -268,3 +278,55 @@ def _safe_result(result: ToolResult) -> dict[str, Any]:
 
 
 __all__ = ["ErrorCategory", "ErrorClassification", "ErrorClassifier", "RecoveryAction", "RecoveryConfidence", "RecoveryContext", "RecoveryDecision", "RecoveryHistoryRecord", "RecoveryResult", "RecoverySeverity", "RecoveryStatus", "RecoverabilityPolicy", "classify_error", "decide_recovery"]
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedError:
+    category: ErrorCategory
+    message: str
+    tool_name: str | None = None
+    command: str | None = None
+    file_path: str | None = None
+    exit_code: int | None = None
+    stderr: str | None = None
+    stdout: str | None = None
+    recoverable: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "category": self.category.value,
+            "message": _bounded(self.message),
+            "tool_name": self.tool_name,
+            "command": self.command,
+            "file_path": self.file_path,
+            "exit_code": self.exit_code,
+            "stderr": _bounded(self.stderr) if self.stderr else None,
+            "stdout": _bounded(self.stdout) if self.stdout else None,
+            "recoverable": self.recoverable,
+        }
+
+
+def normalize_error(result: ToolResult, *, tool_name: str | None = None, command: str | None = None, file_path: str | None = None) -> NormalizedError:
+    classifier = ErrorClassifier()
+    classification = classifier.classify(result)
+    stderr = getattr(result, "stderr", None)
+    stdout = getattr(result, "stdout", None)
+    exit_code = getattr(result, "exit_code", None)
+    return NormalizedError(
+        category=classification.category,
+        message=result.message or classification.code,
+        tool_name=tool_name or result.tool_name,
+        command=command,
+        file_path=file_path,
+        exit_code=exit_code,
+        stderr=stderr,
+        stdout=stdout,
+        recoverable=classification.recoverable,
+    )
+
+
+def compute_error_signature(result: ToolResult, *, tool_name: str | None = None, command: str | None = None) -> str:
+    normalized = normalize_error(result, tool_name=tool_name, command=command)
+    msg_cleaned = re.sub(r"\(timestamp \d+\)", "", normalized.message, flags=re.IGNORECASE)
+    msg_cleaned = re.sub(r"\s+", " ", msg_cleaned).strip()
+    return f"{normalized.category.value}:{normalized.tool_name}:{normalized.command}:{normalized.exit_code}:{msg_cleaned}"

@@ -114,3 +114,10 @@ The execution engine uses `ToolExecutionProfile` definitions and `ToolScheduler`
 Developers can configure concurrency limits via `AutonomousLoopConfig(parallel_execution_enabled=True, max_parallel_tools=4)` and inspect `AutonomousLoopResult.parallel_metrics` after execution. When disabled or when mutating tools are invoked, the scheduler automatically forces safe sequential execution.
 
 All safety boundaries are fully preserved: no shell execution, no network access, strict read-only tool registry preservation, immutable result records, and thread-safe memory and budget updates.
+
+
+## Phase 12.5 Better Error Recovery Workflows
+
+Phase 12.5 integrates diagnostic-driven error recovery into the autonomous tool loop. When any tool call, shell command, or test execution fails, `ErrorClassifier` normalizes the output into structured categories (such as `TEST_FAILURE`, `FILE_ERROR`, `DEPENDENCY_ERROR`, `RUNTIME_ERROR`, `TIMEOUT`), computes a stable error signature, and consults `RecoverabilityPolicy` to choose a non-blind recovery strategy (`INSPECT_FILE`, `REPLAN`, `VERIFY`, etc.).
+
+Developers can configure and inspect recovery limits (`max_recovery_attempts`, `max_identical_failures`) and recovery history within autonomous loop configurations. Parallel tool execution failures are processed independently so that successful parallel results are preserved.
