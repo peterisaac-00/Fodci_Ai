@@ -2294,3 +2294,26 @@ Phase 12.6 introduces a persistent, scoped, and ranked Advanced Memory subsystem
 ```
 
 `AdvancedMemorySystem` supports multiple memory types (`PROJECT_MEMORY`, `TECHNICAL_MEMORY`, `ERROR_MEMORY`, `SOLUTION_MEMORY`, `PREFERENCE_MEMORY`, `TASK_MEMORY`) and explicit scoping (`GLOBAL`, `PROJECT`, `TASK`, `SESSION`). Retrieval is context-aware and relevance-scored using deterministic lexical matching, confidence weighting, and importance ranking, with strict project isolation and automatic deduplication (reinforcing existing memory entries rather than duplicating them).
+
+## Phase 12.7 Multi-Agent Architecture
+
+Phase 12.7 introduces a production-quality, model-agnostic **Multi-Agent Architecture** that coordinates specialized engineering agents through a central orchestration layer (`AgentOrchestrator`).
+
+```text
+                 ┌─────────────────┐
+                 │ AgentOrchestrator│
+                 └────────┬────────┘
+                          │
+          ┌───────────────┼──────────────┐
+          ▼               ▼              ▼
+     Planner Agent   Coding Agent   Testing Agent
+          │               │              │
+          └───────────────┼──────────────┘
+                          ▼
+                    Review Agent
+                          │
+                          ▼
+                   Verification Agent
+```
+
+`AgentRegistry` manages specialized agent roles (`PLANNER`, `CODER`, `TESTER`, `DEBUGGER`, `REVIEWER`, `VERIFIER`). `TaskState` and `SubTask` model dependency-aware execution graphs (DAGs) while ensuring safe parallel and sequential delegation. Successful completions automatically record structured knowledge into the Phase 12.6 `AdvancedMemorySystem`, preserving project isolation and backward compatibility with 1022 passing tests.

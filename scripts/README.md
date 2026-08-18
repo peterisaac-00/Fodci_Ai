@@ -128,3 +128,10 @@ Developers can configure and inspect recovery limits (`max_recovery_attempts`, `
 Phase 12.6 integrates persistent, scoped, and ranked memory into the agent architecture. `AdvancedMemorySystem` manages memory records with rich metadata (provenance, confidence, scope, importance, status).
 
 Developers can initialize the memory system with a persistent JSON store path (`AdvancedMemorySystem(store_path)`), add verified solutions or error resolutions, and retrieve context-aware candidate memories during agent tasks. All operations maintain local disk persistence via atomic temporary file replacement (`fsync` + `os.replace`), strict project isolation, and complete zero-dependency operation.
+
+
+## Phase 12.7 Multi-Agent Architecture Workflows
+
+Phase 12.7 integrates multi-agent orchestration into the backend engineering agent. `AgentOrchestrator` consumes a set of dependency-aware `SubTask` items, resolves specialized agents via `AgentRegistry`, maintains shared `TaskState`, and persists successful solution records into `AdvancedMemorySystem`.
+
+Developers can instantiate `AgentOrchestrator(registry, memory_system)` and execute multi-agent workflows programmatically or integrate them with custom task definitions, ensuring robust local execution without external API dependencies.
