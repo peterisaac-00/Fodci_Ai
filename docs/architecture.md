@@ -2459,3 +2459,11 @@ Phase 13.9 specializes the Phase 13.8 security checkpoint on the testing discipl
 `scripts/train_phase139_testing_qa.py` validates that the input checkpoint is exactly `fodci-security-auth-v1`, evaluates it on the testing validation partition, continues bounded CPU training, saves `fodci-testing-qa-v1.pt`, reloads it into a fresh model, and verifies finite loss, parameter changes, and reload consistency. The implementation is a controlled model-specialization experiment and does not claim that aggregate coverage or generated text is equivalent to an executable QA suite.
 
 The held-out benchmark is stored separately at `training_data/testing_qa/evaluation/phase_139.jsonl` and is executed by the shared deterministic benchmark runner. Its keyword coverage and non-empty-output results are diagnostic proxies only; reliable QA still requires running tests, reviewing assertions, and inspecting changed risk areas.
+
+## Phase 13.10 — Model Scaling Analysis
+
+Phase 13.10 adds a bounded CPU-only scaling experiment without changing the default Fodci runtime or any existing checkpoint. The control is the verified `fodci-testing-qa-v1` checkpoint with 11,424,400 parameters. The experimental candidate uses hidden size 608, eight Transformer layers, eight attention heads, a 2,432-unit feed-forward layer, the same 10,000-token vocabulary and 256-token context, and contains 47,877,840 parameters—approximately 4.19 times the control.
+
+`scripts/analyze_phase1310_scaling.py` measures parameter counts, shape compatibility, forward/backward loss, finite gradients, resident memory after backward, short two-step CPU training, and validation loss on the Phase 13.9 testing corpus. The larger candidate starts from random initialization because the existing 11.4M checkpoint is not shape-compatible; consequently, its loss is not a fair capability comparison. The candidate checkpoint is not saved and is not wired into the normal runtime.
+
+The recorded decision is to retain the 11.4M model as the default. Reconsideration requires a separately trained larger checkpoint, matched data and compute protocols, repeatable benchmark improvement, acceptable resource limits, and execution-aware task gains. Parameter count alone is not treated as evidence of better engineering behavior.
