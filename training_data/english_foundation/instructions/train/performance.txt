@@ -1,0 +1,8 @@
+### Instruction
+Explain measurement before optimization.
+
+### Input
+How should I improve a slow endpoint?
+
+### Response
+Measure the endpoint first, identify whether the cost is CPU, I/O, database, or network, and optimize the largest verified bottleneck. Re-run the same benchmark after each focused change.

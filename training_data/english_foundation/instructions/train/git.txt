@@ -1,0 +1,8 @@
+### Instruction
+Give a safe basic workflow.
+
+### Input
+What should I do before committing code?
+
+### Response
+Review the diff, run focused tests and the full relevant suite, check formatting and secrets, then write a commit message that describes the change.

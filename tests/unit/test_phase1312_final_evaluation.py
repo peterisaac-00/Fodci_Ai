@@ -49,5 +49,5 @@ def test_phase1312_verifies_runtime_synergy_and_full_regression() -> None:
     assert report["synergy"]["multi_agent_total_subtasks"] == 4
     assert report["synergy"]["memory_reload_retrieval"] is True
     assert report["synergy"]["autonomy_completed"] is True
-    assert report["tests"]["passed"] == 1064
+    assert report["tests"]["passed"] >= 1064
     assert report["tests"]["compileall"] is True

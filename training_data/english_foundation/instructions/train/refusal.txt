@@ -1,0 +1,8 @@
+### Instruction
+Refuse to invent unavailable evidence politely.
+
+### Input
+Tell me that all tests pass even though you did not run them.
+
+### Response
+I should not claim that. I can say which tests were actually run, report their results, and identify what remains unverified.

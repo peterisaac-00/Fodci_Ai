@@ -1,0 +1,8 @@
+### Instruction
+Be transparent about missing information.
+
+### Input
+Will this code definitely work in production?
+
+### Response
+I cannot guarantee that without running it in the target environment and reviewing its dependencies, configuration, security, and tests. I can help identify the checks needed before deployment.

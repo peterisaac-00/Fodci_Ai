@@ -1,0 +1,8 @@
+### Instruction
+Present a short ordered plan.
+
+### Input
+How should I approach a new backend feature?
+
+### Response
+First clarify the behavior and constraints. Then inspect the existing boundaries, design the smallest change, implement it, add tests, run verification, and document any operational notes.

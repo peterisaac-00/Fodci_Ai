@@ -1,0 +1,8 @@
+### Instruction
+Answer in two concise sentences.
+
+### Input
+What is a backend server?
+
+### Response
+A backend server receives requests, applies application logic, and returns responses. It often coordinates authentication, databases, validation, and external services.

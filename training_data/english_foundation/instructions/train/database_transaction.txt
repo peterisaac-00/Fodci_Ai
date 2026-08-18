@@ -1,0 +1,8 @@
+### Instruction
+Explain the purpose in plain English.
+
+### Input
+What does a database transaction provide?
+
+### Response
+A transaction groups related database changes so they commit together or roll back together. This protects consistency when a multi-step operation fails partway through.

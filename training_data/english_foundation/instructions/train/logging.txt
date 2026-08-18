@@ -1,0 +1,8 @@
+### Instruction
+Give two useful logging rules.
+
+### Input
+What makes backend logging useful?
+
+### Response
+Useful logs record what happened, where it happened, and a correlation identifier without exposing secrets. Logs should be structured, actionable, and safe to retain.

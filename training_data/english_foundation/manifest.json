@@ -1,0 +1,83 @@
+{
+  "format": "fodci.english_foundation_manifest",
+  "language": "en",
+  "license_url": "https://www.gutenberg.org/policy/license.html",
+  "quality": {
+    "all_sources_english": true,
+    "min_clean_characters": 144804,
+    "total_clean_characters": 3065244,
+    "train_documents": 4,
+    "validation_documents": 1
+  },
+  "raw_sources": [
+    {
+      "author": "Lewis Carroll",
+      "clean_characters": 144804,
+      "clean_sha256": "sha256:b4db734ea790dcc85161a1eda137e8d8dd706f1702a81c82e11d090295aa956d",
+      "ebook_id": 11,
+      "filename": "alice_in_wonderland.txt",
+      "raw_sha256": "sha256:01b38ea4c710a84bc18d0bd41271a5a1a92b94e97b2812f4dece97d4a694725e",
+      "title": "Alice's Adventures in Wonderland",
+      "url": "https://www.gutenberg.org/ebooks/11.txt.utf-8"
+    },
+    {
+      "author": "Jane Austen",
+      "clean_characters": 719033,
+      "clean_sha256": "sha256:9b6fb95b090df04469a5c790c56d4d5b85a0b12d4ed8f2a82f94bc45a2a42d91",
+      "ebook_id": 1342,
+      "filename": "pride_and_prejudice.txt",
+      "raw_sha256": "sha256:74f2665d6e6925fc2c17dec644bec9e87df478a0f1836822125e8acbb3777806",
+      "title": "Pride and Prejudice",
+      "url": "https://www.gutenberg.org/ebooks/1342.txt.utf-8"
+    },
+    {
+      "author": "Mary Wollstonecraft Shelley",
+      "clean_characters": 420104,
+      "clean_sha256": "sha256:c6eec8a81f887be61403181971d53841ede9699f9a5d08503ea3fe3175872a3e",
+      "ebook_id": 84,
+      "filename": "frankenstein.txt",
+      "raw_sha256": "sha256:7810cd483cffcf2cc8a1d8f0d5807931e69d4f48cd14149b8c76f88af82fead3",
+      "title": "Frankenstein; or, the Modern Prometheus",
+      "url": "https://www.gutenberg.org/ebooks/84.txt.utf-8"
+    },
+    {
+      "author": "Herman Melville",
+      "clean_characters": 1218625,
+      "clean_sha256": "sha256:e17d721417df97550b0000f225df1a4701f7861881d6cdf437e1e990bf0f4df6",
+      "ebook_id": 2701,
+      "filename": "moby_dick.txt",
+      "raw_sha256": "sha256:9a6844ac0703853720010787c7b6c70b0020f1ab1862dcd74452fa46474d1215",
+      "title": "Moby-Dick; or, The Whale",
+      "url": "https://www.gutenberg.org/ebooks/2701.txt.utf-8"
+    },
+    {
+      "author": "Arthur Conan Doyle",
+      "clean_characters": 562678,
+      "clean_sha256": "sha256:ed90acc857a513893e6f7f755212ee9471608ed9ad69ec256d83653a3c732f64",
+      "ebook_id": 1661,
+      "filename": "sherlock_holmes.txt",
+      "raw_sha256": "sha256:922e2a12ccb43a4c9544c260b2166c6ad2097aeb5957faeee113f173bb857cd0",
+      "title": "The Adventures of Sherlock Holmes",
+      "url": "https://www.gutenberg.org/ebooks/1661.txt.utf-8"
+    }
+  ],
+  "schema_version": "1.0",
+  "terms_note": "Source texts are selected from Project Gutenberg English works and must retain applicable source license notices when redistributed.",
+  "tokenizer_merges": 512,
+  "tokenizer_path": "tokenizers/fodci-english-v4.json",
+  "tokenizer_training_sources": [
+    "training_data/english_foundation/raw",
+    "training_data/english_foundation/dolly/databricks-dolly-15k.jsonl"
+  ],
+  "tokenizer_version": "fodci-english-v4",
+  "tokenizer_vocab_size": 10000,
+  "train_sources": [
+    "alice_in_wonderland.txt",
+    "frankenstein.txt",
+    "moby_dick.txt",
+    "pride_and_prejudice.txt"
+  ],
+  "validation_sources": [
+    "sherlock_holmes.txt"
+  ]
+}

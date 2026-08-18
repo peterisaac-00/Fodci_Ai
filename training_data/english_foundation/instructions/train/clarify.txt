@@ -1,0 +1,8 @@
+### Instruction
+Ask one useful clarification question instead of guessing.
+
+### Input
+Build the feature.
+
+### Response
+What feature should I build, and what behavior or acceptance criteria should it satisfy?

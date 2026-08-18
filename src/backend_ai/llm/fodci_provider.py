@@ -47,6 +47,7 @@ class FodciLocalProvider:
         *,
         system_prompt: str = DEFAULT_FODCI_SYSTEM_PROMPT,
         inference_config: InferenceConfig | None = None,
+        tokenizer_path: Path | str | None = None,
     ) -> "FodciLocalProvider":
         """Construct one CPU provider from one existing local checkpoint."""
 
@@ -60,14 +61,14 @@ class FodciLocalProvider:
         try:
             from backend_ai.checkpoint import CheckpointManager
             from backend_ai.inference import InferenceConfig, InferenceEngine
-            from backend_ai.model import FodciModel
+            from backend_ai.model import FodciModel, ModelConfig
             from backend_ai.tokenizer import FodciTokenizer
 
+            checkpoint_metadata = CheckpointManager(
+                path.parent,
+                model_version="checkpoint-inspection",
+            ).inspect(path).metadata
             if inference_config is None:
-                checkpoint_metadata = CheckpointManager(
-                    path.parent,
-                    model_version="checkpoint-inspection",
-                ).inspect(path).metadata
                 config = InferenceConfig(
                     device="cpu",
                     model_version=checkpoint_metadata.model_version,
@@ -79,7 +80,17 @@ class FodciLocalProvider:
                 config = replace(config, device="cpu")
             if config.checkpoint_path != path:
                 config = replace(config, checkpoint_path=path)
-            engine = InferenceEngine(FodciModel(), FodciTokenizer(), config)
+            model = FodciModel(ModelConfig(**checkpoint_metadata.model_config))
+            resolved_tokenizer_path = Path(tokenizer_path) if tokenizer_path is not None else None
+            if resolved_tokenizer_path is None and checkpoint_metadata.model_version.startswith("fodci-english-"):
+                tokenizer_candidates = (
+                    path.parent.parent / "tokenizers" / "fodci-english-v4.json",
+                    path.parent.parent / "tokenizers" / "fodci-english-v3.json",
+                    path.parent.parent / "tokenizers" / "fodci-english-v2.json",
+                )
+                resolved_tokenizer_path = next((candidate for candidate in tokenizer_candidates if candidate.is_file()), None)
+            tokenizer = FodciTokenizer.load(resolved_tokenizer_path) if resolved_tokenizer_path is not None else FodciTokenizer()
+            engine = InferenceEngine(model, tokenizer, config)
         except LLMProviderError:
             raise
         except Exception as exc:

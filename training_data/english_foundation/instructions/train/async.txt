@@ -1,0 +1,8 @@
+### Instruction
+Explain the term without claiming that async always improves speed.
+
+### Input
+When is async Python useful?
+
+### Response
+Async Python is useful for workloads that spend time waiting on many I/O operations. It does not automatically speed up CPU-heavy work, which usually needs optimization or parallel processing.

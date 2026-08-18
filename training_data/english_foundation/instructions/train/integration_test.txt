@@ -1,0 +1,8 @@
+### Instruction
+Explain the concept and include one practical distinction.
+
+### Input
+What is an integration test?
+
+### Response
+An integration test checks whether multiple components work together, such as an API endpoint, a service, and a database. Unlike a unit test, it exercises a real boundary between components.

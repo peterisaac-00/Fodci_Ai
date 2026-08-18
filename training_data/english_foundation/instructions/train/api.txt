@@ -1,0 +1,8 @@
+### Instruction
+Explain the term for a new developer.
+
+### Input
+What is an API?
+
+### Response
+An API is a defined interface through which one software component requests data or actions from another. It specifies inputs, outputs, errors, and communication rules.

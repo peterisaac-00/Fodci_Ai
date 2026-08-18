@@ -1,0 +1,1293 @@
+{
+  "format": "fodci-byte-bpe",
+  "merges": [
+    {
+      "left": 105,
+      "right": 36,
+      "token_id": 260
+    },
+    {
+      "left": 120,
+      "right": 108,
+      "token_id": 261
+    },
+    {
+      "left": 104,
+      "right": 36,
+      "token_id": 262
+    },
+    {
+      "left": 120,
+      "right": 36,
+      "token_id": 263
+    },
+    {
+      "left": 119,
+      "right": 36,
+      "token_id": 264
+    },
+    {
+      "left": 105,
+      "right": 118,
+      "token_id": 265
+    },
+    {
+      "left": 109,
+      "right": 114,
+      "token_id": 266
+    },
+    {
+      "left": 101,
+      "right": 114,
+      "token_id": 267
+    },
+    {
+      "left": 48,
+      "right": 36,
+      "token_id": 268
+    },
+    {
+      "left": 230,
+      "right": 132,
+      "token_id": 269
+    },
+    {
+      "left": 125,
+      "right": 36,
+      "token_id": 270
+    },
+    {
+      "left": 115,
+      "right": 121,
+      "token_id": 271
+    },
+    {
+      "left": 261,
+      "right": 260,
+      "token_id": 272
+    },
+    {
+      "left": 105,
+      "right": 114,
+      "token_id": 273
+    },
+    {
+      "left": 115,
+      "right": 114,
+      "token_id": 274
+    },
+    {
+      "left": 115,
+      "right": 36,
+      "token_id": 275
+    },
+    {
+      "left": 106,
+      "right": 36,
+      "token_id": 276
+    },
+    {
+      "left": 101,
+      "right": 118,
+      "token_id": 277
+    },
+    {
+      "left": 115,
+      "right": 118,
+      "token_id": 278
+    },
+    {
+      "left": 266,
+      "right": 107,
+      "token_id": 279
+    },
+    {
+      "left": 267,
+      "right": 262,
+      "token_id": 280
+    },
+    {
+      "left": 105,
+      "right": 262,
+      "token_id": 281
+    },
+    {
+      "left": 101,
+      "right": 112,
+      "token_id": 282
+    },
+    {
+      "left": 115,
+      "right": 276,
+      "token_id": 283
+    },
+    {
+      "left": 50,
+      "right": 36,
+      "token_id": 284
+    },
+    {
+      "left": 120,
+      "right": 275,
+      "token_id": 285
+    },
+    {
+      "left": 105,
+      "right": 119,
+      "token_id": 286
+    },
+    {
+      "left": 265,
+      "right": 36,
+      "token_id": 287
+    },
+    {
+      "left": 14,
+      "right": 14,
+      "token_id": 288
+    },
+    {
+      "left": 101,
+      "right": 36,
+      "token_id": 289
+    },
+    {
+      "left": 101,
+      "right": 120,
+      "token_id": 290
+    },
+    {
+      "left": 279,
+      "right": 36,
+      "token_id": 291
+    },
+    {
+      "left": 108,
+      "right": 109,
+      "token_id": 292
+    },
+    {
+      "left": 118,
+      "right": 105,
+      "token_id": 293
+    },
+    {
+      "left": 108,
+      "right": 101,
+      "token_id": 294
+    },
+    {
+      "left": 109,
+      "right": 120,
+      "token_id": 295
+    },
+    {
+      "left": 108,
+      "right": 260,
+      "token_id": 296
+    },
+    {
+      "left": 105,
+      "right": 112,
+      "token_id": 297
+    },
+    {
+      "left": 266,
+      "right": 36,
+      "token_id": 298
+    },
+    {
+      "left": 119,
+      "right": 120,
+      "token_id": 299
+    },
+    {
+      "left": 115,
+      "right": 123,
+      "token_id": 300
+    },
+    {
+      "left": 269,
+      "right": 160,
+      "token_id": 301
+    },
+    {
+      "left": 269,
+      "right": 161,
+      "token_id": 302
+    },
+    {
+      "left": 115,
+      "right": 113,
+      "token_id": 303
+    },
+    {
+      "left": 101,
+      "right": 264,
+      "token_id": 304
+    },
+    {
+      "left": 101,
+      "right": 263,
+      "token_id": 305
+    },
+    {
+      "left": 103,
+      "right": 108,
+      "token_id": 306
+    },
+    {
+      "left": 77,
+      "right": 36,
+      "token_id": 307
+    },
+    {
+      "left": 109,
+      "right": 119,
+      "token_id": 308
+    },
+    {
+      "left": 112,
+      "right": 36,
+      "token_id": 309
+    },
+    {
+      "left": 109,
+      "right": 103,
+      "token_id": 310
+    },
+    {
+      "left": 105,
+      "right": 14,
+      "token_id": 311
+    },
+    {
+      "left": 274,
+      "right": 36,
+      "token_id": 312
+    },
+    {
+      "left": 119,
+      "right": 105,
+      "token_id": 313
+    },
+    {
+      "left": 107,
+      "right": 108,
+      "token_id": 314
+    },
+    {
+      "left": 123,
+      "right": 109,
+      "token_id": 315
+    },
+    {
+      "left": 50,
+      "right": 288,
+      "token_id": 316
+    },
+    {
+      "left": 106,
+      "right": 278,
+      "token_id": 317
+    },
+    {
+      "left": 101,
+      "right": 119,
+      "token_id": 318
+    },
+    {
+      "left": 112,
+      "right": 105,
+      "token_id": 319
+    },
+    {
+      "left": 268,
+      "right": 280,
+      "token_id": 320
+    },
+    {
+      "left": 273,
+      "right": 36,
+      "token_id": 321
+    },
+    {
+      "left": 125,
+      "right": 271,
+      "token_id": 322
+    },
+    {
+      "left": 302,
+      "right": 36,
+      "token_id": 323
+    },
+    {
+      "left": 102,
+      "right": 105,
+      "token_id": 324
+    },
+    {
+      "left": 269,
+      "right": 157,
+      "token_id": 325
+    },
+    {
+      "left": 109,
+      "right": 264,
+      "token_id": 326
+    },
+    {
+      "left": 109,
+      "right": 118,
+      "token_id": 327
+    },
+    {
+      "left": 123,
+      "right": 108,
+      "token_id": 328
+    },
+    {
+      "left": 112,
+      "right": 270,
+      "token_id": 329
+    },
+    {
+      "left": 261,
+      "right": 36,
+      "token_id": 330
+    },
+    {
+      "left": 261,
+      "right": 305,
+      "token_id": 331
+    },
+    {
+      "left": 114,
+      "right": 115,
+      "token_id": 332
+    },
+    {
+      "left": 121,
+      "right": 118,
+      "token_id": 333
+    },
+    {
+      "left": 109,
+      "right": 263,
+      "token_id": 334
+    },
+    {
+      "left": 122,
+      "right": 265,
+      "token_id": 335
+    },
+    {
+      "left": 120,
+      "right": 109,
+      "token_id": 336
+    },
+    {
+      "left": 112,
+      "right": 109,
+      "token_id": 337
+    },
+    {
+      "left": 123,
+      "right": 304,
+      "token_id": 338
+    },
+    {
+      "left": 119,
+      "right": 101,
+      "token_id": 339
+    },
+    {
+      "left": 267,
+      "right": 36,
+      "token_id": 340
+    },
+    {
+      "left": 63,
+      "right": 36,
+      "token_id": 341
+    },
+    {
+      "left": 306,
+      "right": 36,
+      "token_id": 342
+    },
+    {
+      "left": 105,
+      "right": 264,
+      "token_id": 343
+    },
+    {
+      "left": 105,
+      "right": 277,
+      "token_id": 344
+    },
+    {
+      "left": 105,
+      "right": 268,
+      "token_id": 345
+    },
+    {
+      "left": 101,
+      "right": 103,
+      "token_id": 346
+    },
+    {
+      "left": 119,
+      "right": 296,
+      "token_id": 347
+    },
+    {
+      "left": 115,
+      "right": 119,
+      "token_id": 348
+    },
+    {
+      "left": 261,
+      "right": 105,
+      "token_id": 349
+    },
+    {
+      "left": 269,
+      "right": 152,
+      "token_id": 350
+    },
+    {
+      "left": 112,
+      "right": 260,
+      "token_id": 351
+    },
+    {
+      "left": 118,
+      "right": 109,
+      "token_id": 352
+    },
+    {
+      "left": 101,
+      "right": 102,
+      "token_id": 353
+    },
+    {
+      "left": 101,
+      "right": 104,
+      "token_id": 354
+    },
+    {
+      "left": 122,
+      "right": 260,
+      "token_id": 355
+    },
+    {
+      "left": 121,
+      "right": 114,
+      "token_id": 356
+    },
+    {
+      "left": 101,
+      "right": 107,
+      "token_id": 357
+    },
+    {
+      "left": 273,
+      "right": 120,
+      "token_id": 358
+    },
+    {
+      "left": 101,
+      "right": 113,
+      "token_id": 359
+    },
+    {
+      "left": 105,
+      "right": 104,
+      "token_id": 360
+    },
+    {
+      "left": 109,
+      "right": 112,
+      "token_id": 361
+    },
+    {
+      "left": 115,
+      "right": 115,
+      "token_id": 362
+    },
+    {
+      "left": 315,
+      "right": 330,
+      "token_id": 363
+    },
+    {
+      "left": 121,
+      "right": 263,
+      "token_id": 364
+    },
+    {
+      "left": 112,
+      "right": 262,
+      "token_id": 365
+    },
+    {
+      "left": 113,
+      "right": 270,
+      "token_id": 366
+    },
+    {
+      "left": 265,
+      "right": 260,
+      "token_id": 367
+    },
+    {
+      "left": 119,
+      "right": 108,
+      "token_id": 368
+    },
+    {
+      "left": 292,
+      "right": 264,
+      "token_id": 369
+    },
+    {
+      "left": 317,
+      "right": 36,
+      "token_id": 370
+    },
+    {
+      "left": 119,
+      "right": 109,
+      "token_id": 371
+    },
+    {
+      "left": 267,
+      "right": 104,
+      "token_id": 372
+    },
+    {
+      "left": 322,
+      "right": 36,
+      "token_id": 373
+    },
+    {
+      "left": 105,
+      "right": 120,
+      "token_id": 374
+    },
+    {
+      "left": 111,
+      "right": 36,
+      "token_id": 375
+    },
+    {
+      "left": 114,
+      "right": 36,
+      "token_id": 376
+    },
+    {
+      "left": 332,
+      "right": 263,
+      "token_id": 377
+    },
+    {
+      "left": 118,
+      "right": 115,
+      "token_id": 378
+    },
+    {
+      "left": 108,
+      "right": 287,
+      "token_id": 379
+    },
+    {
+      "left": 88,
+      "right": 296,
+      "token_id": 380
+    },
+    {
+      "left": 119,
+      "right": 121,
+      "token_id": 381
+    },
+    {
+      "left": 282,
+      "right": 309,
+      "token_id": 382
+    },
+    {
+      "left": 105,
+      "right": 103,
+      "token_id": 383
+    },
+    {
+      "left": 123,
+      "right": 292,
+      "token_id": 384
+    },
+    {
+      "left": 105,
+      "right": 122,
+      "token_id": 385
+    },
+    {
+      "left": 288,
+      "right": 301,
+      "token_id": 386
+    },
+    {
+      "left": 103,
+      "right": 274,
+      "token_id": 387
+    },
+    {
+      "left": 121,
+      "right": 119,
+      "token_id": 388
+    },
+    {
+      "left": 278,
+      "right": 36,
+      "token_id": 389
+    },
+    {
+      "left": 117,
+      "right": 121,
+      "token_id": 390
+    },
+    {
+      "left": 294,
+      "right": 262,
+      "token_id": 391
+    },
+    {
+      "left": 109,
+      "right": 262,
+      "token_id": 392
+    },
+    {
+      "left": 300,
+      "right": 36,
+      "token_id": 393
+    },
+    {
+      "left": 113,
+      "right": 36,
+      "token_id": 394
+    },
+    {
+      "left": 283,
+      "right": 272,
+      "token_id": 395
+    },
+    {
+      "left": 48,
+      "right": 14,
+      "token_id": 396
+    },
+    {
+      "left": 271,
+      "right": 314,
+      "token_id": 397
+    },
+    {
+      "left": 325,
+      "right": 264,
+      "token_id": 398
+    },
+    {
+      "left": 119,
+      "right": 297,
+      "token_id": 399
+    },
+    {
+      "left": 121,
+      "right": 116,
+      "token_id": 400
+    },
+    {
+      "left": 76,
+      "right": 69,
+      "token_id": 401
+    },
+    {
+      "left": 101,
+      "right": 266,
+      "token_id": 402
+    },
+    {
+      "left": 102,
+      "right": 260,
+      "token_id": 403
+    },
+    {
+      "left": 113,
+      "right": 260,
+      "token_id": 404
+    },
+    {
+      "left": 108,
+      "right": 265,
+      "token_id": 405
+    },
+    {
+      "left": 261,
+      "right": 311,
+      "token_id": 406
+    },
+    {
+      "left": 271,
+      "right": 114,
+      "token_id": 407
+    },
+    {
+      "left": 271,
+      "right": 118,
+      "token_id": 408
+    },
+    {
+      "left": 271,
+      "right": 365,
+      "token_id": 409
+    },
+    {
+      "left": 105,
+      "right": 113,
+      "token_id": 410
+    },
+    {
+      "left": 115,
+      "right": 106,
+      "token_id": 411
+    },
+    {
+      "left": 119,
+      "right": 268,
+      "token_id": 412
+    },
+    {
+      "left": 125,
+      "right": 14,
+      "token_id": 413
+    },
+    {
+      "left": 261,
+      "right": 265,
+      "token_id": 414
+    },
+    {
+      "left": 71,
+      "right": 401,
+      "token_id": 415
+    },
+    {
+      "left": 73,
+      "right": 86,
+      "token_id": 416
+    },
+    {
+      "left": 103,
+      "right": 303,
+      "token_id": 417
+    },
+    {
+      "left": 105,
+      "right": 124,
+      "token_id": 418
+    },
+    {
+      "left": 84,
+      "right": 88,
+      "token_id": 419
+    },
+    {
+      "left": 415,
+      "right": 419,
+      "token_id": 420
+    },
+    {
+      "left": 416,
+      "right": 36,
+      "token_id": 421
+    },
+    {
+      "left": 420,
+      "right": 421,
+      "token_id": 422
+    },
+    {
+      "left": 115,
+      "right": 112,
+      "token_id": 423
+    },
+    {
+      "left": 116,
+      "right": 265,
+      "token_id": 424
+    },
+    {
+      "left": 271,
+      "right": 263,
+      "token_id": 425
+    },
+    {
+      "left": 102,
+      "right": 364,
+      "token_id": 426
+    },
+    {
+      "left": 120,
+      "right": 287,
+      "token_id": 427
+    },
+    {
+      "left": 282,
+      "right": 36,
+      "token_id": 428
+    },
+    {
+      "left": 102,
+      "right": 270,
+      "token_id": 429
+    },
+    {
+      "left": 273,
+      "right": 263,
+      "token_id": 430
+    },
+    {
+      "left": 106,
+      "right": 118,
+      "token_id": 431
+    },
+    {
+      "left": 282,
+      "right": 112,
+      "token_id": 432
+    },
+    {
+      "left": 298,
+      "right": 272,
+      "token_id": 433
+    },
+    {
+      "left": 303,
+      "right": 36,
+      "token_id": 434
+    },
+    {
+      "left": 120,
+      "right": 265,
+      "token_id": 435
+    },
+    {
+      "left": 294,
+      "right": 355,
+      "token_id": 436
+    },
+    {
+      "left": 125,
+      "right": 268,
+      "token_id": 437
+    },
+    {
+      "left": 274,
+      "right": 260,
+      "token_id": 438
+    },
+    {
+      "left": 290,
+      "right": 109,
+      "token_id": 439
+    },
+    {
+      "left": 101,
+      "right": 111,
+      "token_id": 440
+    },
+    {
+      "left": 69,
+      "right": 112,
+      "token_id": 441
+    },
+    {
+      "left": 37,
+      "right": 36,
+      "token_id": 442
+    },
+    {
+      "left": 104,
+      "right": 109,
+      "token_id": 443
+    },
+    {
+      "left": 120,
+      "right": 115,
+      "token_id": 444
+    },
+    {
+      "left": 316,
+      "right": 422,
+      "token_id": 445
+    },
+    {
+      "left": 101,
+      "right": 270,
+      "token_id": 446
+    },
+    {
+      "left": 116,
+      "right": 116,
+      "token_id": 447
+    },
+    {
+      "left": 316,
+      "right": 301,
+      "token_id": 448
+    },
+    {
+      "left": 261,
+      "right": 287,
+      "token_id": 449
+    },
+    {
+      "left": 121,
+      "right": 112,
+      "token_id": 450
+    },
+    {
+      "left": 109,
+      "right": 314,
+      "token_id": 451
+    },
+    {
+      "left": 264,
+      "right": 283,
+      "token_id": 452
+    },
+    {
+      "left": 105,
+      "right": 263,
+      "token_id": 453
+    },
+    {
+      "left": 118,
+      "right": 286,
+      "token_id": 454
+    },
+    {
+      "left": 277,
+      "right": 260,
+      "token_id": 455
+    },
+    {
+      "left": 104,
+      "right": 105,
+      "token_id": 456
+    },
+    {
+      "left": 384,
+      "right": 342,
+      "token_id": 457
+    },
+    {
+      "left": 295,
+      "right": 120,
+      "token_id": 458
+    },
+    {
+      "left": 112,
+      "right": 309,
+      "token_id": 459
+    },
+    {
+      "left": 441,
+      "right": 310,
+      "token_id": 460
+    },
+    {
+      "left": 335,
+      "right": 270,
+      "token_id": 461
+    },
+    {
+      "left": 119,
+      "right": 116,
+      "token_id": 462
+    },
+    {
+      "left": 284,
+      "right": 380,
+      "token_id": 463
+    },
+    {
+      "left": 119,
+      "right": 303,
+      "token_id": 464
+    },
+    {
+      "left": 120,
+      "right": 118,
+      "token_id": 465
+    },
+    {
+      "left": 267,
+      "right": 103,
+      "token_id": 466
+    },
+    {
+      "left": 300,
+      "right": 376,
+      "token_id": 467
+    },
+    {
+      "left": 261,
+      "right": 326,
+      "token_id": 468
+    },
+    {
+      "left": 48,
+      "right": 323,
+      "token_id": 469
+    },
+    {
+      "left": 281,
+      "right": 285,
+      "token_id": 470
+    },
+    {
+      "left": 308,
+      "right": 108,
+      "token_id": 471
+    },
+    {
+      "left": 112,
+      "right": 115,
+      "token_id": 472
+    },
+    {
+      "left": 260,
+      "right": 283,
+      "token_id": 473
+    },
+    {
+      "left": 50,
+      "right": 302,
+      "token_id": 474
+    },
+    {
+      "left": 91,
+      "right": 108,
+      "token_id": 475
+    },
+    {
+      "left": 119,
+      "right": 14,
+      "token_id": 476
+    },
+    {
+      "left": 119,
+      "right": 275,
+      "token_id": 477
+    },
+    {
+      "left": 339,
+      "right": 392,
+      "token_id": 478
+    },
+    {
+      "left": 81,
+      "right": 118,
+      "token_id": 479
+    },
+    {
+      "left": 99,
+      "right": 36,
+      "token_id": 480
+    },
+    {
+      "left": 115,
+      "right": 116,
+      "token_id": 481
+    },
+    {
+      "left": 120,
+      "right": 14,
+      "token_id": 482
+    },
+    {
+      "left": 88,
+      "right": 108,
+      "token_id": 483
+    },
+    {
+      "left": 109,
+      "right": 104,
+      "token_id": 484
+    },
+    {
+      "left": 431,
+      "right": 434,
+      "token_id": 485
+    },
+    {
+      "left": 284,
+      "right": 70,
+      "token_id": 486
+    },
+    {
+      "left": 120,
+      "right": 268,
+      "token_id": 487
+    },
+    {
+      "left": 106,
+      "right": 105,
+      "token_id": 488
+    },
+    {
+      "left": 111,
+      "right": 114,
+      "token_id": 489
+    },
+    {
+      "left": 327,
+      "right": 36,
+      "token_id": 490
+    },
+    {
+      "left": 101,
+      "right": 125,
+      "token_id": 491
+    },
+    {
+      "left": 104,
+      "right": 265,
+      "token_id": 492
+    },
+    {
+      "left": 372,
+      "right": 14,
+      "token_id": 493
+    },
+    {
+      "left": 109,
+      "right": 113,
+      "token_id": 494
+    },
+    {
+      "left": 113,
+      "right": 278,
+      "token_id": 495
+    },
+    {
+      "left": 277,
+      "right": 104,
+      "token_id": 496
+    },
+    {
+      "left": 294,
+      "right": 263,
+      "token_id": 497
+    },
+    {
+      "left": 107,
+      "right": 36,
+      "token_id": 498
+    },
+    {
+      "left": 123,
+      "right": 278,
+      "token_id": 499
+    },
+    {
+      "left": 104,
+      "right": 115,
+      "token_id": 500
+    },
+    {
+      "left": 112,
+      "right": 458,
+      "token_id": 501
+    },
+    {
+      "left": 294,
+      "right": 116,
+      "token_id": 502
+    },
+    {
+      "left": 113,
+      "right": 267,
+      "token_id": 503
+    },
+    {
+      "left": 116,
+      "right": 112,
+      "token_id": 504
+    },
+    {
+      "left": 101,
+      "right": 14,
+      "token_id": 505
+    },
+    {
+      "left": 261,
+      "right": 291,
+      "token_id": 506
+    },
+    {
+      "left": 62,
+      "right": 36,
+      "token_id": 507
+    },
+    {
+      "left": 337,
+      "right": 111,
+      "token_id": 508
+    },
+    {
+      "left": 105,
+      "right": 101,
+      "token_id": 509
+    },
+    {
+      "left": 105,
+      "right": 116,
+      "token_id": 510
+    },
+    {
+      "left": 107,
+      "right": 118,
+      "token_id": 511
+    },
+    {
+      "left": 107,
+      "right": 293,
+      "token_id": 512
+    },
+    {
+      "left": 121,
+      "right": 103,
+      "token_id": 513
+    },
+    {
+      "left": 102,
+      "right": 115,
+      "token_id": 514
+    },
+    {
+      "left": 385,
+      "right": 287,
+      "token_id": 515
+    }
+  ],
+  "special_tokens": {
+    "<BOS>": 2,
+    "<EOS>": 3,
+    "<PAD>": 0,
+    "<UNK>": 1
+  },
+  "version": 1,
+  "vocab_size": 10000
+}

@@ -1,0 +1,8 @@
+### Instruction
+Compare the two statuses clearly.
+
+### Input
+What is the difference between 401 and 403?
+
+### Response
+HTTP 401 means the request lacks valid authentication. HTTP 403 means the identity is known or accepted, but it is not allowed to perform the requested action.

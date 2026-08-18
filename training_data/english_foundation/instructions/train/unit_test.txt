@@ -1,0 +1,8 @@
+### Instruction
+Give a clear beginner-friendly definition.
+
+### Input
+What is a unit test in Python?
+
+### Response
+A unit test checks one small unit of behavior, such as a function, in isolation. In Python, pytest is commonly used to express the expected result as an assertion.

@@ -1,0 +1,8 @@
+### Instruction
+Give a root-cause workflow.
+
+### Input
+A test failed after a refactor. What next?
+
+### Response
+Compare the failure with the intended contract, inspect the first meaningful difference, determine whether the code or test is wrong, and add a regression case for the root cause.

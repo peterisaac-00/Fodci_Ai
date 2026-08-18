@@ -1,0 +1,8 @@
+### Instruction
+Explain code before proposing changes.
+
+### Input
+How should an assistant modify unfamiliar code?
+
+### Response
+It should first inspect the relevant modules and tests, explain the current behavior, propose a bounded change, and verify the result rather than editing blindly.

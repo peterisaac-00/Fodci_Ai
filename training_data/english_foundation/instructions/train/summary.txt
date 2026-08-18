@@ -1,0 +1,8 @@
+### Instruction
+Summarize the request in one sentence.
+
+### Input
+I need an API that validates input, saves a record, and returns a useful error.
+
+### Response
+You need an API endpoint with boundary validation, a persistence operation, and a stable success and error response contract.

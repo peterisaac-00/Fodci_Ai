@@ -395,3 +395,31 @@ The stable checkpoint is distributed as the GitHub Release asset `v13.12-stable/
 ```
 
 The script downloads the asset, verifies SHA-256 `3af5d2b6009f5a0fd0ff98644d9666bd0c30f0dfe8994f91524ae6df11433bfa`, and places it at `artifacts\\checkpoints\\fodci-testing-qa-v1.pt`. The CLI now prefers this stable checkpoint and falls back to `fodci-tiny-v1.pt` only when the stable asset is absent.
+
+## Phase 13.13 — English Language Foundation
+
+Prepare the English-only corpus, provenance manifest, curated instruction records, and bounded v4 tokenizer:
+
+```text
+PYTHONPATH=src python scripts/prepare_phase1313_english_foundation.py
+PYTHONPATH=src python scripts/generate_phase1313_english_instructions.py
+```
+
+Run the matched CPU-only English foundation experiment. It writes experimental 11.4M and 25M checkpoints plus `artifacts/evaluation/phase1313_english_foundation.json`; it does not replace `fodci-testing-qa-v1`:
+
+```text
+PYTHONPATH=src python scripts/train_phase1313_english_foundation.py \
+  --max-steps 1024 \
+  --train-examples 1024
+```
+
+Run bounded English instruction tuning from the experimental 25M foundation checkpoint using Databricks Dolly records under CC-BY-SA-3.0. For CPU environments, the documented validation-safe smoke budget uses 1,200 records and 512 steps:
+
+```text
+PYTHONPATH=src python scripts/train_phase1313_dolly_instruction_tuning.py \
+  --max-steps 512 \
+  --max-records 1200 \
+  --learning-rate 3e-5
+```
+
+The resulting reports separate structural gates and held-out loss from human-readable response quality. The Phase 13.13 probes remain repetitive or nonsensical, so neither English checkpoint is activated as the stable runtime. The default remains the 11,424,400-parameter `fodci-testing-qa-v1` checkpoint.

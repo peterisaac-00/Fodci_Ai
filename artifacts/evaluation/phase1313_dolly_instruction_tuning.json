@@ -1,0 +1,86 @@
+{
+  "all_response_probes_non_empty": true,
+  "base_checkpoint": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-english-25m-v1.pt",
+  "baseline_validation_loss": 5.395006893204667,
+  "checkpoint_exists": true,
+  "checkpoint_path": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-english-25m-dolly-v1.pt",
+  "checkpoint_reload": true,
+  "data": {
+    "categories": {
+      "brainstorming": 137,
+      "classification": 169,
+      "closed_qa": 140,
+      "creative_writing": 56,
+      "general_qa": 199,
+      "information_extraction": 112,
+      "open_qa": 292,
+      "summarization": 95
+    },
+    "context_length": 256,
+    "language": "en",
+    "records_read": 1200,
+    "source": "databricks-dolly-15k",
+    "train_examples": 1131,
+    "validation_examples": 69,
+    "validation_modulus": 20
+  },
+  "dataset_path": "/home/ubuntu/backend-ai/training_data/english_foundation/dolly/databricks-dolly-15k.jsonl",
+  "dataset_sha256": "sha256:2df9083338b4abd6bceb5635764dab5d833b393b55759dffb0959b6fcbf794ec",
+  "finite_loss": true,
+  "format": "fodci.phase1313_dolly_instruction_tuning",
+  "global_step": 512,
+  "heldout_loss_improved": true,
+  "language": "en",
+  "learning_rate": 3e-05,
+  "license": "CC-BY-SA-3.0",
+  "max_steps": 512,
+  "model_version": "fodci-english-25m-dolly-v1",
+  "non_empty_split": true,
+  "parameter_count": 25985488,
+  "parameters_changed": true,
+  "phase": "13.13",
+  "response_probes": [
+    {
+      "generated_tokens": 12,
+      "non_empty": true,
+      "prompt": "What is a unit test in Python?",
+      "stopped_reason": "eos",
+      "text": "The Scarkeale is s."
+    },
+    {
+      "generated_tokens": 4,
+      "non_empty": true,
+      "prompt": "Explain what an API is in one short paragraph.",
+      "stopped_reason": "eos",
+      "text": "The s."
+    },
+    {
+      "generated_tokens": 10,
+      "non_empty": true,
+      "prompt": "Hello. Please introduce yourself in clear English.",
+      "stopped_reason": "eos",
+      "text": "The Spers, Mans."
+    },
+    {
+      "generated_tokens": 4,
+      "non_empty": true,
+      "prompt": "How should passwords be stored?",
+      "stopped_reason": "eos",
+      "text": "The s."
+    },
+    {
+      "generated_tokens": 48,
+      "non_empty": true,
+      "prompt": "What does HTTP 201 mean?",
+      "stopped_reason": "max_new_tokens",
+      "text": "The Scarkek, Scix Scix Scix Sk, Scix Scix Scark, Scark, Sc"
+    }
+  ],
+  "schema_version": "1.0",
+  "structural_gates_passed": true,
+  "tokenizer_path": "/home/ubuntu/backend-ai/tokenizers/fodci-english-v4.json",
+  "tokenizer_sha256": "sha256:95d6b9e8db304fb8d77588f4fe687766aac52a023ffd5cf5ff1eca0aec75fe68",
+  "trained_validation_loss": 4.673298667655181,
+  "training_seconds": 194.0100241409964,
+  "validation_improvement": 0.7217082255494862
+}

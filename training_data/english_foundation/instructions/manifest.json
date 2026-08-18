@@ -1,0 +1,167 @@
+{
+  "format": "fodci.english_instruction_manifest",
+  "language": "en",
+  "records": [
+    {
+      "id": "greeting",
+      "language": "en",
+      "sha256": "05dd7855bda26fb60663c8f90a4f4b9561518231916d41a995fb47a29697a8ce"
+    },
+    {
+      "id": "identity",
+      "language": "en",
+      "sha256": "a3ce369bcec1ee291d50556d13f7b7cfaa0bec1c110581e0e4ad9d22dd0ade26"
+    },
+    {
+      "id": "unit_test",
+      "language": "en",
+      "sha256": "fec10765f2e64e608efcbddeff802c2b530d99f277b5d7a64077d2dfd2430386"
+    },
+    {
+      "id": "integration_test",
+      "language": "en",
+      "sha256": "4b4c689f3993c362d611c6f1747119c0bc9cbbb9b31fad5be06a26d4ae880673"
+    },
+    {
+      "id": "backend_server",
+      "language": "en",
+      "sha256": "1c5f80952145fb8d30cc532eff0e3becb83b8dab4939b6f0f7d323de356c99f6"
+    },
+    {
+      "id": "api",
+      "language": "en",
+      "sha256": "437ca1b5cb44c513cb6599618ec07e92b77eec3b173112eb29324db632b84a16"
+    },
+    {
+      "id": "clarify",
+      "language": "en",
+      "sha256": "d142421cef149ffc6abd6fde1e2f8446fc34282e94f3499cf9acbd245bc8cf68"
+    },
+    {
+      "id": "uncertainty",
+      "language": "en",
+      "sha256": "1208214bd6bc5e272944f0e554569fc6e0e2623c24fc618d22954816487a2e44"
+    },
+    {
+      "id": "jwt",
+      "language": "en",
+      "sha256": "a9db054359d0e61843c969ff22248974facadc36d6c319de94e8bcd6a0b86c9b"
+    },
+    {
+      "id": "passwords",
+      "language": "en",
+      "sha256": "28c2e8beeb555a6e1a17f36fbc583c4323506fbd493d9417b3cf9e25984bb5d3"
+    },
+    {
+      "id": "sql",
+      "language": "en",
+      "sha256": "3323287f21d589d7fbc845cd05deb978581376fe30dd10fb3ad95af28c24873a"
+    },
+    {
+      "id": "error",
+      "language": "en",
+      "sha256": "7aca363752024e41fbd7127af3a27d037540002acf7540061270846f187270f2"
+    },
+    {
+      "id": "http_status",
+      "language": "en",
+      "sha256": "17c175a441f161634f4dbf8c567145cab7c1e1633044b80a98b21ddf4640b90e"
+    },
+    {
+      "id": "async",
+      "language": "en",
+      "sha256": "6c614fedd4f8099881ad05e4cd6403053234c69ab08fc186ef868e58bfd9f90d"
+    },
+    {
+      "id": "pydantic",
+      "language": "en",
+      "sha256": "56910112b92cb891b28b5ee284cf4b61ef58fb8f77ab8f1ab3215f822a1376a6"
+    },
+    {
+      "id": "logging",
+      "language": "en",
+      "sha256": "393f8411c551c5525eeac4e802842c6fddca0b58549ddbbce32dca62716547bc"
+    },
+    {
+      "id": "retry",
+      "language": "en",
+      "sha256": "fc8ea71c445750307f2eb2c626d5dc00b6812bf98ecb7c697bf32668bd39bb7f"
+    },
+    {
+      "id": "database_transaction",
+      "language": "en",
+      "sha256": "09772c1c190e40a2d69c66cc7e1e505a5fcc215fc58c1c77d393c4dcc8cecc20"
+    },
+    {
+      "id": "code_review",
+      "language": "en",
+      "sha256": "a122e6bc30c505123e03eb5f36f01001caefe585a996f51838f8f05d07354fd8"
+    },
+    {
+      "id": "coverage",
+      "language": "en",
+      "sha256": "3b29242421c3db4ab2163d691a375a991f221b085cc0ad0a5346d323f3f1ad09"
+    },
+    {
+      "id": "rest",
+      "language": "en",
+      "sha256": "9cd72f9718af66c4c576983561f28d011648ef084d2eebeed8d839fc745df918"
+    },
+    {
+      "id": "git",
+      "language": "en",
+      "sha256": "e09f1cfe9ecbb8b765a82abb978208661639685c28babe23a50d355741e57cd6"
+    },
+    {
+      "id": "plan",
+      "language": "en",
+      "sha256": "4b9eaf1c50f2cf6edf39959c069abf9ef984da16dfe64987b562ab27447e96ec"
+    },
+    {
+      "id": "security",
+      "language": "en",
+      "sha256": "05ade88335a4133986f00c8fc910b4c9afc4d0c7f853f6b7b0505474e7532bb4"
+    },
+    {
+      "id": "performance",
+      "language": "en",
+      "sha256": "a43a23437065fc0de64934199f444bd7f12a710203f40d76081d2d3b8e9682a9"
+    },
+    {
+      "id": "refusal",
+      "language": "en",
+      "sha256": "6063a5705972841456c83b40b926ea8ef894f35ba23f538b3dcd54e96a76a934"
+    },
+    {
+      "id": "summary",
+      "language": "en",
+      "sha256": "a957da483376e4a2cd384b7175b1d9860cde60e7eca65372d7f1e264729f01b6"
+    },
+    {
+      "id": "explain_code",
+      "language": "en",
+      "sha256": "064d78f38d9a5b033cdaf12deaa643ce2892a1e70d30e69de3f07dde5fc90b97"
+    },
+    {
+      "id": "test_failure",
+      "language": "en",
+      "sha256": "e38e8b56b8c501aa176c5a5fbf76d671fa11ab37fa04082500aa67cc367d64f8"
+    },
+    {
+      "id": "response_style",
+      "language": "en",
+      "sha256": "84d269ab677a028afab701fa6c05f3458f7ce565700dc5f35aa54e0406bc3579"
+    },
+    {
+      "id": "english_only",
+      "language": "en",
+      "sha256": "2cf39be91d41c7cca99c75b4c5ccd48f6e0b7de5f7a6de5945d0cd9ad42512ea"
+    },
+    {
+      "id": "closing",
+      "language": "en",
+      "sha256": "2cba7510d2e8cf44111beab1ac0e3b741c3f8aefa25658a5dd1152f85dcbbcc2"
+    }
+  ],
+  "schema_version": "1.0"
+}

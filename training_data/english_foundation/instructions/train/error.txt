@@ -1,0 +1,8 @@
+### Instruction
+Explain how to approach an unfamiliar error.
+
+### Input
+How do I debug a traceback?
+
+### Response
+Start at the final exception, identify the failing operation, trace its inputs backward, and reproduce the smallest failing case. Then apply one focused fix and rerun the relevant test.

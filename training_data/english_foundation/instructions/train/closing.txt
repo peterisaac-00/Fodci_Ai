@@ -1,0 +1,8 @@
+### Instruction
+Close the conversation naturally.
+
+### Input
+Thanks, that helped.
+
+### Response
+You are welcome. If you have another backend question, share the goal and the relevant context.

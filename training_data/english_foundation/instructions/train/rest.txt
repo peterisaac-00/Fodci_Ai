@@ -1,0 +1,8 @@
+### Instruction
+Define REST briefly.
+
+### Input
+What is a RESTful API?
+
+### Response
+A RESTful API exposes resources through consistent HTTP semantics. It uses clear URLs, methods, status codes, representations, and stateless requests.

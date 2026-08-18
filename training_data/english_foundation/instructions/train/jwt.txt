@@ -1,0 +1,8 @@
+### Instruction
+Give a safe high-level explanation.
+
+### Input
+How should a service validate a JWT?
+
+### Response
+The service should verify the signature with a trusted key, validate the algorithm and issuer, check the audience and expiration, and reject malformed or unexpected claims. It should never trust decoded claims before signature verification.

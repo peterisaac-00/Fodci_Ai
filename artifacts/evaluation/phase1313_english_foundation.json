@@ -1,0 +1,143 @@
+{
+  "all_response_probes_non_empty": true,
+  "all_training_gates_passed": true,
+  "data": {
+    "context_length": 256,
+    "instruction_chunks_in_train": 32,
+    "tokenizer_merges": 512,
+    "train_characters": 2502566,
+    "train_documents": 4,
+    "train_examples": 1024,
+    "validation_characters": 562678,
+    "validation_documents": 1,
+    "validation_examples": 256
+  },
+  "dataset_version": "english-foundation-v1",
+  "format": "fodci.phase1313_english_foundation",
+  "language": "en",
+  "models": {
+    "english_11m": {
+      "all_gates_passed": true,
+      "baseline_validation_loss": 9.275777719914913,
+      "baseline_validation_steps": 128,
+      "checkpoint_exists": true,
+      "checkpoint_path": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-english-11m-v1.pt",
+      "checkpoint_reload": true,
+      "config": {
+        "context_length": 256,
+        "feed_forward_size": 1280,
+        "hidden_size": 320,
+        "num_attention_heads": 5,
+        "num_layers": 4,
+        "vocab_size": 10000
+      },
+      "finite_loss": true,
+      "global_step": 512,
+      "max_steps": 1024,
+      "model_version": "fodci-english-11m-v1",
+      "non_empty_split": true,
+      "parameter_count": 11424400,
+      "parameters_changed": true,
+      "reloaded_validation_loss": 4.780643615871668,
+      "trained_validation_loss": 4.780643615871668,
+      "training_seconds": 94.039975452004,
+      "validation_improvement": 4.495134104043245,
+      "validation_steps": 128,
+      "validation_tokens": 65536
+    },
+    "english_25m": {
+      "all_gates_passed": true,
+      "baseline_validation_loss": 9.2738551273942,
+      "baseline_validation_steps": 128,
+      "checkpoint_exists": true,
+      "checkpoint_path": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-english-25m-v1.pt",
+      "checkpoint_reload": true,
+      "config": {
+        "context_length": 256,
+        "feed_forward_size": 1792,
+        "hidden_size": 448,
+        "num_attention_heads": 7,
+        "num_layers": 7,
+        "vocab_size": 10000
+      },
+      "finite_loss": true,
+      "global_step": 512,
+      "max_steps": 1024,
+      "model_version": "fodci-english-25m-v1",
+      "non_empty_split": true,
+      "parameter_count": 25985488,
+      "parameters_changed": true,
+      "reloaded_validation_loss": 4.886633660644293,
+      "trained_validation_loss": 4.886633660644293,
+      "training_seconds": 227.77422616200056,
+      "validation_improvement": 4.3872214667499065,
+      "validation_steps": 128,
+      "validation_tokens": 65536
+    }
+  },
+  "phase": "13.13",
+  "response_probes": {
+    "english_11m": {
+      "all_non_empty": true,
+      "checkpoint": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-english-11m-v1.pt",
+      "model_version": "fodci-english-11m-v1",
+      "outputs": [
+        {
+          "generated_tokens": 32,
+          "non_empty": true,
+          "prompt": "What is a unit test in Python?",
+          "stopped_reason": "max_new_tokens",
+          "text": "Input\nInput\nInput\nInput\nInput\nInput\nInput\nInput\n"
+        },
+        {
+          "generated_tokens": 32,
+          "non_empty": true,
+          "prompt": "Explain what an API is in one short paragraph.",
+          "stopped_reason": "max_new_tokens",
+          "text": "Input\nInput\nInput\nInput\nInput\nInput\nInput\nInput\n"
+        },
+        {
+          "generated_tokens": 32,
+          "non_empty": true,
+          "prompt": "Hello. Please introduce yourself in clear English.",
+          "stopped_reason": "max_new_tokens",
+          "text": "Input\nInput\nInput\nInput\nInput\nInput\nInput\nInput\n"
+        }
+      ]
+    },
+    "english_25m": {
+      "all_non_empty": true,
+      "checkpoint": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-english-25m-v1.pt",
+      "model_version": "fodci-english-25m-v1",
+      "outputs": [
+        {
+          "generated_tokens": 32,
+          "non_empty": true,
+          "prompt": "What is a unit test in Python?",
+          "stopped_reason": "max_new_tokens",
+          "text": "Input\nInput\nInponse\nInput\nInput\nInput\nInput\nInput"
+        },
+        {
+          "generated_tokens": 32,
+          "non_empty": true,
+          "prompt": "Explain what an API is in one short paragraph.",
+          "stopped_reason": "max_new_tokens",
+          "text": "Inponse\nInponse\nInponse\nResput\nInput\nInput\nInput\n"
+        },
+        {
+          "generated_tokens": 32,
+          "non_empty": true,
+          "prompt": "Hello. Please introduce yourself in clear English.",
+          "stopped_reason": "max_new_tokens",
+          "text": "Input\nInput\nInponse\nInput\nInput\nInput\nInput\nInput"
+        }
+      ]
+    }
+  },
+  "schema_version": "1.0",
+  "stable_runtime": "fodci-testing-qa-v1",
+  "stable_runtime_replaced": false,
+  "tokenizer_path": "/home/ubuntu/backend-ai/tokenizers/fodci-english-v4.json",
+  "tokenizer_sha256": "sha256:95d6b9e8db304fb8d77588f4fe687766aac52a023ffd5cf5ff1eca0aec75fe68",
+  "total_elapsed_seconds": 349.1437738040113
+}

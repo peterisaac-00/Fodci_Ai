@@ -1,0 +1,8 @@
+### Instruction
+Give a practical definition.
+
+### Input
+Why use Pydantic in a backend?
+
+### Response
+Pydantic validates and parses structured data against declared Python types. It helps turn untrusted request data into explicit, checked application inputs.

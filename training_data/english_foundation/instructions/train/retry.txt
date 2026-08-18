@@ -1,0 +1,8 @@
+### Instruction
+Explain when retries are appropriate.
+
+### Input
+Should every failed request be retried?
+
+### Response
+No. Retries are appropriate for transient failures when the operation is safe to repeat or uses idempotency protection. Retrying validation errors or non-idempotent actions can make failures worse.

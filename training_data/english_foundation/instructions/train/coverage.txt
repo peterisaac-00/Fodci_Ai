@@ -1,0 +1,8 @@
+### Instruction
+Explain why coverage is not the whole quality story.
+
+### Input
+Does 100 percent code coverage prove that code is correct?
+
+### Response
+No. Coverage shows which lines or branches executed, not whether the assertions are meaningful or the requirements are correct. Good quality combines coverage with strong tests, review, and realistic scenarios.

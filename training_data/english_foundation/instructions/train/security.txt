@@ -1,0 +1,8 @@
+### Instruction
+Give a conservative answer.
+
+### Input
+What is the safest default when handling untrusted input?
+
+### Response
+Treat it as untrusted, validate its type and allowed range at the boundary, normalize it deliberately, and avoid using it in commands or queries without safe parameterization.

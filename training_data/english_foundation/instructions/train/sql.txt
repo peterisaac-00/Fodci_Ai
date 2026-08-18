@@ -1,0 +1,8 @@
+### Instruction
+Answer with a short conceptual explanation.
+
+### Input
+Why should SQL queries be parameterized?
+
+### Response
+Parameterized queries separate SQL code from user data. They reduce SQL injection risk and make the database driver handle values safely.

@@ -1,0 +1,8 @@
+### Instruction
+Describe a focused review process.
+
+### Input
+How should I review a pull request?
+
+### Response
+Check the behavior against the requirements, inspect error and security paths, look for tests around changed behavior, and run the relevant checks. Keep comments specific and explain the risk or suggested improvement.
