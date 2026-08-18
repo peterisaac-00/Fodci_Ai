@@ -2254,3 +2254,43 @@ AutonomousToolLoop Verification & Continuation / Abort
 ```
 
 `ErrorClassifier` and `NormalizedError` unify distinct failure outputs (tool exceptions, subprocess command failures, pytest assertions) into a common format. The recovery policy prevents infinite loops and blind retries by maintaining a signature-based failure history and bounded retry limits (`max_recovery_attempts`, `max_identical_failures`). Parallel tool execution failures are classified and handled independently without discarding successful parallel tool results. All recovery decisions require explicit verification before marking a recovery attempt successful.
+
+## Phase 12.6 Advanced Memory
+
+Phase 12.6 introduces a persistent, scoped, and ranked Advanced Memory subsystem for the Fodci AI Backend Engineering Agent, ensuring that historical knowledge, error recovery resolutions, project facts, and solutions persist across tasks and sessions without modifying model weights.
+
+```text
+                 ┌──────────────┐
+                 │   User Task  │
+                 └──────┬───────┘
+                        ↓
+                 ┌──────────────┐
+                 │    Agent     │
+                 └──────┬───────┘
+                        ↓
+                 ┌──────────────┐
+                 │Memory Retrieve│
+                 └──────┬───────┘
+                        ↓
+                 ┌──────────────┐
+                 │Context Manager│
+                 └──────┬───────┘
+                        ↓
+                      LLM
+                        ↓
+                 Tool Execution
+                        ↓
+                 ┌──────────────┐
+                 │Error Recovery│
+                 └──────┬───────┘
+                        ↓
+                 Verification
+                        ↓
+                 ┌──────────────┐
+                 │Memory Writer │
+                 └──────┬───────┘
+                        ↓
+                 Persistent Store
+```
+
+`AdvancedMemorySystem` supports multiple memory types (`PROJECT_MEMORY`, `TECHNICAL_MEMORY`, `ERROR_MEMORY`, `SOLUTION_MEMORY`, `PREFERENCE_MEMORY`, `TASK_MEMORY`) and explicit scoping (`GLOBAL`, `PROJECT`, `TASK`, `SESSION`). Retrieval is context-aware and relevance-scored using deterministic lexical matching, confidence weighting, and importance ranking, with strict project isolation and automatic deduplication (reinforcing existing memory entries rather than duplicating them).

@@ -121,3 +121,10 @@ All safety boundaries are fully preserved: no shell execution, no network access
 Phase 12.5 integrates diagnostic-driven error recovery into the autonomous tool loop. When any tool call, shell command, or test execution fails, `ErrorClassifier` normalizes the output into structured categories (such as `TEST_FAILURE`, `FILE_ERROR`, `DEPENDENCY_ERROR`, `RUNTIME_ERROR`, `TIMEOUT`), computes a stable error signature, and consults `RecoverabilityPolicy` to choose a non-blind recovery strategy (`INSPECT_FILE`, `REPLAN`, `VERIFY`, etc.).
 
 Developers can configure and inspect recovery limits (`max_recovery_attempts`, `max_identical_failures`) and recovery history within autonomous loop configurations. Parallel tool execution failures are processed independently so that successful parallel results are preserved.
+
+
+## Phase 12.6 Advanced Memory Workflows
+
+Phase 12.6 integrates persistent, scoped, and ranked memory into the agent architecture. `AdvancedMemorySystem` manages memory records with rich metadata (provenance, confidence, scope, importance, status).
+
+Developers can initialize the memory system with a persistent JSON store path (`AdvancedMemorySystem(store_path)`), add verified solutions or error resolutions, and retrieve context-aware candidate memories during agent tasks. All operations maintain local disk persistence via atomic temporary file replacement (`fsync` + `os.replace`), strict project isolation, and complete zero-dependency operation.
