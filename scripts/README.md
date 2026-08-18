@@ -364,3 +364,13 @@ PYTHONPATH=src python scripts/analyze_phase1310_scaling.py
 ```
 
 The command writes `artifacts/evaluation/phase1310_scaling_analysis.json`, `artifacts/checkpoints/fodci-scaling-25m-experimental-v1.pt`, and the tracked report `docs/experiments/phase1310_scaling_analysis.md`. The larger model starts from random initialization because existing checkpoints are shape-incompatible, so its loss is not a fair capability comparison. The experiment therefore keeps the 11.4M model as the default until a larger model receives matched full-stage training and demonstrates repeatable benchmark and execution-aware gains.
+
+## Phase 13.11 — Integration & Multi-Agent Synergy
+
+`run_phase1311_synergy.py` validates the real `fodci-testing-qa-v1` checkpoint through `FodciLocalProvider`, then runs dependency-ordered multi-agent orchestration with `AdvancedMemorySystem` persistence/reload/retrieval and a bounded `AutonomyController` task.
+
+```text
+PYTHONPATH=src python scripts/run_phase1311_synergy.py
+```
+
+The command writes `artifacts/evaluation/phase1311_multi_agent_synergy.json` and the tracked report `docs/experiments/phase1311_multi_agent_synergy.md`. It uses a temporary project and memory store, a four-token provider smoke, bounded autonomy budgets, and no external APIs or runtime model replacement. The approximately 26M Phase 13.10 checkpoint remains experimental and is not activated.
