@@ -1,0 +1,8 @@
+### Instruction
+Why should a traceback repair avoid broad exception handling?
+
+### Input
+None
+
+### Response
+A broad handler can turn programming defects into misleading successes and erase the original signal. Catch the narrow expected exception and let unexpected failures remain visible.

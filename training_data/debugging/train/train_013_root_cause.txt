@@ -1,0 +1,8 @@
+### Instruction
+How can configuration drift cause an apparently correct code path to fail?
+
+### Input
+None
+
+### Response
+Different environment variables, dependency versions, migrations, or feature flags can invalidate assumptions. Compare effective configuration and versions safely before editing business logic.

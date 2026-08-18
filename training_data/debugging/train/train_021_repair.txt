@@ -1,0 +1,8 @@
+### Instruction
+How should a repair preserve an existing API response contract?
+
+### Input
+None
+
+### Response
+Keep status semantics and schema stable unless a versioned change is intentional; update the implementation and tests rather than surprising existing clients.

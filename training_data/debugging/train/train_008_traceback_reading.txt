@@ -1,0 +1,12 @@
+### Instruction
+How should a SyntaxError be fixed safely?
+
+### Input
+Traceback (most recent call last):
+  File "routes.py", line 22
+    return response(
+                    ^
+SyntaxError: '(' was never closed
+
+### Response
+Use the reported file and line as the starting point, inspect the nearby delimiter or indentation, and make the smallest syntax correction. Then compile or run the focused test before broader changes.

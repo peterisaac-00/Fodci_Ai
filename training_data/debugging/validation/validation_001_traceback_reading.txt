@@ -1,0 +1,11 @@
+### Instruction
+What does this traceback suggest and what should be checked first?
+
+### Input
+Traceback (most recent call last):
+  File "billing.py", line 14, in total
+    return subtotal + tax
+TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'
+
+### Response
+The failure is a TypeError caused by adding an integer to None. Check why the producer allowed a missing value and apply the domain's explicit missing-value policy.

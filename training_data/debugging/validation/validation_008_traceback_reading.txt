@@ -1,0 +1,8 @@
+### Instruction
+How should secrets be handled when preserving a traceback for analysis?
+
+### Input
+None
+
+### Response
+Redact tokens, passwords, authorization headers, and private payload values while preserving exception type, safe locations, correlation ID, and the call path needed for diagnosis.

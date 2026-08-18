@@ -1,0 +1,8 @@
+### Instruction
+How can a test distinguish a timeout retry fix from an infinite retry loop?
+
+### Input
+None
+
+### Response
+Use a bounded fake dependency, assert the exact attempt count and backoff policy, and verify the final error or success outcome.

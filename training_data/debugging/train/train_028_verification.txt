@@ -1,0 +1,8 @@
+### Instruction
+What should a regression test assert for an error-handling repair?
+
+### Input
+None
+
+### Response
+Assert the triggering input, stable error category or response, absence of secret leakage, and that valid neighboring inputs still succeed.

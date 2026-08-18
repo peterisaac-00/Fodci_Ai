@@ -1,0 +1,8 @@
+### Instruction
+What is a safe repair for a transient upstream timeout?
+
+### Input
+None
+
+### Response
+Use a bounded timeout and bounded retry only when the operation is safe to repeat, then map exhaustion to a stable dependency error and preserve redacted evidence.

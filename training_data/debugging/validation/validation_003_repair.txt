@@ -1,0 +1,8 @@
+### Instruction
+How should a service repair a missing request field without masking malformed clients?
+
+### Input
+None
+
+### Response
+Validate the request at the boundary and return a stable field-level client error, while reserving defaults for fields whose absence is explicitly allowed by the contract.

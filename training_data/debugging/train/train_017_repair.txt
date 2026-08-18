@@ -1,0 +1,8 @@
+### Instruction
+What makes a debugging patch safe and minimal?
+
+### Input
+None
+
+### Response
+It addresses the demonstrated cause, preserves existing contracts, changes the smallest necessary surface, avoids unrelated refactors, and includes a regression test for the failure.

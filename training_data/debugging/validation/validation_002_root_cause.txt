@@ -1,0 +1,8 @@
+### Instruction
+How should an engineer investigate a test that fails only after another test runs?
+
+### Input
+None
+
+### Response
+Check shared mutable state, fixture cleanup, database transactions, environment variables, and ordering dependence; reproduce the test in isolation and in the failing order.

@@ -1,0 +1,8 @@
+### Instruction
+How should a repair handle a security-sensitive error?
+
+### Input
+None
+
+### Response
+Remove secret exposure, use a safe public error, retain redacted structured logs, and add a regression test that asserts sensitive values do not appear.

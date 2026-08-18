@@ -1,0 +1,8 @@
+### Instruction
+What is the correct order for verifying a debugging fix?
+
+### Input
+None
+
+### Response
+Reproduce the original failure, run a focused regression test, inspect the changed behavior and diff, then run the relevant broader suite and verify no new failures.

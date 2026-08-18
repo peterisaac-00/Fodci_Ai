@@ -1,0 +1,11 @@
+### Instruction
+What is the likely cause of this error at an API boundary?
+
+### Input
+Traceback (most recent call last):
+  File "api.py", line 42, in create_user
+    email = payload['email']
+KeyError: 'email'
+
+### Response
+`KeyError: 'email'` means code indexed a dictionary assuming `email` existed. The boundary either received an incomplete payload or validation was bypassed; use explicit validation and safe access according to the contract.

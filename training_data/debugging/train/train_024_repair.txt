@@ -1,0 +1,8 @@
+### Instruction
+Why should an automated repair prefer a patch over a full rewrite?
+
+### Input
+None
+
+### Response
+A bounded patch preserves unrelated behavior and makes review, rollback, and verification tractable. A rewrite introduces unmeasured changes beyond the diagnosed failure.

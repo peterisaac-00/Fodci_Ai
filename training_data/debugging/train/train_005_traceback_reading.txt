@@ -1,0 +1,11 @@
+### Instruction
+What does `JSONDecodeError` usually indicate in a backend client?
+
+### Input
+Traceback (most recent call last):
+  File "client.py", line 31, in fetch
+    return response.json()
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+### Response
+The client attempted to parse a response that was not valid JSON, possibly an empty body, HTML error page, or malformed payload. Inspect status and content type before decoding and preserve safe diagnostic context.

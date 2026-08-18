@@ -1,0 +1,8 @@
+### Instruction
+Why can a 500 response be only a symptom?
+
+### Input
+None
+
+### Response
+The 500 is a transport-level symptom; the root cause may be an earlier invalid input, missing configuration, dependency failure, or programming exception identified from the traceback and evidence.

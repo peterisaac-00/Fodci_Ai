@@ -1,0 +1,8 @@
+### Instruction
+How should a backend repair a failed downstream request?
+
+### Input
+None
+
+### Response
+Classify the failure, apply a bounded timeout and retry only for known transient errors when the operation is safe, then return a stable error contract and preserve diagnostic context.

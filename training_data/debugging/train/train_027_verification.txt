@@ -1,0 +1,8 @@
+### Instruction
+How should a debugging result report uncertainty?
+
+### Input
+None
+
+### Response
+State what was reproduced, the evidence for the root cause, what was changed, which checks passed, and any remaining hypotheses instead of claiming certainty without evidence.

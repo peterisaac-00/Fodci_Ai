@@ -1,0 +1,8 @@
+### Instruction
+How should an engineer handle a failure that cannot yet be reproduced?
+
+### Input
+None
+
+### Response
+Preserve the evidence, add safe observability, formulate competing hypotheses, and create the smallest diagnostic experiment. Do not claim a fix based only on correlation.

@@ -1,0 +1,8 @@
+### Instruction
+What is a common root cause of an intermittent database timeout?
+
+### Input
+None
+
+### Response
+Possible causes include pool exhaustion, slow plans, lock contention, or an unavailable dependency. Measure timing and pool or database evidence instead of treating every timeout as a code defect.

@@ -1,0 +1,8 @@
+### Instruction
+Why is changing multiple unrelated files dangerous during root-cause analysis?
+
+### Input
+None
+
+### Response
+It destroys causal clarity and increases regression risk. Keep the hypothesis and patch narrow until evidence requires a broader change.

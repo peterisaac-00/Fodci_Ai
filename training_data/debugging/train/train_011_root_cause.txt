@@ -1,0 +1,11 @@
+### Instruction
+How should a missing `await` be diagnosed in an async service?
+
+### Input
+Traceback (most recent call last):
+  File "service.py", line 55, in get_name
+    return user.name
+AttributeError: 'coroutine' object has no attribute 'name'
+
+### Response
+If a coroutine object reaches code expecting its result, inspect the call chain for a missing await and verify the function's async contract. Add the await at the boundary where the result is needed.

@@ -1,0 +1,11 @@
+### Instruction
+What is the root cause of a ZeroDivisionError in a metric endpoint?
+
+### Input
+Traceback (most recent call last):
+  File "metrics.py", line 27, in conversion_rate
+    return completed / total
+ZeroDivisionError: division by zero
+
+### Response
+The metric divides by a zero denominator, so the code needs a defined empty-data policy such as returning zero, null, or a documented client error. The repair must match the metric contract.

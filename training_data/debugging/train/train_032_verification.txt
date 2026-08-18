@@ -1,0 +1,8 @@
+### Instruction
+What evidence is needed before declaring an autonomous repair complete?
+
+### Input
+None
+
+### Response
+The original failure is reproduced and resolved, focused and relevant full tests pass, the diff is within scope, and the final state is independently verified.

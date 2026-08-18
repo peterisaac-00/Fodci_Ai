@@ -1,0 +1,8 @@
+### Instruction
+How should an automated agent avoid repeating the same failed repair?
+
+### Input
+None
+
+### Response
+Record a stable error signature and patch attempt, compare new evidence with prior attempts, and replan or escalate when the same failure persists.

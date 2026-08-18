@@ -1,0 +1,11 @@
+### Instruction
+How should a ModuleNotFoundError be triaged before changing application code?
+
+### Input
+Traceback (most recent call last):
+  File "worker.py", line 4, in <module>
+    from payments.client import Gateway
+ModuleNotFoundError: No module named 'payments'
+
+### Response
+Confirm the import name, active environment, package installation, and project packaging configuration. Do not immediately rewrite imports or install an unapproved dependency; the cause may be environment drift.

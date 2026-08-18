@@ -1,0 +1,8 @@
+### Instruction
+What evidence should be collected before changing a failing production path?
+
+### Input
+None
+
+### Response
+Collect the exact error, request or correlation ID, relevant input shape with secrets removed, versions, recent changes, and reproducible steps. Evidence narrows the hypothesis without guessing.

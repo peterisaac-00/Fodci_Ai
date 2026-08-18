@@ -1,0 +1,8 @@
+### Instruction
+Why should a repair inspect the final diff before completion?
+
+### Input
+None
+
+### Response
+Diff inspection catches accidental edits, debug prints, weakened validation, unrelated formatting churn, and secrets that tests may not detect.

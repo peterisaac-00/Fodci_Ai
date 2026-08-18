@@ -1,0 +1,8 @@
+### Instruction
+What must be proven before accepting a traceback fix?
+
+### Input
+None
+
+### Response
+Reproduce the original error, pass a focused regression test, verify valid neighboring behavior, inspect the diff, and run the relevant broader test suite.

@@ -1,0 +1,8 @@
+### Instruction
+Why must a fix be tested against the original failing input?
+
+### Input
+None
+
+### Response
+A green unrelated test does not prove the reported failure is fixed. The original input is the direct acceptance evidence for the repair.

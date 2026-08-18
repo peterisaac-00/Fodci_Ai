@@ -1,0 +1,8 @@
+### Instruction
+How can an engineer distinguish a root cause from a downstream symptom?
+
+### Input
+None
+
+### Response
+Trace the first invalid state backward through the call chain and data transformations. A later 500 response or assertion failure may be a symptom of an earlier validation, configuration, or dependency error.

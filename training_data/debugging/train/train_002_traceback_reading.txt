@@ -1,0 +1,8 @@
+### Instruction
+How should the final exception line and the deepest application frame be used when reading a traceback?
+
+### Input
+None
+
+### Response
+The final exception line names the failure type and message, while the deepest relevant application frame identifies where the bad state was first observed. Read upward for the call path and inspect surrounding values before patching.

@@ -1,0 +1,8 @@
+### Instruction
+How should code repair a missing optional value without hiding bugs?
+
+### Input
+None
+
+### Response
+Use an explicit domain policy such as a default, a typed optional branch, or a controlled validation error. Do not catch every exception or silently convert unexpected states.

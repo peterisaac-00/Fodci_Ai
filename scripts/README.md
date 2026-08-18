@@ -269,3 +269,32 @@ PYTHONPATH=src python scripts/benchmark_stage1.py \
 ```
 
 The benchmark is a deterministic keyword-coverage and non-empty-output diagnostic. It is not a substitute for schema validation, contract tests, or execution-aware API evaluation.
+
+
+## Phase 13.7 — Debugging & Root Cause Analysis
+
+`generate_phase137_data.py` creates the debugging specialist corpus under `training_data/debugging`, with 32 training records, 8 validation records, and 8 held-out benchmark records. The balanced curriculum covers traceback reading, root-cause isolation, minimal repair, and verification.
+
+```text
+python scripts/generate_phase137_data.py
+```
+
+`train_phase137_debugging.py` continues from `artifacts/checkpoints/fodci-rest-api-v1.pt` and writes `artifacts/checkpoints/fodci-debugging-v1.pt`. The default CPU-only run is bounded to twelve optimizer steps, uses response-only loss masking and a short-record-safe context window, and validates lineage, non-empty splits, finite loss, parameter changes, checkpoint existence, and reload consistency.
+
+```text
+PYTHONPATH=src python scripts/train_phase137_debugging.py
+```
+
+The workflow writes `artifacts/evaluation/phase137_debugging_training.json` and the tracked report `docs/experiments/phase137_debugging_training.md`. The held-out debugging benchmark is run with:
+
+```text
+PYTHONPATH=src python scripts/benchmark_stage1.py \
+  --dataset training_data/debugging/evaluation/phase_137.jsonl \
+  --checkpoint artifacts/checkpoints/fodci-debugging-v1.pt \
+  --model-version fodci-debugging-v1 \
+  --run-prefix phase137-debugging \
+  --report artifacts/evaluation/phase137_debugging_benchmark.json \
+  --markdown docs/experiments/phase137_debugging_benchmark.md
+```
+
+The benchmark uses deterministic greedy decoding and keyword coverage as a conservative diagnostic. A non-empty rate of 1.0 with zero keyword coverage is valid evidence that the checkpoint emits text but has not yet demonstrated reliable debugging semantics; it must not be presented as successful autonomous repair.

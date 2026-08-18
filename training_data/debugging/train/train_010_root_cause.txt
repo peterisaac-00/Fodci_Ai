@@ -1,0 +1,8 @@
+### Instruction
+Why should the first failing test be investigated before later failures?
+
+### Input
+None
+
+### Response
+Later failures may cascade from shared corrupted state or one broken dependency. The first independent failure usually provides the strongest evidence for the root cause.

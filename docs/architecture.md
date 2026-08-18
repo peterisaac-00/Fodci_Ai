@@ -2434,3 +2434,12 @@ Phase 13.6 specializes the Phase 13.5 SQL checkpoint on professional RESTful API
 `scripts/train_phase136_rest_api.py` validates that the input checkpoint is exactly `fodci-sql-database-v1`, evaluates it on the REST validation partition, continues bounded CPU training, saves `fodci-rest-api-v1.pt`, reloads it into a fresh model, and verifies finite loss, parameter changes, and reload consistency. The shared benchmark runner evaluates eight REST questions with fixed greedy decoding and records model, dataset, and protocol identity.
 
 Objective validation loss and generation benchmark metrics are intentionally reported separately. Lower loss validates that the specialization path and response-only training objective are functioning; non-empty output and keyword coverage are conservative diagnostics and do not establish semantic API design competence or executable contract correctness.
+
+
+## Phase 13.7 — Debugging & Root Cause Analysis Training
+
+Phase 13.7 specializes the Phase 13.6 REST checkpoint on the evidence-driven debugging workflow required by an autonomous engineering agent. The dataset contains 32 training records and 8 held-out validation records covering traceback reading, root-cause isolation, minimal repairs, regression testing, safe error handling, uncertainty reporting, and completion verification. Traceback examples are synthetic local fixtures and contain no credentials or private data; the held-out benchmark is stored separately at `training_data/debugging/evaluation/phase_137.jsonl`.
+
+`scripts/train_phase137_debugging.py` validates that the input checkpoint is exactly `fodci-rest-api-v1`, evaluates it on the debugging validation partition, continues bounded CPU training, saves `fodci-debugging-v1.pt`, reloads it into a fresh model, and verifies finite loss, parameter changes, and reload consistency. The curriculum emphasizes diagnosis before editing, narrow exception handling, redacted evidence, bounded retries, minimal patches, original-failure reproduction, focused regression tests, diff inspection, and explicit escalation when evidence is insufficient.
+
+The shared benchmark runner evaluates eight debugging questions with fixed greedy decoding and records model, dataset, and protocol identity. Lower objective loss and non-empty output are useful diagnostics, but they do not prove that an agent can safely repair arbitrary repositories; future evaluation must add execution-aware tasks and verification evidence.

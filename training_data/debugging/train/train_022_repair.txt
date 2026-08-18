@@ -1,0 +1,8 @@
+### Instruction
+What should be done when a fix requires a database schema change?
+
+### Input
+None
+
+### Response
+Plan a backward-compatible migration, deploy in safe order, backfill or validate data, and verify both old and new application paths during the rollout.

@@ -1,0 +1,11 @@
+### Instruction
+How should an AttributeError be analyzed when a value can be None?
+
+### Input
+Traceback (most recent call last):
+  File "orders.py", line 73, in total
+    return order.customer.name
+AttributeError: 'NoneType' object has no attribute 'name'
+
+### Response
+Check the value's producer and the contract that permits None before the failing attribute access. The fix should validate or handle the absent value at the correct boundary, not blindly add a broad catch.

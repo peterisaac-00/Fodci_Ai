@@ -1,0 +1,11 @@
+### Instruction
+Read this traceback and identify the immediate failure: `NameError: name 'user_idd' is not defined` at `return users[user_idd]`.
+
+### Input
+Traceback (most recent call last):
+  File "service.py", line 18, in find_user
+    return users[user_idd]
+NameError: name 'user_idd' is not defined
+
+### Response
+The immediate failure is a NameError caused by the misspelled variable `user_idd`. Inspect the local scope and correct it to the intended `user_id` rather than changing unrelated lookup logic.

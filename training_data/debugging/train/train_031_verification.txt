@@ -1,0 +1,8 @@
+### Instruction
+Why should debugging workflows record a stable error signature?
+
+### Input
+None
+
+### Response
+A stable signature groups repeated occurrences of the same failure, prevents blind repeated retries, and helps measure whether the repair removes the original class of error.
