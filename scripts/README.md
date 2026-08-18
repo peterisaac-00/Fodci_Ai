@@ -357,10 +357,10 @@ The benchmark uses deterministic greedy decoding and keyword coverage as a conse
 
 ## Phase 13.10 — Model Scaling Analysis
 
-`analyze_phase1310_scaling.py` runs a bounded CPU-only comparison between the verified 11.4M-parameter `fodci-testing-qa-v1` checkpoint and an experimental approximately 48M-parameter configuration. It measures parameter count, shape compatibility, forward/backward time, resident memory, finite gradients, short training behavior, and validation loss without saving or activating a scaled checkpoint.
+`analyze_phase1310_scaling.py` runs a bounded CPU-only comparison between the verified 11.4M-parameter `fodci-testing-qa-v1` checkpoint and an experimental approximately 26M-parameter configuration. It performs four optimizer steps on the same testing corpus, measures parameter count, shape compatibility, forward/backward time, resident memory, finite gradients, checkpoint reload, and validation loss, and saves the scaled checkpoint only as an experimental artifact.
 
 ```text
 PYTHONPATH=src python scripts/analyze_phase1310_scaling.py
 ```
 
-The command writes `artifacts/evaluation/phase1310_scaling_analysis.json` and the tracked report `docs/experiments/phase1310_scaling_analysis.md`. The larger model starts from random initialization because existing checkpoints are shape-incompatible, so its loss is not a fair capability comparison. The experiment therefore keeps the 11.4M model as the default until a larger model receives matched training and demonstrates repeatable benchmark and execution-aware gains.
+The command writes `artifacts/evaluation/phase1310_scaling_analysis.json`, `artifacts/checkpoints/fodci-scaling-25m-experimental-v1.pt`, and the tracked report `docs/experiments/phase1310_scaling_analysis.md`. The larger model starts from random initialization because existing checkpoints are shape-incompatible, so its loss is not a fair capability comparison. The experiment therefore keeps the 11.4M model as the default until a larger model receives matched full-stage training and demonstrates repeatable benchmark and execution-aware gains.

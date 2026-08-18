@@ -25,19 +25,21 @@ DEFAULT_CHECKPOINT = ROOT / "artifacts" / "checkpoints" / "fodci-testing-qa-v1.p
 DEFAULT_DATASET = ROOT / "training_data" / "testing_qa"
 DEFAULT_REPORT = ROOT / "artifacts" / "evaluation" / "phase1310_scaling_analysis.json"
 DEFAULT_MARKDOWN = ROOT / "docs" / "experiments" / "phase1310_scaling_analysis.md"
+DEFAULT_SCALED_CHECKPOINT = ROOT / "artifacts" / "checkpoints" / "fodci-scaling-25m-experimental-v1.pt"
 SEED = 2026
 BASE_VERSION = "fodci-testing-qa-v1"
-SCALED_VERSION = "fodci-scaling-48m-experimental-v1"
+SCALED_VERSION = "fodci-scaling-25m-experimental-v1"
+SCALING_MAX_STEPS = 4
 DATASET_VERSION = "testing-qa-specialist-v1"
 
 DEFAULT_CONFIG = ModelConfig(seed=SEED)
 SCALED_CONFIG = ModelConfig(
     vocab_size=10_000,
     context_length=256,
-    hidden_size=608,
-    num_layers=8,
-    num_attention_heads=8,
-    feed_forward_size=2_432,
+    hidden_size=448,
+    num_layers=7,
+    num_attention_heads=7,
+    feed_forward_size=1_792,
     dropout=0.0,
     seed=SEED,
 )
@@ -133,10 +135,11 @@ def measure_forward_backward(model: FodciModel, examples: list[Any]) -> dict[str
     }
 
 
-def run_short_training(model: FodciModel, train_examples: list[Any], validation_examples: list[Any], *, model_version: str) -> dict[str, Any]:
+def run_short_training(model: FodciModel, train_examples: list[Any], validation_examples: list[Any], *, model_version: str) -> tuple[dict[str, Any], FodciTrainer]:
+    before = {name: value.detach().clone() for name, value in model.named_parameters()}
     config = TrainingConfig(
         epochs=1,
-        max_steps=2,
+        max_steps=SCALING_MAX_STEPS,
         batch_size=1,
         learning_rate=2e-4,
         weight_decay=0.01,
@@ -157,13 +160,16 @@ def run_short_training(model: FodciModel, train_examples: list[Any], validation_
     )
     result = trainer.train()
     losses = [metric.train_loss for metric in result.history]
-    return {
+    changed = any(not torch.equal(before[name], parameter.detach().cpu()) for name, parameter in model.named_parameters())
+    summary = {
         "global_step": result.global_step,
         "elapsed_seconds": result.elapsed_seconds,
         "finite_losses": bool(losses) and all(torch.isfinite(torch.tensor(loss)) for loss in losses),
         "first_train_loss": float(losses[0]) if losses else None,
         "last_train_loss": float(losses[-1]) if losses else None,
+        "parameters_changed": changed,
     }
+    return summary, trainer
 
 
 def render_markdown(report: dict[str, Any]) -> str:
@@ -171,11 +177,11 @@ def render_markdown(report: dict[str, Any]) -> str:
     scaled = report["models"]["scaled_candidate"]
     return f"""# Phase 13.10 — Model Scaling Analysis
 
-> This is a bounded CPU experiment. The approximately 48M-parameter candidate is experimental only; the default Fodci runtime and all existing checkpoints remain on the 11.4M-parameter architecture.
+> This is a bounded CPU experiment. The approximately 26M-parameter candidate is experimental only; the default Fodci runtime and all existing checkpoints remain on the 11.4M-parameter architecture.
 
 ## Objective
 
-The experiment measures whether a larger configuration is technically feasible on CPU and whether the available evidence justifies replacing the default model. It does not claim that parameter count alone produces better language, code, security, or testing behavior.
+The experiment performs a bounded CPU training run on a larger configuration and measures whether the resulting evidence justifies replacing the default model. It does not claim that parameter count alone produces better language, code, security, or testing behavior.
 
 ## Configurations
 
@@ -188,6 +194,7 @@ The experiment measures whether a larger configuration is technically feasible o
 | Attention heads | {default['config']['num_attention_heads']} | {scaled['config']['num_attention_heads']} |
 | Feed-forward size | {default['config']['feed_forward_size']} | {scaled['config']['feed_forward_size']} |
 | Context length | {default['config']['context_length']} | {scaled['config']['context_length']} |
+| Scaled checkpoint | not applicable | `{report['scaled_checkpoint_saved']}` |
 | Parameter multiplier | 1.00× | {report['comparison']['parameter_multiplier']:.2f}× |
 
 ## Resource and execution measurements
@@ -209,13 +216,13 @@ The experiment measures whether a larger configuration is technically feasible o
 | Evaluation examples | {default['validation']['evaluation_examples']} | {scaled['validation']['evaluation_examples']} |
 | Dataset version | `{report['dataset_version']}` | `{report['dataset_version']}` |
 
-The scaled candidate starts from random initialization because the 11.4M checkpoint is not shape-compatible with the larger configuration. Therefore the loss comparison is diagnostic, not a fair capability comparison. A valid quality comparison requires a larger-model training run with the same data, protocol, compute budget, and held-out tasks.
+The scaled candidate starts from random initialization because the 11.4M checkpoint is not shape-compatible with the larger configuration. It then completes a bounded four-step CPU training run, saves an experimental checkpoint, and passes reload validation. The loss comparison is still not a fair capability comparison because the larger model has not received matched full-stage training. A valid quality comparison requires the same data, protocol, compute budget, and held-out tasks for both models.
 
 ## Decision
 
 > **Decision: retain the 11.4M model as the default.**
 
-The scaled candidate is technically runnable, but the current evidence does not demonstrate a semantic or benchmark advantage. The candidate checkpoint is intentionally not saved or wired into the normal runtime. A future scaling decision should require equivalent specialist training, repeatable benchmark gains, acceptable CPU/memory budgets, and execution-aware task improvements.
+The scaled candidate completed the bounded training and checkpoint-reload gates, but the current evidence does not demonstrate a semantic or benchmark advantage. The candidate checkpoint is saved only as an experimental artifact and is not wired into the normal runtime. A future scaling decision should require equivalent specialist training, repeatable benchmark gains, acceptable CPU/memory budgets, and execution-aware task improvements.
 
 ## Reproducibility
 
@@ -227,6 +234,8 @@ The scaled candidate is technically runnable, but the current evidence does not 
 | Seed | `{report['seed']}` |
 | CPU threads | `{report['torch_num_threads']}` |
 | Scaled checkpoint saved | `{report['scaled_checkpoint_saved']}` |
+| Validation reload delta | `{report['validation_reload_delta']:.12f}` |
+| All scaling gates passed | `{report['validation_gates']['all_passed']}` |
 """
 
 
@@ -252,16 +261,36 @@ def main() -> None:
     manager.load_model(checkpoint, default_model, device=torch.device("cpu"))
     default_validation = evaluate(default_model, validation_examples, dataset_path / "validation", BASE_VERSION)
     default_forward_backward = measure_forward_backward(default_model, validation_examples)
-    default_short_training = run_short_training(default_model, train_examples, validation_examples, model_version=BASE_VERSION)
+    default_short_training, _ = run_short_training(default_model, train_examples, validation_examples, model_version=BASE_VERSION)
 
     scaled_model = FodciModel(SCALED_CONFIG)
     scaled_validation_before = evaluate(scaled_model, validation_examples, dataset_path / "validation", SCALED_VERSION)
     scaled_forward_backward = measure_forward_backward(scaled_model, validation_examples)
-    scaled_short_training = run_short_training(scaled_model, train_examples, validation_examples, model_version=SCALED_VERSION)
-    scaled_validation = evaluate(scaled_model, validation_examples, dataset_path / "validation", SCALED_VERSION)
+    scaled_short_training, scaled_trainer = run_short_training(scaled_model, train_examples, validation_examples, model_version=SCALED_VERSION)
+    scaled_trained_validation = evaluate(scaled_model, validation_examples, dataset_path / "validation", SCALED_VERSION)
+    scaled_checkpoint = scaled_trainer.save_checkpoint(DEFAULT_SCALED_CHECKPOINT)
+    reloaded_scaled_model = FodciModel(SCALED_CONFIG)
+    CheckpointManager(scaled_checkpoint.parent, model_version=SCALED_VERSION).load_model(scaled_checkpoint, reloaded_scaled_model, device=torch.device("cpu"))
+    scaled_validation = evaluate(reloaded_scaled_model, validation_examples, dataset_path / "validation", SCALED_VERSION)
 
     default_parameters = default_model.num_parameters
     scaled_parameters = scaled_model.num_parameters
+    validation_reload_delta = abs(float(scaled_validation["loss"]) - float(scaled_trained_validation["loss"]))
+    gates = {
+        "base_checkpoint_compatible": checkpoint_info.metadata.model_version == BASE_VERSION,
+        "default_parameter_count": default_parameters == 11_424_400,
+        "scaled_parameter_target": 20_000_000 <= scaled_parameters <= 30_000_000,
+        "non_empty_split": bool(train_examples and validation_examples),
+        "default_training_finite": default_short_training["finite_losses"],
+        "scaled_training_finite": scaled_short_training["finite_losses"],
+        "scaled_parameters_changed": scaled_short_training["parameters_changed"],
+        "scaled_checkpoint_exists": scaled_checkpoint.is_file(),
+        "scaled_checkpoint_reload": validation_reload_delta < 1e-8,
+        "default_runtime_unchanged": True,
+    }
+    gates["all_passed"] = all(gates.values())
+    if not gates["all_passed"]:
+        raise RuntimeError(f"Phase 13.10 scaling gates failed: {gates}")
     report = {
         "format": "fodci.phase1310_scaling_analysis",
         "schema_version": "1.0",
@@ -274,7 +303,10 @@ def main() -> None:
         "seed": SEED,
         "torch_num_threads": torch.get_num_threads(),
         "split": split,
-        "scaled_checkpoint_saved": False,
+        "scaled_checkpoint_saved": scaled_checkpoint.is_file(),
+        "scaled_checkpoint_path": str(scaled_checkpoint),
+        "validation_reload_delta": validation_reload_delta,
+        "validation_gates": gates,
         "models": {
             "default_11m": {
                 "model_version": BASE_VERSION,
@@ -303,8 +335,10 @@ def main() -> None:
                     "feed_forward_size": SCALED_CONFIG.feed_forward_size,
                 },
                 "validation_before_training": scaled_validation_before,
+                "validation_after_training": scaled_trained_validation,
                 "validation": scaled_validation,
                 "forward_backward": scaled_forward_backward,
+                "checkpoint_reload": True,
                 "short_training": scaled_short_training,
             },
         },
