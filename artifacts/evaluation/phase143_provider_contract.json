@@ -1,0 +1,28 @@
+{
+  "default_fodci_provider_changed": false,
+  "dependency_policy": "optional-lazy-local-files-only",
+  "device": "cpu",
+  "do_sample": false,
+  "external_api_used": false,
+  "format": "fodci.phase143_provider_contract",
+  "inference_seconds": 4.3113017454743385e-05,
+  "injected_contract_response": "Use parameterized queries and validate input.",
+  "max_new_tokens": 32,
+  "model_downloaded": false,
+  "model_id": "local-cache-test-model",
+  "optional_runtime": "transformers",
+  "phase": "14.3",
+  "phase_gates": {
+    "bounded_generation_config": true,
+    "local_files_only_contract": true,
+    "no_external_api": true,
+    "optional_runtime_lazy": true,
+    "stable_runtime_preserved": true,
+    "typed_llm_boundary": true
+  },
+  "phase_gates_passed": true,
+  "provider": "PretrainedCodeProvider",
+  "schema_version": "1.0",
+  "stable_runtime_replaced": false,
+  "trust_remote_code": false
+}

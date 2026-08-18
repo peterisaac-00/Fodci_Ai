@@ -443,3 +443,13 @@ PYTHONPATH=src python scripts/run_phase142_fodci_baseline.py --max-new-tokens 32
 ```
 
 The report preserves the honest baseline result: all 24 calls completed and produced non-empty text, but the understandability heuristic and keyword coverage were both zero. This is diagnostic evidence, not a semantic judge, and every response remains subject to manual review. The stable runtime is not changed by this phase.
+
+## Phase 14.3 — Experimental Pretrained Provider Contract
+
+`run_phase143_provider_contract.py` validates the optional `PretrainedCodeProvider` through injected tokenizer/model doubles. The phase does not download a model, call an external API, or change the default Fodci runtime.
+
+```text
+PYTHONPATH=src python scripts/run_phase143_provider_contract.py
+```
+
+The provider loads Transformers lazily only when explicitly requested, uses local-files-only loading, disables remote code by default, and keeps the existing typed `LLMProvider` boundary. Phase 14.4 supplies a concrete local/cache model artifact for evaluation.

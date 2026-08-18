@@ -2505,3 +2505,9 @@ Phase 14.2 uses the exact Phase 14.1 dataset to measure the stable `fodci-testin
 Phase 14.2 applies the fixed Phase 14.1 response benchmark to the stable `fodci-testing-qa-v1` checkpoint with CPU-only deterministic inference, seed `2026`, provider-default greedy decoding, and a 32-token bound. All 24 cases completed without provider failures and the stable runtime was not changed.
 
 The measured non-empty rate was `1.0000`, but the understandable heuristic rate and average keyword coverage were both `0.0000`; the average repeated-token rate was `0.3278`. Outputs remained gibberish or repetitive, so this phase confirms the reproducible baseline and the language-capability limitation rather than semantic backend competence. Phase 14.3 can introduce an experimental provider, but stable-runtime replacement remains prohibited until the same benchmark demonstrates clear improvement.
+
+## Phase 14.3 — Experimental Pretrained Provider Contract
+
+Phase 14.3 adds `PretrainedCodeProvider` behind the existing typed `LLMProvider` boundary. The provider is optional and lazy: the default Fodci import path does not import Transformers, download weights, call external APIs, or replace the stable provider. Explicit loading uses local-files-only mode and disables remote code by default; generation is CPU-bounded through a validated `PretrainedProviderConfig`.
+
+The phase was validated with injected tokenizer/model doubles rather than a real model artifact. Typed request formatting, response decoding, invalid-conversation rejection, and bounded generation settings all passed. A concrete local/cache Qwen artifact is deferred to Phase 14.4, and no stable runtime activation is permitted before benchmark evidence.
