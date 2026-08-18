@@ -2537,3 +2537,9 @@ The final decision is `adopt_qwen_as_experimental_backend_with_backend_policy`: 
 Phase 15.1 introduces `TeacherStudentExample`, an immutable provenance-rich contract for future Qwen-to-Fodci learning. Each record includes the prompt, response, backend domain, teacher identity and fingerprint, source, quality and verification status, split, redaction status, approval, execution evidence, metadata, timestamp, and deterministic record ID.
 
 Raw records remain buffer-only and are not training-eligible. Acceptance requires positive verification, secret review, and explicit train/validation/test assignment. The phase performs no automatic training and does not change the stable runtime.
+
+## Phase 15.2 — Interaction Capture and Training Buffer
+
+Phase 15.2 adds `InteractionBuffer`, a bounded append-only local JSONL store for Teacher–Student records. It rejects symlinks, malformed records, duplicate IDs, and capacity overflow, and exposes pending versus training-eligible views without invoking training or external services.
+
+Live interaction data remains local and ignored by Git. Only the contract implementation, tests, and aggregate report are committed; private prompts, credentials, and captured project source must never be committed.

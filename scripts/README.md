@@ -492,3 +492,13 @@ The decision is to keep `fodci-testing-qa-v1` stable and use Qwen only as an exp
 ```text
 PYTHONPATH=src python scripts/run_phase151_contract.py
 ```
+
+## Phase 15.2 — Interaction Capture and Training Buffer
+
+`run_phase152_buffer.py` validates the local append-only JSONL interaction buffer, duplicate rejection, capacity bounds, and the absence of automatic training.
+
+```text
+PYTHONPATH=src python scripts/run_phase152_buffer.py
+```
+
+The live interaction buffer is local and ignored by Git. Commit only contract code, tests, and aggregate reports; never commit private prompts, credentials, or project source captured during normal use.

@@ -1,0 +1,23 @@
+{
+  "automatic_training_performed": false,
+  "bound_rejected": true,
+  "duplicate_rejected": true,
+  "eligible_count": 0,
+  "external_api_used": false,
+  "format": "fodci.phase152_buffer",
+  "pending_count": 2,
+  "phase": "15.2",
+  "phase_gates": {
+    "bound_rejected": true,
+    "bounded_storage": true,
+    "duplicate_rejected": true,
+    "local_only": true,
+    "pending_records_preserved": true,
+    "training_not_started": true
+  },
+  "phase_gates_passed": true,
+  "raw_buffer_path_is_local": true,
+  "record_count": 2,
+  "schema_version": "1.0",
+  "storage_format": "append-only-jsonl"
+}
