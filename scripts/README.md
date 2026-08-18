@@ -474,3 +474,13 @@ PYTHONPATH=src python scripts/run_phase145_backend_scope.py
 ```
 
 This runtime policy specializes behavior but does not erase general knowledge from pretrained weights. The default Fodci application remains unchanged until a later acceptance decision.
+
+## Phase 14.6 — Final Comparison and Decision
+
+`run_phase146_final_decision.py` compares the exact Phase 14.1 benchmark reports for stable Fodci 11M and experimental Qwen 0.5B, verifies the stable release SHA-256, and records a non-activation decision.
+
+```text
+PYTHONPATH=src python scripts/run_phase146_final_decision.py
+```
+
+The decision is to keep `fodci-testing-qa-v1` stable and use Qwen only as an experimental provider behind `BackendScopedProvider`. Readability improved substantially, but semantic correctness is not proven and Q4 quantization was not validated.

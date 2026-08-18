@@ -1,0 +1,60 @@
+{
+  "baseline": {
+    "average_keyword_coverage": 0.0,
+    "average_repeated_token_rate": 0.327777625,
+    "non_empty_rate": 1.0,
+    "understandable_heuristic_rate": 0.0
+  },
+  "baseline_model": "fodci-testing-qa-v1",
+  "candidate": {
+    "average_keyword_coverage": 0.71875,
+    "average_repeated_token_rate": 0.23655483333333335,
+    "manual_quality_notes": 5,
+    "non_empty_rate": 1.0,
+    "quantization": "none-fp16-safetensors",
+    "understandable_heuristic_rate": 0.9166666666666666
+  },
+  "candidate_model": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+  "dataset_fingerprint": "sha256:ca6ac06e3c665051689326637c4cb96ae6f2733f1485a2524082901de3b01095",
+  "dataset_version": "phase141-v1",
+  "decision": "adopt_qwen_as_experimental_backend_with_backend_policy",
+  "deltas": {
+    "average_keyword_coverage": 0.71875,
+    "non_empty_rate": 0.0,
+    "repeated_token_rate": -0.091223,
+    "understandable_heuristic_rate": 0.916667
+  },
+  "format": "fodci.phase146_final_decision",
+  "gates": {
+    "baseline_complete": true,
+    "manual_review_required": true,
+    "quantized_q4_evidence_not_overclaimed": true,
+    "qwen_complete": true,
+    "qwen_keyword_coverage_improved": true,
+    "qwen_readability_improved": true,
+    "same_benchmark_dataset": true,
+    "scope_policy_passed": true,
+    "stable_checkpoint_present": true,
+    "stable_checkpoint_release_hash_matches": true,
+    "stable_runtime_not_replaced": true
+  },
+  "phase": "14.6",
+  "phase_gates_passed": true,
+  "quantized_q4_validated": false,
+  "qwen_1_5b_needed_now": false,
+  "recommendation": "Use Qwen 0.5B only as an experimental language provider behind BackendScopedProvider. Do not replace the stable Fodci runtime and do not claim semantic correctness until execution-aware correctness tests pass.",
+  "schema_version": "1.0",
+  "scope_report": {
+    "passed_probe_count": 5,
+    "phase_gates_passed": true
+  },
+  "semantic_correctness_proven": false,
+  "stable_checkpoint": {
+    "expected_release_sha256": "3af5d2b6009f5a0fd0ff98644d9666bd0c30f0dfe8994f91524ae6df11433bfa",
+    "matches_release": true,
+    "path": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-testing-qa-v1.pt",
+    "sha256": "3af5d2b6009f5a0fd0ff98644d9666bd0c30f0dfe8994f91524ae6df11433bfa"
+  },
+  "stable_runtime_action": "keep_fodci_testing_qa_v1",
+  "stable_runtime_replaced": false
+}
