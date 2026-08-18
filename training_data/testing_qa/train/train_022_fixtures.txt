@@ -1,0 +1,8 @@
+### Instruction
+How should tests control time?
+
+### Input
+None
+
+### Response
+Inject a clock or patch a narrow time provider and make the test's timestamps explicit. Avoid sleeping to wait for time-based behavior; advance the controlled clock or use a bounded polling helper.

@@ -1,0 +1,8 @@
+### Instruction
+Why are fakes often preferable to unrestricted mocks?
+
+### Input
+None
+
+### Response
+A small fake models the collaborator's relevant behavior and keeps tests readable, while unrestricted mocks can validate an imagined call sequence without proving a useful contract.

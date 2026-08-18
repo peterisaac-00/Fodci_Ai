@@ -1,0 +1,8 @@
+### Instruction
+When is an end-to-end test justified?
+
+### Input
+None
+
+### Response
+Use it for a small number of critical user journeys that cross the deployed stack. Keep lower-level behavior covered by unit and integration tests so end-to-end failures remain diagnosable.

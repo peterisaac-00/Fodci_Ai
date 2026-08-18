@@ -1,0 +1,8 @@
+### Instruction
+How should a team interpret 95 percent line coverage with an untested authorization branch?
+
+### Input
+Coverage report: 95% lines; authorization deny branch uncovered.
+
+### Response
+Do not accept the percentage as sufficient. Add focused tests for allow and deny outcomes because a small untested security branch can be higher risk than many covered low-risk lines.

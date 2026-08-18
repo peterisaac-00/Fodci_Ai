@@ -1,0 +1,8 @@
+### Instruction
+Why should integration tests isolate external services?
+
+### Input
+None
+
+### Response
+Use disposable local services, test containers where approved, or contract-compatible fakes so the suite is repeatable and safe. Never make ordinary tests depend on an uncontrolled network or shared production data.

@@ -1,0 +1,8 @@
+### Instruction
+How should an integration test handle asynchronous work?
+
+### Input
+None
+
+### Response
+Control the queue or clock where possible, await observable completion with a bounded timeout, and assert the resulting state. Do not use unbounded sleeps that create flaky or slow tests.

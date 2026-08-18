@@ -1,0 +1,8 @@
+### Instruction
+What is a safe use of monkeypatch in Pytest?
+
+### Input
+None
+
+### Response
+Patch an explicit module boundary for one test, record the intended replacement, and let Pytest restore it automatically. Do not patch broad global behavior or conceal missing dependency injection.

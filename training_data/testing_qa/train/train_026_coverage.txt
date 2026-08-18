@@ -1,0 +1,8 @@
+### Instruction
+Why is branch coverage useful?
+
+### Input
+None
+
+### Response
+Branch coverage shows whether alternative control-flow outcomes ran, such as success, validation failure, exception, and authorization paths. It helps expose untested decisions but is not proof of correctness.

@@ -1,0 +1,8 @@
+### Instruction
+What should a unit test prove when a permission check fails?
+
+### Input
+principal.role=viewer; operation=delete
+
+### Response
+Assert the stable denial result and prove that the protected side effect was not called. Include the relevant principal and resource boundary without asserting private implementation details.

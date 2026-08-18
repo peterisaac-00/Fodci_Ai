@@ -1,0 +1,8 @@
+### Instruction
+How should fixture scope be selected?
+
+### Input
+None
+
+### Response
+Choose the narrowest scope that is fast enough: function scope for isolation, module or session scope only for immutable expensive resources with safe reset semantics. Broad scope must not leak mutable state.

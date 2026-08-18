@@ -1,0 +1,8 @@
+### Instruction
+How should an integration test prove transaction rollback?
+
+### Input
+Insert item succeeds; second constraint fails
+
+### Response
+Trigger a controlled failure after a write is attempted, assert the documented error, and query the isolated database to prove the partial state was rolled back. Cleanup must still run.

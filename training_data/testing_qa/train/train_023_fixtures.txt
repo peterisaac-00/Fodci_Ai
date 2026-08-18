@@ -1,0 +1,8 @@
+### Instruction
+How should flaky tests be diagnosed before adding retries?
+
+### Input
+None
+
+### Response
+Collect the failure pattern, isolate shared state and timing assumptions, run the test repeatedly or in a controlled order, and fix the cause. A retry can hide a real race and must not replace diagnosis.

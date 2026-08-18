@@ -1,0 +1,8 @@
+### Instruction
+What should a unit test do when a dependency raises an error?
+
+### Input
+None
+
+### Response
+Use a controlled fake or mock to produce the expected dependency failure, then assert the unit maps it to the documented result and does not swallow unexpected exceptions or retry without a bound.

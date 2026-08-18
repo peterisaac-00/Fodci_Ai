@@ -1,0 +1,8 @@
+### Instruction
+How should parameterization improve a Pytest suite?
+
+### Input
+None
+
+### Response
+Use `pytest.mark.parametrize` for a finite table of related inputs and expected outcomes. Give cases readable IDs and keep each case focused so failures identify the boundary condition.

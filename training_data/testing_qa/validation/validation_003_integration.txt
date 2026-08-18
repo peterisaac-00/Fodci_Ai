@@ -1,0 +1,8 @@
+### Instruction
+What should an API integration test verify after creating a resource?
+
+### Input
+POST /items with a valid JSON body
+
+### Response
+Send the request through the application boundary, assert status and response schema, then read the controlled persistence boundary or published event and verify the created resource and its important invariants.

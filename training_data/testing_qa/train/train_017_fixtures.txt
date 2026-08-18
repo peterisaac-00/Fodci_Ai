@@ -1,0 +1,8 @@
+### Instruction
+What is a Pytest fixture?
+
+### Input
+None
+
+### Response
+A fixture is a named, reusable setup and cleanup provider injected into tests. It should expose the smallest useful resource, have an explicit scope, and guarantee cleanup when setup succeeds.

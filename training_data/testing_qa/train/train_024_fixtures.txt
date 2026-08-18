@@ -1,0 +1,8 @@
+### Instruction
+What should a test double verify about calls?
+
+### Input
+None
+
+### Response
+Assert calls only when the interaction is part of the contract, such as an idempotency or audit requirement. Avoid asserting incidental call order or exact internal calls that do not affect observable behavior.

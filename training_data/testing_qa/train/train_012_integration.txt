@@ -1,0 +1,8 @@
+### Instruction
+What should a database integration test verify beyond a repository mock?
+
+### Input
+None
+
+### Response
+Verify migrations, queries, transactions, constraints, serialization, and rollback behavior against a controlled database implementation. A repository mock cannot reveal SQL or schema integration defects.

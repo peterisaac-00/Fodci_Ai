@@ -1,0 +1,8 @@
+### Instruction
+How should a Pytest unit test verify a validator rejects malformed input?
+
+### Input
+Input: {email: invalid}
+
+### Response
+Call the validator with one malformed case, assert the documented exception or result and stable field information, and keep the assertion scoped so unrelated failures cannot be mistaken for validation behavior.

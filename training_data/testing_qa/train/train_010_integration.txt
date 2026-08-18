@@ -1,0 +1,8 @@
+### Instruction
+How should an API integration test be structured?
+
+### Input
+None
+
+### Response
+Arrange a controlled application and dependency environment, send a realistic request through the public boundary, assert status and response schema, and verify important side effects or persistence without relying on production services.

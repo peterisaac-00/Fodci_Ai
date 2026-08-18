@@ -326,3 +326,31 @@ PYTHONPATH=src python scripts/benchmark_stage1.py \
 ```
 
 The benchmark uses deterministic greedy decoding and keyword coverage as a conservative diagnostic. It does not establish that the model can implement secure authentication, and security claims require threat modeling, code review, and execution-aware tests.
+
+## Phase 13.9 — Testing & Quality Assurance
+
+`generate_phase139_data.py` creates the testing and quality assurance specialist corpus under `training_data/testing_qa`, with 32 training records, 8 validation records, and 8 held-out benchmark records. The balanced curriculum covers Pytest unit tests, integration tests, fixtures and test doubles, and code coverage.
+
+```text
+python scripts/generate_phase139_data.py
+```
+
+`train_phase139_testing_qa.py` continues from `artifacts/checkpoints/fodci-security-auth-v1.pt` and writes `artifacts/checkpoints/fodci-testing-qa-v1.pt`. The default CPU-only run is bounded to twelve optimizer steps, uses response-only loss masking and a short-record-safe context window, and validates lineage, non-empty splits, finite loss, parameter changes, checkpoint existence, and reload consistency.
+
+```text
+PYTHONPATH=src python scripts/train_phase139_testing_qa.py
+```
+
+The workflow writes `artifacts/evaluation/phase139_testing_qa_training.json` and the tracked report `docs/experiments/phase139_testing_qa_training.md`. The held-out QA benchmark is run with:
+
+```text
+PYTHONPATH=src python scripts/benchmark_stage1.py \
+  --dataset training_data/testing_qa/evaluation/phase_139.jsonl \
+  --checkpoint artifacts/checkpoints/fodci-testing-qa-v1.pt \
+  --model-version fodci-testing-qa-v1 \
+  --run-prefix phase139-testing-qa \
+  --report artifacts/evaluation/phase139_testing_qa_benchmark.json \
+  --markdown docs/experiments/phase139_testing_qa_benchmark.md
+```
+
+The benchmark uses deterministic greedy decoding and keyword coverage as a conservative diagnostic. It does not establish that the model can generate executable tests or guarantee meaningful coverage; those claims require running and reviewing actual test suites.

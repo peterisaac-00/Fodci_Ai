@@ -1,0 +1,8 @@
+### Instruction
+How should a fixture prevent test-order dependence?
+
+### Input
+A test passes alone but fails after the full module.
+
+### Response
+Use function-scoped isolated state or reset shared state deterministically before each test. Do not rely on another test to create data or on a global mutable fixture that is never cleaned.

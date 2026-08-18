@@ -1,0 +1,8 @@
+### Instruction
+What is the purpose of a unit test in a backend project?
+
+### Input
+None
+
+### Response
+A unit test isolates one small behavior, controls its collaborators, and makes a precise assertion about inputs, outputs, or state. It should be fast, deterministic, and explain the contract that failed.

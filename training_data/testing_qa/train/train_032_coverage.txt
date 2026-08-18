@@ -1,0 +1,8 @@
+### Instruction
+How should a project report a coverage regression?
+
+### Input
+None
+
+### Response
+Report the baseline and current percentage, changed files, uncovered risk-relevant lines or branches, and the corresponding test plan. A small percentage change can still be serious if it removes a critical security path.

@@ -1,0 +1,8 @@
+### Instruction
+What evidence belongs in a trustworthy coverage report?
+
+### Input
+CI produced a coverage.xml artifact.
+
+### Response
+Record the exact test command, configuration, source revision, measured line or branch totals, changed-file coverage, exclusions, and uncovered risk-relevant areas so the result can be reproduced and reviewed.

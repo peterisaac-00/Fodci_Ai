@@ -1,0 +1,8 @@
+### Instruction
+How should a team use a coverage threshold?
+
+### Input
+None
+
+### Response
+Treat the threshold as a guardrail that prevents regression, not as a target achieved by trivial assertions. Review changed code and important risk paths even when the aggregate percentage is high.

@@ -1,0 +1,8 @@
+### Instruction
+What does an integration test verify?
+
+### Input
+None
+
+### Response
+An integration test exercises a meaningful boundary between components such as an API, database, queue, or authentication middleware. It verifies wiring, serialization, configuration, and real collaboration rather than one isolated function.

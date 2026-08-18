@@ -1,0 +1,8 @@
+### Instruction
+How should a Pytest test name communicate intent?
+
+### Input
+None
+
+### Response
+Use a stable name that describes the behavior and relevant condition, such as `test_rejects_expired_token`. A useful name identifies the contract without encoding incidental implementation details.

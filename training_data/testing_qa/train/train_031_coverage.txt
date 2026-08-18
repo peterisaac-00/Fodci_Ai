@@ -1,0 +1,8 @@
+### Instruction
+Why should coverage combine unit and integration runs?
+
+### Input
+None
+
+### Response
+Unit tests provide fast detailed coverage while integration tests cover wiring and real boundaries. Either alone can leave important paths unmeasured or falsely reassuring.

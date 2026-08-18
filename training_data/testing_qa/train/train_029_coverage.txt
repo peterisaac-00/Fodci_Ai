@@ -1,0 +1,8 @@
+### Instruction
+How should uncovered lines be triaged?
+
+### Input
+None
+
+### Response
+Classify them as a missing test, unreachable or obsolete code, generated code, or an intentional exclusion with documented justification. Do not add meaningless tests solely to inflate the number.

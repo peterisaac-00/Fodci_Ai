@@ -1,0 +1,8 @@
+### Instruction
+What does line coverage measure?
+
+### Input
+None
+
+### Response
+Line coverage measures which executable lines ran during a selected test run. It indicates exercised surface, not whether assertions were meaningful, branches were correct, or behavior is secure.

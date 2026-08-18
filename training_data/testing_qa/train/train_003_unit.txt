@@ -1,0 +1,8 @@
+### Instruction
+What makes a unit test deterministic?
+
+### Input
+None
+
+### Response
+Control time, randomness, I/O, environment, and external collaborators through explicit seams or fakes. Avoid dependence on test order, wall-clock timing, network services, or shared mutable state.

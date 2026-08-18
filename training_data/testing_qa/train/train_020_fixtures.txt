@@ -1,0 +1,8 @@
+### Instruction
+How should a Pytest fixture manage temporary files?
+
+### Input
+None
+
+### Response
+Use `tmp_path` or an equivalent managed temporary directory, create only the needed files, and let the fixture lifecycle remove them. Never write tests into the source tree or a shared fixed path.

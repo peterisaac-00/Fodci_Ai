@@ -1,0 +1,8 @@
+### Instruction
+How should a unit test protect a security-sensitive behavior?
+
+### Input
+None
+
+### Response
+Assert both the allowed behavior and the rejection paths, including no secret leakage, correct authorization boundaries, and that the protected side effect is not invoked after a failed check.

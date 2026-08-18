@@ -1,0 +1,8 @@
+### Instruction
+How should a test assert an exception with Pytest?
+
+### Input
+None
+
+### Response
+Use `pytest.raises` around the smallest operation expected to fail and assert the exception type and stable message or attributes when those are part of the contract. Do not wrap the entire test and hide unrelated failures.

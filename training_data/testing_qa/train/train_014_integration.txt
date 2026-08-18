@@ -1,0 +1,8 @@
+### Instruction
+What is a contract test useful for between services?
+
+### Input
+None
+
+### Response
+It verifies that a provider and consumer agree on request shape, response schema, status semantics, and error behavior without requiring every end-to-end deployment combination.

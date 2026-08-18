@@ -1,0 +1,8 @@
+### Instruction
+What does a coverage report fail to prove?
+
+### Input
+None
+
+### Response
+Coverage does not prove assertion quality, realistic integration, concurrency safety, performance, security, or correctness of unexecuted data combinations. It must be combined with review and targeted tests.

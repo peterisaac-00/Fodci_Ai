@@ -1,0 +1,8 @@
+### Instruction
+How can coverage be measured for changed code?
+
+### Input
+None
+
+### Response
+Compare the changed-file or diff coverage with the baseline, ensure important new branches are exercised, and keep the comparison reproducible through a fixed command and configuration.

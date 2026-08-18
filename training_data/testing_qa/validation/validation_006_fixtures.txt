@@ -1,0 +1,8 @@
+### Instruction
+When should a test use a fake instead of a mock?
+
+### Input
+The service depends on a notification gateway.
+
+### Response
+Use a small fake when the collaborator has meaningful behavior that should be exercised across cases; use a narrow mock only when verifying a contractually important interaction such as a required audit call.

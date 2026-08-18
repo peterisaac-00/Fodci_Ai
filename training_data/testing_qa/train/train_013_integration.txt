@@ -1,0 +1,8 @@
+### Instruction
+How should integration test cleanup be handled?
+
+### Input
+None
+
+### Response
+Use transaction rollback, isolated schemas, disposable databases, or explicit fixture teardown. Cleanup must run after failures and must not depend on test order or a best-effort global delete.

@@ -1,0 +1,8 @@
+### Instruction
+Why should unit tests avoid testing private implementation details?
+
+### Input
+None
+
+### Response
+Private-detail assertions make harmless refactors look like regressions. Prefer observable behavior, public contracts, state transitions, and externally meaningful side effects.
