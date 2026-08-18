@@ -74,3 +74,14 @@ python scripts/run_phase116_acceptance.py \
 A policy JSON object can be supplied with `--policy` to override documented `AcceptancePolicy` fields. The command returns exit code `0` only for `ACCEPT`, `2` for a valid evidence set that is `REJECT` or `INVALID_EVALUATION`, and `1` for missing/corrupt input stores or other command errors. Every evaluated decision is written to the immutable acceptance store when the required input records are available.
 
 The acceptance workflow requires real persisted evidence. It does not fabricate a Candidate artifact, training configuration, benchmark result, test-set identity, or fingerprint. Acceptance never promotes the candidate or changes the normal `fodci` runtime.
+
+
+## Phase 12.1 planning-aware autonomous workflow
+
+The existing `run_fodci_autonomous_tool_loop_smoke.py` now prints a concise validated plan and final step statuses. It remains a developer smoke workflow for the explicit opt-in autonomous loop; the normal interactive `fodci` session is not redesigned.
+
+```text
+python scripts/run_fodci_autonomous_tool_loop_smoke.py
+```
+
+The planning layer performs typed task analysis, creates dependency-aware steps, validates the plan before selection, records `pending`, `in_progress`, `completed`, `failed`, `blocked`, and `skipped` states, and can trigger a bounded replan when the existing recovery policy reports a meaningful recoverable failure. It never dispatches tools itself, executes commands, modifies files, runs parallel operations, or bypasses the read-only default registry.

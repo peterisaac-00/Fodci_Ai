@@ -2106,3 +2106,30 @@ complete evidence + safe improvement   → ACCEPT
 `AcceptanceReport` is both machine-readable and human-renderable. It stores model lineage, benchmark/dataset/policy versions, fingerprints, metrics, findings, warnings, reproducibility checks, training configuration, checkpoint identity, evaluation ID, decision, reason, and timestamp. `AcceptanceStore` persists reports atomically and prevents different results from reusing an evaluation ID.
 
 Acceptance does not equal promotion. The report can make a Candidate eligible for a future explicit promotion operation, but Phase 11.6 never calls `ModelArtifactRegistry.set_current_official`, never changes the current official pointer, and never replaces the runtime model. Rejected and invalid candidates remain auditable in the acceptance store.
+
+
+## Phase 12.1 — Better Planning
+
+Phase 12.1 integrates planning into the existing opt-in `AutonomousToolLoop` without replacing the Agent, ToolRegistry, ToolSelector, recovery policy, memory, evaluator, or verification layers.
+
+The planner now contains a typed task-analysis boundary, deterministic structured plan generation, plan validation, immutable execution state, and a bounded replanner. `TaskAnalysis` captures the objective, task type, requirements, constraints, expected changes, relevant project areas, dependencies, verification criteria, risks, confidence, and completeness. `ExecutionPlan` contains actionable `PlanStep` objects with dependency IDs, expected outcomes, risk level, and verification requirements. `PlanValidator` rejects duplicate IDs, unknown dependencies, cycles, execution payloads, excessive budgets, and malformed plan structure before execution.
+
+`PlanExecutionState` is the authoritative immutable runtime snapshot for plan progress. It stores the plan identity, revision, per-step `pending`, `in_progress`, `completed`, `failed`, `blocked`, `skipped`, or `needs_clarification` status, current step, replan count, and bounded state-change events. Only dependency-satisfied steps are eligible for selection. Successful tool evidence and verification update the state; a successful tool call alone does not prove task completion.
+
+When an existing structured recovery decision identifies a recoverable failure, `PlanReplanner` may generate one revised plan within the explicit `max_replans` ceiling. The replan preserves completed step evidence and reopens failed or in-progress work. It never executes tools, changes files, retries indefinitely, or bypasses safety policy. The resulting plan and state are written into `AutonomousLoopState`, `AutonomousLoopResult`, and the existing `ShortTermMemory` plan snapshot.
+
+The boundary remains:
+
+```text
+Task Analysis → Planner → Plan Validator → ExecutionPlan
+                                           ↓
+                              AutonomousToolLoop
+                                           ↓
+                         ToolSelector → ToolRegistry → Evidence
+                                           ↓
+                                PlanExecutionState
+                                           ↓
+                              Bounded PlanReplanner
+```
+
+Phase 12.1 does not add parallel execution, long-context handling, new tool capabilities, network access, shell bypasses, automatic Git mutation, model training, memory retrieval architecture, multi-agent orchestration, or production autonomy. `ToolRegistry.default()` remains read-only and the normal `fodci` interactive runtime remains separate from the autonomous developer workflow.

@@ -9,8 +9,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
+import hashlib
+import json
 import re
 from typing import Any
+from types import MappingProxyType
 
 from backend_ai.tools.project_context import ProjectContext
 
@@ -35,8 +38,20 @@ class PlanRiskLevel(str, Enum):
 
 
 class PlanStepStatus(str, Enum):
-    PLANNED = "PLANNED"
-    NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
+    """Lifecycle states for a declarative plan step.
+
+    ``PLANNED`` is retained as a compatibility alias for the initial pending
+    state used by earlier planner releases.
+    """
+
+    PENDING = "pending"
+    PLANNED = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+    SKIPPED = "skipped"
+    NEEDS_CLARIFICATION = "needs_clarification"
 
 
 class PlannerConfidence(str, Enum):
@@ -108,6 +123,44 @@ class PlannerRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskAnalysis:
+    """Bounded, typed analysis used as the input to structured plan generation."""
+
+    task: str
+    normalized_task: str
+    objective: str
+    task_type: PlannerTaskType
+    requirements: tuple[str, ...]
+    constraints: tuple[str, ...]
+    expected_changes: tuple[str, ...]
+    relevant_project_areas: tuple[str, ...]
+    dependencies: tuple[str, ...]
+    verification_criteria: tuple[str, ...]
+    risks: tuple["PlanRisk", ...]
+    confidence: PlannerConfidence
+    completeness: PlanCompleteness
+    warnings: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task": self.task,
+            "normalized_task": self.normalized_task,
+            "objective": self.objective,
+            "task_type": self.task_type.value,
+            "requirements": list(self.requirements),
+            "constraints": list(self.constraints),
+            "expected_changes": list(self.expected_changes),
+            "relevant_project_areas": list(self.relevant_project_areas),
+            "dependencies": list(self.dependencies),
+            "verification_criteria": list(self.verification_criteria),
+            "risks": [risk.to_dict() for risk in self.risks],
+            "confidence": self.confidence.value,
+            "completeness": self.completeness.value,
+            "warnings": list(self.warnings),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PlanStep:
     """One declarative step describing what should happen, never how a tool is called."""
 
@@ -171,7 +224,7 @@ class PlanRisk:
 
 @dataclass(frozen=True, slots=True)
 class ExecutionPlan:
-    """Complete declarative plan handed to future Phase 6.2, not executed here."""
+    """Complete declarative plan consumed by the opt-in autonomous executor."""
 
     task: str
     normalized_task: str
@@ -186,6 +239,7 @@ class ExecutionPlan:
     confidence: PlannerConfidence
     warnings: tuple[str, ...]
     completeness: PlanCompleteness
+    plan_id: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.steps, tuple):
@@ -200,6 +254,10 @@ class ExecutionPlan:
             raise ValueError("ExecutionPlan.confidence must be PlannerConfidence")
         if not isinstance(self.completeness, PlanCompleteness):
             raise ValueError("ExecutionPlan.completeness must be PlanCompleteness")
+        if self.plan_id is None:
+            object.__setattr__(self, "plan_id", derive_plan_id(self))
+        elif not isinstance(self.plan_id, str) or not self.plan_id.strip():
+            raise ValueError("ExecutionPlan.plan_id must be non-empty when supplied")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -216,7 +274,193 @@ class ExecutionPlan:
             "confidence": self.confidence.value,
             "warnings": list(self.warnings),
             "completeness": self.completeness.value,
+            "plan_id": self.plan_id,
         }
+
+
+class PlanExecutionEventType(str, Enum):
+    STATUS_CHANGED = "status_changed"
+    REPLANNED = "replanned"
+    VERIFICATION_REQUIRED = "verification_required"
+    VERIFICATION_PASSED = "verification_passed"
+    VERIFICATION_FAILED = "verification_failed"
+
+
+@dataclass(frozen=True, slots=True)
+class PlanExecutionEvent:
+    """One bounded, explainable change to plan execution state."""
+
+    event_type: PlanExecutionEventType
+    step_id: str | None
+    from_status: PlanStepStatus | None
+    to_status: PlanStepStatus | None
+    reason: str
+    revision: int
+    evidence: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.event_type, PlanExecutionEventType):
+            raise ValueError("event_type must be PlanExecutionEventType")
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise ValueError("event reason must contain text")
+        if not isinstance(self.revision, int) or self.revision < 0:
+            raise ValueError("event revision must be non-negative")
+        if not isinstance(self.evidence, tuple):
+            object.__setattr__(self, "evidence", tuple(self.evidence))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "event_type": self.event_type.value,
+            "step_id": self.step_id,
+            "from_status": self.from_status.value if self.from_status else None,
+            "to_status": self.to_status.value if self.to_status else None,
+            "reason": self.reason,
+            "revision": self.revision,
+            "evidence": list(self.evidence),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PlanExecutionState:
+    """Immutable execution state that makes a plan operational rather than descriptive."""
+
+    plan_id: str
+    revision: int
+    statuses: Mapping[str, PlanStepStatus]
+    current_step_id: str | None = None
+    next_step_id: str | None = None
+    replan_count: int = 0
+    events: tuple[PlanExecutionEvent, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.plan_id, str) or not self.plan_id.strip():
+            raise ValueError("plan_id must contain text")
+        if not isinstance(self.revision, int) or self.revision < 0:
+            raise ValueError("revision must be non-negative")
+        if not isinstance(self.replan_count, int) or self.replan_count < 0:
+            raise ValueError("replan_count must be non-negative")
+        normalized = {str(key): value for key, value in dict(self.statuses).items()}
+        if any(not isinstance(value, PlanStepStatus) for value in normalized.values()):
+            raise ValueError("statuses must map step IDs to PlanStepStatus")
+        object.__setattr__(self, "statuses", MappingProxyType(normalized))
+        if not isinstance(self.events, tuple):
+            object.__setattr__(self, "events", tuple(self.events))
+
+    @classmethod
+    def from_plan(cls, plan: ExecutionPlan, *, prior: "PlanExecutionState | None" = None, reason: str = "plan created") -> "PlanExecutionState":
+        previous = dict(prior.statuses) if prior is not None else {}
+        statuses = {}
+        for step in plan.steps:
+            prior_status = previous.get(step.step_id)
+            if prior_status in {PlanStepStatus.FAILED, PlanStepStatus.BLOCKED, PlanStepStatus.IN_PROGRESS}:
+                prior_status = PlanStepStatus.PENDING
+            statuses[step.step_id] = prior_status or (step.status if step.status is not PlanStepStatus.NEEDS_CLARIFICATION else PlanStepStatus.NEEDS_CLARIFICATION)
+        revision = (prior.revision + 1) if prior is not None else 0
+        events = list(prior.events) if prior is not None else []
+        if prior is not None:
+            events.append(PlanExecutionEvent(PlanExecutionEventType.REPLANNED, None, None, None, reason, revision))
+        state = cls(plan.plan_id or derive_plan_id(plan), revision, statuses, prior.current_step_id if prior else None, None, (prior.replan_count + 1) if prior else 0, tuple(events[-128:]))
+        return replace_plan_execution_next(state, plan)
+
+    def transition(self, plan: ExecutionPlan, step_id: str, status: PlanStepStatus, *, reason: str, evidence: Sequence[str] = ()) -> "PlanExecutionState":
+        if step_id not in {step.step_id for step in plan.steps}:
+            raise ValueError(f"unknown plan step: {step_id}")
+        current = self.statuses.get(step_id, PlanStepStatus.PENDING)
+        if current is status and status is not PlanStepStatus.IN_PROGRESS:
+            return self
+        statuses = dict(self.statuses)
+        statuses[step_id] = status
+        event_type = PlanExecutionEventType.STATUS_CHANGED
+        if status is PlanStepStatus.COMPLETED and any("verif" in item.casefold() for item in evidence):
+            event_type = PlanExecutionEventType.VERIFICATION_PASSED
+        event = PlanExecutionEvent(event_type, step_id, current, status, reason, self.revision, tuple(evidence))
+        updated = PlanExecutionState(self.plan_id, self.revision, statuses, step_id if status is PlanStepStatus.IN_PROGRESS else self.current_step_id, None, self.replan_count, (*self.events[-127:], event))
+        return replace_plan_execution_next(updated, plan)
+
+    def next_ready_step(self, plan: ExecutionPlan) -> str | None:
+        statuses = self.statuses
+        for step in plan.steps:
+            if statuses.get(step.step_id, PlanStepStatus.PENDING) not in {PlanStepStatus.PENDING, PlanStepStatus.PLANNED}:
+                continue
+            if all(statuses.get(dep, PlanStepStatus.PENDING) is PlanStepStatus.COMPLETED for dep in step.dependencies):
+                return step.step_id
+        return None
+
+    @property
+    def completed_step_ids(self) -> tuple[str, ...]:
+        return tuple(step_id for step_id, status in self.statuses.items() if status is PlanStepStatus.COMPLETED)
+
+    @property
+    def failed_step_ids(self) -> tuple[str, ...]:
+        return tuple(step_id for step_id, status in self.statuses.items() if status is PlanStepStatus.FAILED)
+
+    @property
+    def blocked_step_ids(self) -> tuple[str, ...]:
+        return tuple(step_id for step_id, status in self.statuses.items() if status is PlanStepStatus.BLOCKED)
+
+    @property
+    def skipped_step_ids(self) -> tuple[str, ...]:
+        return tuple(step_id for step_id, status in self.statuses.items() if status is PlanStepStatus.SKIPPED)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plan_id": self.plan_id,
+            "revision": self.revision,
+            "statuses": {key: value.value for key, value in sorted(self.statuses.items())},
+            "current_step_id": self.current_step_id,
+            "completed_step_ids": list(self.completed_step_ids),
+            "failed_step_ids": list(self.failed_step_ids),
+            "blocked_step_ids": list(self.blocked_step_ids),
+            "skipped_step_ids": list(self.skipped_step_ids),
+            "next_step_id": self.next_step_id,
+            "replan_count": self.replan_count,
+            "events": [event.to_dict() for event in self.events],
+        }
+
+
+def replace_plan_execution_next(state: PlanExecutionState, plan: ExecutionPlan) -> PlanExecutionState:
+    next_step = state.next_ready_step(plan)
+    return PlanExecutionState(state.plan_id, state.revision, state.statuses, state.current_step_id, next_step, state.replan_count, state.events)
+
+
+@dataclass(frozen=True, slots=True)
+class ReplanRequest:
+    task: str
+    current_plan: ExecutionPlan
+    execution_state: PlanExecutionState
+    project_context: ProjectContext | None
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise ValueError("replan reason must contain text")
+
+
+@dataclass(frozen=True, slots=True)
+class ReplanResult:
+    plan: ExecutionPlan | None
+    execution_state: PlanExecutionState
+    validation: "PlanValidationResult"
+    changed: bool
+    reason: str
+
+
+class PlanReplanner:
+    """Bounded replanner that reuses the existing Planner and never executes tools."""
+
+    def __init__(self, planner: "Planner | None" = None) -> None:
+        self.planner = planner or Planner()
+
+    def replan(self, request: ReplanRequest) -> ReplanResult:
+        result = self.planner.plan(PlannerRequest(request.task, request.project_context))
+        validation = getattr(result, "validation", None)
+        if not isinstance(validation, PlanValidationResult):
+            validation = PlanValidator().validate(result.plan) if result.plan is not None else PlanValidationResult(False, ("replanner returned no plan",))
+        if result.plan is None:
+            return ReplanResult(None, request.execution_state, validation, False, request.reason)
+        changed = result.plan.plan_id != request.current_plan.plan_id
+        state = PlanExecutionState.from_plan(result.plan, prior=request.execution_state, reason=request.reason)
+        return ReplanResult(result.plan, state, validation, changed, request.reason)
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +493,54 @@ class PlannerResult:
             "warnings": list(self.warnings),
             "errors": list(self.errors),
         }
+
+
+class TaskAnalyzer:
+    """Analyze a task and available context without inspecting or executing the repository."""
+
+    def __init__(self, *, config: PlannerConfig | None = None) -> None:
+        self.config = config or PlannerConfig()
+
+    def analyze(self, request: PlannerRequest) -> TaskAnalysis:
+        if not isinstance(request, PlannerRequest):
+            raise ValueError("request must be a PlannerRequest")
+        config = request.config
+        task = _bounded_text(request.task, config.max_task_length)
+        normalized = _normalize_task(task)
+        task_type = _classify_task(normalized)
+        warnings: list[str] = []
+        if len(request.task) > config.max_task_length:
+            warnings.append("task exceeded max_task_length and was safely truncated")
+        context = request.project_context
+        if context is None:
+            warnings.append("ProjectContext was not supplied; project-aware assumptions remain unconfirmed")
+        elif context.completeness == "partial" or context.truncated:
+            warnings.append("ProjectContext is partial; missing project evidence must be inspected later")
+        if task_type is PlannerTaskType.UNKNOWN:
+            warnings.append("task category is ambiguous; the plan preserves ambiguity instead of inventing implementation details")
+        if _is_ambiguous(normalized):
+            warnings.append("task is ambiguous or underspecified; clarification may be required before implementation")
+        constraints = _build_constraints(task_type, context)
+        verification = _verification_strategy(task_type)
+        relevant = _relevant_project_areas(task_type, context)
+        dependencies = _analysis_dependencies(task_type)
+        requirements = _analysis_requirements(task_type, normalized)
+        return TaskAnalysis(
+            task=task,
+            normalized_task=normalized,
+            objective=_bounded_text(_goal(task_type, normalized), config.max_task_length),
+            task_type=task_type,
+            requirements=tuple(_bounded_items(requirements, config.max_constraints, warnings, "requirements")),
+            constraints=tuple(_bounded_items(constraints, config.max_constraints, warnings, "constraints")),
+            expected_changes=tuple(_expected_changes(task_type)),
+            relevant_project_areas=tuple(_bounded_items(relevant, config.max_constraints, warnings, "relevant_project_areas")),
+            dependencies=tuple(_bounded_items(dependencies, config.max_constraints, warnings, "dependencies")),
+            verification_criteria=tuple(_bounded_items(verification, config.max_constraints, warnings, "verification_criteria")),
+            risks=tuple(_bounded_risks(_build_risks(task_type, context, normalized), config.max_risks, warnings)),
+            confidence=_confidence(task_type, context, normalized),
+            completeness=_completeness(task_type, context, normalized),
+            warnings=tuple(_bounded_items(_unique_sorted(warnings), config.max_warnings, warnings, "warnings")),
+        )
 
 
 class PlanValidationError(ValueError):
@@ -309,11 +601,12 @@ class PlanValidator:
 
 
 class Planner:
-    """Create a plan from supplied text/context only; no tool or execution access exists."""
+    """Create and validate a plan from supplied text/context only; no tool access exists."""
 
-    def __init__(self, *, config: PlannerConfig | None = None, validator: PlanValidator | None = None) -> None:
+    def __init__(self, *, config: PlannerConfig | None = None, validator: PlanValidator | None = None, analyzer: TaskAnalyzer | None = None) -> None:
         self.config = config or PlannerConfig()
         self.validator = validator or PlanValidator()
+        self.analyzer = analyzer or TaskAnalyzer(config=self.config)
 
     def create_plan(
         self,
@@ -337,20 +630,12 @@ class Planner:
         if not task:
             validation = PlanValidationResult(False, ("task must not be empty",))
             return PlannerResult(PlannerResultStatus.INVALID_REQUEST, None, validation, errors=validation.errors)
-        normalized = _normalize_task(task)
-        task_type = _classify_task(normalized)
-        warnings: list[str] = []
-        if len(request.task) > config.max_task_length:
-            warnings.append("task exceeded max_task_length and was safely truncated")
+        analysis = self.analyzer.analyze(request)
+        task = analysis.task
+        normalized = analysis.normalized_task
+        task_type = analysis.task_type
+        warnings: list[str] = list(analysis.warnings)
         context = request.project_context
-        if context is None:
-            warnings.append("ProjectContext was not supplied; project-aware assumptions remain unconfirmed")
-        elif context.completeness == "partial" or context.truncated:
-            warnings.append("ProjectContext is partial; missing project evidence must be inspected later")
-        if task_type is PlannerTaskType.UNKNOWN:
-            warnings.append("task category is ambiguous; the plan preserves ambiguity instead of inventing implementation details")
-        if _is_ambiguous(normalized):
-            warnings.append("task is ambiguous or underspecified; clarification may be required before implementation")
         steps = _build_steps(task_type, context, normalized, config.max_plan_text_length)
         assumptions = _build_assumptions(task_type, context, normalized)
         constraints = _build_constraints(task_type, context)
@@ -379,6 +664,19 @@ class Planner:
             return PlannerResult(PlannerResultStatus.VALIDATION_ERROR, None, validation, errors=validation.errors)
         status = PlannerResultStatus.INCOMPLETE if plan.completeness is not PlanCompleteness.COMPLETE else PlannerResultStatus.CREATED
         return PlannerResult(status, plan, validation, warnings=plan.warnings)
+
+
+def format_plan_summary(plan: ExecutionPlan, state: PlanExecutionState | None = None) -> str:
+    """Render only concise plan facts and statuses for terminal visibility."""
+
+    lines = ["Plan:"]
+    statuses = state.statuses if state is not None else {step.step_id: step.status for step in plan.steps}
+    for index, step in enumerate(plan.steps, start=1):
+        status = statuses.get(step.step_id, step.status)
+        lines.append(f"{index}. {step.title} [{status.value}]")
+    if state is not None and state.replan_count:
+        lines.append(f"Replans: {state.replan_count}")
+    return "\n".join(lines)
 
 
 def create_plan(
@@ -416,6 +714,39 @@ def _classify_task(task: str) -> PlannerTaskType:
     if any(word in text for word in ("add", "implement", "create", "build", "feature", "endpoint")):
         return PlannerTaskType.FEATURE
     return PlannerTaskType.UNKNOWN
+
+
+def derive_plan_id(plan: ExecutionPlan) -> str:
+    """Return a stable identity for the declarative plan shape, excluding mutable state."""
+
+    payload = {
+        "task": plan.task,
+        "normalized_task": plan.normalized_task,
+        "goal": plan.goal,
+        "task_type": plan.task_type.value,
+        "steps": [
+            {
+                "step_id": step.step_id,
+                "title": step.title,
+                "objective": step.objective,
+                "rationale": step.rationale,
+                "expected_result": step.expected_result,
+                "dependencies": list(step.dependencies),
+                "risk_level": step.risk_level.value,
+                "verification_required": step.verification_required,
+            }
+            for step in plan.steps
+        ],
+        "assumptions": list(plan.assumptions),
+        "constraints": list(plan.constraints),
+        "risks": [risk.to_dict() for risk in plan.risks],
+        "expected_changes": list(plan.expected_changes),
+        "verification_strategy": list(plan.verification_strategy),
+        "confidence": plan.confidence.value,
+        "completeness": plan.completeness.value,
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return "plan-" + hashlib.sha256(encoded).hexdigest()[:16]
 
 
 def _goal(task_type: PlannerTaskType, task: str) -> str:
@@ -566,6 +897,36 @@ def _completeness(task_type: PlannerTaskType, context: ProjectContext | None, ta
     return PlanCompleteness.COMPLETE
 
 
+def _analysis_requirements(task_type: PlannerTaskType, task: str) -> list[str]:
+    if task_type is PlannerTaskType.UNKNOWN:
+        return ["Clarify the requested outcome before implementation."]
+    return [f"Satisfy the requested {task_type.value.casefold().replace('_', ' ')} objective.", "Preserve existing behavior outside the confirmed change boundary."]
+
+
+def _analysis_dependencies(task_type: PlannerTaskType) -> list[str]:
+    if task_type in {PlannerTaskType.FEATURE, PlannerTaskType.BUG_FIX, PlannerTaskType.REFACTOR}:
+        return ["Inspect relevant project conventions before implementation.", "Define verification before declaring completion."]
+    if task_type is PlannerTaskType.TEST_ADDITION:
+        return ["Understand the target behavior and existing test conventions first."]
+    if task_type is PlannerTaskType.DEPENDENCY_CHANGE:
+        return ["Confirm compatibility and dependency metadata before changing versions."]
+    return ["Establish the affected project area before applying a change."]
+
+
+def _relevant_project_areas(task_type: PlannerTaskType, context: ProjectContext | None) -> list[str]:
+    areas: list[str] = []
+    if context is not None:
+        areas.extend(context.source_directories[:4])
+        areas.extend(context.test_directories[:4])
+        areas.extend(context.config_files[:4])
+        areas.extend(context.documentation_directories[:4])
+    if not areas:
+        areas.append("project areas requiring bounded inspection")
+    if task_type is PlannerTaskType.DOCUMENTATION_CHANGE and not context:
+        areas.append("documentation files")
+    return list(dict.fromkeys(areas))
+
+
 def _is_ambiguous(task: str) -> bool:
     text = task.casefold()
     if len(text.split()) <= 2:
@@ -652,5 +1013,15 @@ __all__ = [
     "PlannerResult",
     "PlannerResultStatus",
     "PlannerTaskType",
+    "PlanExecutionEventType",
+    "PlanExecutionEvent",
+    "PlanExecutionState",
+    "PlanReplanner",
+    "ReplanRequest",
+    "ReplanResult",
+    "TaskAnalysis",
+    "TaskAnalyzer",
     "create_plan",
+    "derive_plan_id",
+    "format_plan_summary",
 ]

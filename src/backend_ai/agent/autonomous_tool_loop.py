@@ -40,6 +40,10 @@ from backend_ai.agent.planner import (
     PlanCompleteness,
     PlanRiskLevel,
     PlanStep,
+    PlanStepStatus,
+    PlanExecutionState,
+    PlanReplanner,
+    ReplanRequest,
     Planner,
     PlannerConfidence,
     PlannerRequest,
@@ -54,7 +58,7 @@ from backend_ai.agent.self_correction import SelfCorrectionRequest, SelfCorrecti
 from backend_ai.agent.regression_protection import RegressionProtection, RegressionProtectionRequest, RegressionProtectionResult
 from backend_ai.agent.final_verification import FinalVerificationRequest, FinalVerificationResult, verify_final_state
 from backend_ai.agent.completion import CompletionDecision, EvidenceStrength, TaskCompletionEvidence, TaskCompletionRequest, TaskCompletionResult, verify_task_completion
-from backend_ai.agent.recovery import RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
+from backend_ai.agent.recovery import RecoveryAction, RecoveryContext, RecoveryResult, RecoveryStatus, decide_recovery
 from backend_ai.agent.experience_records import ExperienceEvaluation, ExperienceLifecycleStatus, ExperienceOutcomeStatus, ExperienceProjectIdentity, ExperienceRecord, ExperienceRecordError, ExperienceRecords, ExperienceSession, ExperienceVerification
 from backend_ai.agent.memory_retrieval import MemoryRetrieval, MemoryRetrievalError, MemoryRetrievalRequest, MemoryRetrievalResult
 from backend_ai.agent.long_term_memory import LongTermMemory, LongTermMemoryEntry, LongTermMemoryError
@@ -192,6 +196,7 @@ class AutonomousLoopConfig:
     max_tool_result_chars: int = 4_000
     max_history_items: int = 8
     max_task_prompt_chars: int = 2_048
+    max_replans: int = 3
     system_prompt: str = (
         "Fodci autonomous tool loop. Return exactly ACTION: TOOL with ARGS JSON "
         "or ACTION: FINAL with ARGS {\"message\": \"...\"}. Never emit prose commands."
@@ -205,13 +210,14 @@ class AutonomousLoopConfig:
             "max_tool_result_chars",
             "max_history_items",
             "max_task_prompt_chars",
+            "max_replans",
         ):
             value = getattr(self, field_name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{field_name} must be a positive integer")
         if self.max_context_tokens <= self.reserve_response_tokens:
             raise ValueError("max_context_tokens must exceed reserve_response_tokens")
-        if self.max_tool_result_chars > 64_000 or self.max_history_items > 128 or self.max_task_prompt_chars > 16_384:
+        if self.max_tool_result_chars > 64_000 or self.max_history_items > 128 or self.max_task_prompt_chars > 16_384 or self.max_replans > 16:
             raise ValueError("Autonomous loop budget exceeds the safety ceiling")
         if not isinstance(self.system_prompt, str) or not self.system_prompt.strip():
             raise ValueError("system_prompt must contain text")
@@ -331,6 +337,7 @@ class AutonomousLoopState:
     long_term_memories: tuple[LongTermMemoryEntry, ...] = ()
     experience_record: ExperienceRecord | None = None
     memory_retrieval: MemoryRetrievalResult | None = None
+    plan_execution: PlanExecutionState | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -356,6 +363,7 @@ class AutonomousLoopState:
             "long_term_memories": [item.to_dict() for item in self.long_term_memories],
             "experience_record": self.experience_record.to_dict() if self.experience_record else None,
             "memory_retrieval": self.memory_retrieval.to_dict() if self.memory_retrieval else None,
+            "plan_execution": self.plan_execution.to_dict() if self.plan_execution else None,
         }
 
 
@@ -385,6 +393,7 @@ class AutonomousLoopResult:
     long_term_memories: tuple[LongTermMemoryEntry, ...] = ()
     experience_record: ExperienceRecord | None = None
     memory_retrieval: MemoryRetrievalResult | None = None
+    plan_execution: PlanExecutionState | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -410,6 +419,7 @@ class AutonomousLoopResult:
             "long_term_memories": [item.to_dict() for item in self.long_term_memories],
             "experience_record": self.experience_record.to_dict() if self.experience_record else None,
             "memory_retrieval": self.memory_retrieval.to_dict() if self.memory_retrieval else None,
+            "plan_execution": self.plan_execution.to_dict() if self.plan_execution else None,
         }
 
 
@@ -499,6 +509,7 @@ class AutonomousToolLoop:
         registry: ToolRegistry | None = None,
         planner: Planner | None = None,
         selector: ToolSelector | None = None,
+        replanner: PlanReplanner | None = None,
         config: AutonomousLoopConfig | None = None,
     ) -> None:
         if not callable(getattr(engine, "generate", None)):
@@ -510,6 +521,7 @@ class AutonomousToolLoop:
         self.registry = registry or ToolRegistry.default()
         self.planner = planner or Planner()
         self.selector = selector or ToolSelector()
+        self.replanner = replanner or PlanReplanner(self.planner)
         self.config = config or AutonomousLoopConfig()
         budget_config = AgentConfig(
             max_steps=_EMERGENCY_TOOL_EXECUTION_BOUND + 2,
@@ -574,6 +586,7 @@ class AutonomousToolLoop:
         usage = AgentUsage()
         context = request.project_context
         plan: ExecutionPlan | None = None
+        plan_execution_state: PlanExecutionState | None = None
         current_selection: ToolSelectionDecision | None = None
         current_step_id: str | None = None
         last_call: ToolCall | None = None
@@ -600,7 +613,40 @@ class AutonomousToolLoop:
         failed_action_signatures: list[str] = []
 
         def snapshot() -> AutonomousLoopState:
-            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result)
+            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result, plan_execution_state)
+
+        def update_plan_step(step_id: str | None, status: PlanStepStatus, *, reason: str, evidence: Sequence[str] = ()) -> None:
+            nonlocal plan, plan_execution_state
+            if plan is None or plan_execution_state is None or step_id is None:
+                return
+            try:
+                plan_execution_state = plan_execution_state.transition(plan, step_id, status, reason=reason, evidence=evidence)
+                plan = replace(plan, steps=tuple(replace(item, status=status if item.step_id == step_id else plan_execution_state.statuses.get(item.step_id, item.status)) for item in plan.steps), plan_id=plan.plan_id)
+                memory.update_plan_state(plan, current_step=step_id if status is PlanStepStatus.IN_PROGRESS else None, completed_steps=plan_execution_state.completed_step_ids, blocked_steps=plan_execution_state.blocked_step_ids, failed_steps=plan_execution_state.failed_step_ids, next_step=plan_execution_state.next_ready_step(plan))
+            except (ShortTermMemoryError, ValueError) as exc:
+                warnings.append(f"plan state update unavailable: {exc}")
+
+        def trigger_replan(reason: str) -> bool:
+            nonlocal plan, plan_execution_state, plan_index
+            if plan is None or plan_execution_state is None:
+                return False
+            if plan_execution_state.replan_count >= self.config.max_replans:
+                warnings.append("replan budget exhausted; preserving the current plan")
+                return False
+            replanned = self.replanner.replan(ReplanRequest(request.task, plan, plan_execution_state, context, reason))
+            if replanned.plan is None or not replanned.validation.valid:
+                warnings.extend(replanned.validation.errors or ("replanning produced no valid plan",))
+                return False
+            plan = replanned.plan
+            plan_execution_state = replanned.execution_state
+            next_step = plan_execution_state.next_ready_step(plan)
+            plan_index = next((index for index, item in enumerate(plan.steps) if item.step_id == next_step), len(plan.steps))
+            warnings.append(f"plan replanned: {reason}")
+            try:
+                memory.update_plan_state(plan, completed_steps=plan_execution_state.completed_step_ids, blocked_steps=plan_execution_state.blocked_step_ids, failed_steps=plan_execution_state.failed_step_ids, next_step=next_step)
+            except ShortTermMemoryError as exc:
+                warnings.append(f"short-term memory replan update unavailable: {exc}")
+            return True
 
         def finish(_request: AutonomousLoopRequest, status: LoopStatus, answer: str, finish_plan: ExecutionPlan | None, finish_context: ProjectContext | None, finish_state: AutonomousLoopState, finish_steps: Sequence[AutonomousLoopStep], finish_calls: Sequence[ToolCall], finish_results: Sequence[ToolResult], finish_usage: AgentUsage, finish_warnings: Sequence[str], finish_errors: Sequence[str]) -> AutonomousLoopResult:
             nonlocal stop_evaluation, budget_decision, final_verification
@@ -721,8 +767,9 @@ class AutonomousToolLoop:
                 errors.extend(plan_result.errors or plan_result.warnings)
                 return finish(request, LoopStatus.FAILED, "", plan_result.plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
             plan = plan_result.plan
+            plan_execution_state = PlanExecutionState.from_plan(plan)
             try:
-                memory.update_plan_state(plan, next_step=plan.steps[0].step_id if plan.steps else None)
+                memory.update_plan_state(plan, current_step=None, next_step=plan_execution_state.next_ready_step(plan))
             except ShortTermMemoryError as exc:
                 errors.append(f"short-term memory plan update failed: {exc}")
             warnings.extend(plan_result.warnings)
@@ -770,6 +817,8 @@ class AutonomousToolLoop:
 
                 plan_step = plan.steps[plan_index] if plan_index < len(plan.steps) else None
                 current_step_id = plan_step.step_id if plan_step else (plan.steps[-1].step_id if plan.steps else None)
+                if plan_step is not None:
+                    update_plan_step(plan_step.step_id, PlanStepStatus.IN_PROGRESS, reason="step selected for execution")
                 if machine.state is not LoopLifecycleState.SELECTING_TOOL:
                     machine.transition(LoopLifecycleState.SELECTING_TOOL)
                 current_selection = None
@@ -783,6 +832,7 @@ class AutonomousToolLoop:
                             message = current_selection.selection_reason if current_selection else "Declarative plan step requires no registered tool."
                             warnings.append(f"Skipped non-executable plan step {plan_step.step_id}: {message}")
                             skipped_step_ids.append(plan_step.step_id)
+                            update_plan_step(plan_step.step_id, PlanStepStatus.SKIPPED, reason=message)
                             steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.SELECTING_TOOL, LoopLifecycleState.REQUESTING_NEXT_ACTION, plan_step.step_id, None, {}, None, None, "", False, False, warnings=(message,)))
                             plan_index += 1
                             cycle_index += 1
@@ -974,16 +1024,28 @@ class AutonomousToolLoop:
                             experience_session.record_correction(recovery_result.decision.reason, recovery_action, error_id=None)
                         except ExperienceRecordError as exc:
                             warnings.append(f"experience correction recording unavailable: {exc}")
-                    if recovery_result.decision.status is RecoveryStatus.CONTINUE and plan_index + 1 < len(plan.steps):
-                        if current_step_id:
-                            completed_step_ids.append(current_step_id)
-                        history.append(AgentMessage(AgentMessageRole.TOOL, _sanitize_text(_bounded_text(f"Recovery decision: {recovery_action}. {recovery_result.decision.reason}", self.config.max_tool_result_chars)), name="recovery", call_id=call.call_id))
-                        steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, current_step_id, call.name, call.arguments, tool_result.error_code, tool_result.error_code, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, warnings=(recovery_action,), errors=(message,)))
-                        machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
-                        plan_index += 1
-                        cycle_index += 1
-                        machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
-                        continue
+                    if recovery_result.decision.status is RecoveryStatus.CONTINUE:
+                        update_plan_step(current_step_id, PlanStepStatus.FAILED, reason=message, evidence=(recovery_action,))
+                        if recovery_result.decision.action is RecoveryAction.REPLAN:
+                            replanned = trigger_replan(f"tool {call.name} failed: {message}")
+                            if replanned:
+                                history.append(AgentMessage(AgentMessageRole.TOOL, _sanitize_text(_bounded_text(f"Recovery decision: {recovery_action}. Plan revised: {message}", self.config.max_tool_result_chars)), name="recovery", call_id=call.call_id))
+                                steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, current_step_id, call.name, call.arguments, tool_result.error_code, tool_result.error_code, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, warnings=(recovery_action, "REPLAN"), errors=(message,)))
+                                machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
+                                cycle_index += 1
+                                machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
+                                continue
+                            update_plan_step(current_step_id, PlanStepStatus.BLOCKED, reason="recovery could not produce a valid revised plan", evidence=(recovery_action,))
+                        elif plan_index + 1 < len(plan.steps):
+                            if current_step_id:
+                                completed_step_ids.append(current_step_id)
+                            history.append(AgentMessage(AgentMessageRole.TOOL, _sanitize_text(_bounded_text(f"Recovery decision: {recovery_action}. Continuing with the next planned step: {message}", self.config.max_tool_result_chars)), name="recovery", call_id=call.call_id))
+                            steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, current_step_id, call.name, call.arguments, tool_result.error_code, tool_result.error_code, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, warnings=(recovery_action,), errors=(message,)))
+                            machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
+                            plan_index += 1
+                            cycle_index += 1
+                            machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
+                            continue
                     stop_evaluation = evaluate_stop_condition(StopConditionRequest(
                         plan=plan,
                         completed_step_ids=tuple(completed_step_ids),
@@ -1017,15 +1079,19 @@ class AutonomousToolLoop:
                         pending_verification_steps.clear()
                         if current_step_id:
                             completed_step_ids.append(current_step_id)
+                            update_plan_step(current_step_id, PlanStepStatus.COMPLETED, reason="verification passed", evidence=verification.evidence or (verification.message or "verification passed",))
                         completion_evidence.extend(verification.evidence or (verification.message or "verification passed",))
                     elif current_step_id:
                         pending_verification_steps.append(current_step_id)
+                        update_plan_step(current_step_id, PlanStepStatus.IN_PROGRESS, reason="verification evidence is pending")
                 elif _tool_requires_verification(call.name, plan_step):
                     if current_step_id:
                         pending_verification_steps.append(current_step_id)
+                        update_plan_step(current_step_id, PlanStepStatus.IN_PROGRESS, reason="post-operation verification is required")
                     verification = VerificationEvidence.pending(call.name, "A post-operation verification step is still required.")
                 elif current_step_id:
                     completed_step_ids.append(current_step_id)
+                    update_plan_step(current_step_id, PlanStepStatus.COMPLETED, reason="structured successful observation", evidence=(f"{call.name} returned a structured successful observation",))
                     completion_evidence.append(f"{call.name} returned a structured successful observation")
                 machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
                 history.append(AgentMessage(AgentMessageRole.ASSISTANT, _sanitize_text(_bounded_text(model_response, _MAX_TEXT_CHARS)), call_id=call.call_id))
@@ -1149,7 +1215,7 @@ class AutonomousToolLoop:
         return _bounded_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
     def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None, recovery: RecoveryResult | None = None, completion: TaskCompletionResult | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval)
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval, state.plan_execution)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str, short_term_memory: ShortTermMemory | None = None) -> AutonomousLoopResult:
         snapshot = short_term_memory.snapshot() if short_term_memory is not None else None

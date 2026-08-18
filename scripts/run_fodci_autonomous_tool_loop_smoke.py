@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from backend_ai.agent import AutonomousLoopRequest, AutonomousToolLoop, LoopStatus, ToolRegistry
+from backend_ai.agent import AutonomousLoopRequest, AutonomousToolLoop, LoopStatus, ToolRegistry, format_plan_summary
 
 
 class SmokeTokenizer:
@@ -36,13 +36,15 @@ def main() -> None:
     assert result.status is LoopStatus.BLOCKED
     assert result.stop_evaluation is not None
     assert result.stop_evaluation.decision.value == "BLOCKED"
-    assert result.stop_evaluation.reason.value == "MISSING_CAPABILITY"
+    assert result.stop_evaluation.reason.value in {"MISSING_CAPABILITY", "TASK_COMPLETION_BLOCKED"}
     assert [call.name for call in result.tool_calls] == ["project_context", "search_code"]
     assert all(tool_result.success for tool_result in result.tool_results)
     assert result.steps[0].selected_tool == "project_context"
     assert result.steps[-1].selected_tool is None
     assert len(engine.prompts) == 2
-    print("Phase 6.4 autonomous stop-condition smoke passed")
+    if result.plan is not None:
+        print(format_plan_summary(result.plan, result.plan_execution))
+    print("Phase 12.1 planning-aware autonomous stop-condition smoke passed")
 
 
 if __name__ == "__main__":

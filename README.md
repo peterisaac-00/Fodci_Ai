@@ -1364,3 +1364,38 @@ python scripts/run_phase116_acceptance.py \
 ```
 
 The command reads persisted evidence only. If a candidate artifact, benchmark result, fingerprint, training configuration, or held-out identity is unavailable, it produces a fail-closed invalid/rejected outcome or exits with a clear input error; it never invents acceptance evidence. Phase 11.6 includes two end-to-end scenarios: a deterministic improved candidate that is accepted under a test policy, and a candidate with critical capability regression that is rejected despite any other metric movement.
+
+
+## Phase 12.1 — Better Planning
+
+Phase 12.1 upgrades the opt-in autonomous workflow from a declarative plan description to a bounded planning-and-execution state machine. The planner performs typed task analysis, preserves requirements and constraints, creates dependency-aware steps, validates the plan as a DAG, and includes verification criteria before execution begins.
+
+The execution path is:
+
+```text
+User Task
+    ↓
+Task Analysis
+    ↓
+Planner
+    ↓
+Plan Validator
+    ↓
+ExecutionPlan
+    ↓
+AutonomousToolLoop
+    ↓
+Tool Selection and Tool Dispatch
+    ↓
+Evidence and Verification
+    ↓
+PlanExecutionState
+    ↓
+Bounded Re-planner when assumptions change
+```
+
+`PlanExecutionState` records immutable step statuses, current step, completed/failed/blocked/skipped steps, revisions, replan count, and bounded state-change events. A failed tool operation is not blindly retried: the existing recovery policy supplies structured evidence, and only a recoverable failure with available replan budget can trigger `PlanReplanner`. Completed evidence is preserved, while failed or in-progress steps are reopened in the revised plan.
+
+The normal `fodci` interactive session remains unchanged. The planning-aware state is integrated into the existing opt-in `AutonomousToolLoop`, exposed on `AutonomousLoopState` and `AutonomousLoopResult`, and rendered concisely by the existing autonomous-loop developer smoke workflow. The planner never dispatches tools, executes commands, reads files, or modifies the repository.
+
+Phase 12.1 intentionally does not implement better codebase understanding, long context, parallel tool execution, advanced error recovery, advanced memory, multi-agent architecture, or unrestricted autonomy. The existing read-only default registry, explicit project root boundary, execution budgets, verification gates, and mutation opt-in rules remain authoritative.
