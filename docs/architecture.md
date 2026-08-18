@@ -2549,3 +2549,9 @@ Live interaction data remains local and ignored by Git. Only the contract implem
 Phase 15.3 adds `QualityFilter` and `VerificationGate` to prevent obvious Teacher–Student contamination. The filter detects secret-like content, excessive repetition, length violations, and missing backend signal. Clean but unevidenced records remain pending; only execution-verified or human-approved records can enter train, validation, or test splits.
 
 The phase explicitly separates heuristic eligibility from semantic correctness. Rejected and unverified records never trigger Fodci training, and no automatic training was performed.
+
+## Phase 15.4 — Offline Distillation Training
+
+Phase 15.4 trains an experimental stable-sized Fodci checkpoint from verified Teacher–Student records using a bounded CPU-only offline schedule. Eight reviewed Backend records were used for training and four separate records for validation over 32 steps. Validation loss improved from `2.805490` to `2.776224`; finite loss, parameter change, checkpoint reload, non-empty splits, and base-checkpoint lineage all passed.
+
+The distilled checkpoint is not activated automatically. Live interactions never start training, and the stable `fodci-testing-qa-v1` runtime remains unchanged until held-out response quality and controlled promotion gates pass.

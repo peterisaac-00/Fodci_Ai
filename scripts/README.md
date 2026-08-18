@@ -512,3 +512,14 @@ PYTHONPATH=src python scripts/run_phase153_quality_gate.py
 ```
 
 Quality gates are contamination controls, not semantic correctness proof. Rejected or unverified records never enter Fodci training splits.
+
+## Phase 15.4 — Offline Distillation Training
+
+`prepare_phase154_seed_data.py` creates reviewed provenance-rich train/validation JSONL records. `train_phase154_offline_distillation.py` trains an experimental stable-sized Fodci checkpoint offline with bounded CPU steps.
+
+```text
+PYTHONPATH=src python scripts/prepare_phase154_seed_data.py
+PYTHONPATH=src python scripts/train_phase154_offline_distillation.py --max-steps 32 --repeats 16 --learning-rate 1e-5
+```
+
+Training is never started from a live interaction. The output checkpoint remains experimental until held-out response evaluation and controlled promotion gates pass.
