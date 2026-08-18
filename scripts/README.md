@@ -374,3 +374,16 @@ PYTHONPATH=src python scripts/run_phase1311_synergy.py
 ```
 
 The command writes `artifacts/evaluation/phase1311_multi_agent_synergy.json` and the tracked report `docs/experiments/phase1311_multi_agent_synergy.md`. It uses a temporary project and memory store, a four-token provider smoke, bounded autonomy budgets, and no external APIs or runtime model replacement. The approximately 26M Phase 13.10 checkpoint remains experimental and is not activated.
+
+## Phase 13.12 — Final Evaluation & Feature Complete
+
+`run_phase1312_final_evaluation.py` audits the complete release: checkpoint lineage, specialist training reports, held-out benchmark report structure, scaling evidence, multi-agent synergy, stable runtime loading, and full regression evidence.
+
+```text
+PYTHONPATH=src python scripts/run_phase1312_final_evaluation.py \
+  --tests-passed 1064 \
+  --pytest-warnings 12 \
+  --compileall
+```
+
+The command writes `artifacts/evaluation/phase1312_final_evaluation.json` and the tracked report `docs/experiments/phase1312_final_evaluation.md`. Benchmark pass rates and non-empty rates remain diagnostic evidence; zero values are reported honestly and do not invalidate structurally correct benchmark reports. The stable release remains `fodci-testing-qa-v1` at 11,424,400 parameters, while `fodci-scaling-25m-experimental-v1` remains inactive.
