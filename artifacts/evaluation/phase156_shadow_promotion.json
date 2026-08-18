@@ -1,0 +1,40 @@
+{
+  "format": "fodci.phase156_shadow_promotion",
+  "schema_version": "1.0",
+  "phase": "15.6",
+  "protocol": {
+    "device": "cpu",
+    "primary_checkpoint": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-testing-qa-v1.pt",
+    "candidate_checkpoint": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-distilled-phase154-v1.pt",
+    "returns_primary_response": true,
+    "human_approved": false
+  },
+  "shadow": {
+    "prompt": "Explain why a backend API should validate request data before business logic.",
+    "primary_response": "en ante the the t then the a",
+    "candidate_response": "e t te te t t t t te t t te ",
+    "candidate_ran": true,
+    "primary_error": null,
+    "candidate_error": null,
+    "returned_response_source": "stable-primary"
+  },
+  "promotion_decision": {
+    "eligible": false,
+    "reasons": [
+      "human approval is required",
+      "candidate repetition is worse than stable",
+      "response quality has not been accepted"
+    ],
+    "stable_runtime_replaced": false
+  },
+  "stable_runtime_replaced": false,
+  "phase_gates": {
+    "primary_response_returned": true,
+    "candidate_ran_in_shadow": true,
+    "candidate_rejected": true,
+    "human_approval_required": true,
+    "stable_runtime_preserved": true,
+    "no_automatic_replacement": true
+  },
+  "phase_gates_passed": true
+}

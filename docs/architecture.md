@@ -2561,3 +2561,9 @@ The distilled checkpoint is not activated automatically. Live interactions never
 Phase 15.5 evaluates the Phase 15.4 distilled candidate and stable Fodci on the identical 24-case Backend benchmark. Both runs completed, but readability and keyword coverage remained `0.0000` for both, while the candidate's repeated-token rate worsened from `0.3278` to `0.6970`.
 
 This negative result is treated as a successful safety decision: the candidate was not promoted, `fodci-testing-qa-v1` remains stable, and a lower offline validation loss is not treated as proof of response quality. More verified data, stronger formatting, and improved distillation are required before promotion.
+
+## Phase 15.6 — Shadow Mode and Controlled Promotion
+
+Phase 15.6 adds a fail-closed shadow path. The candidate provider runs beside the stable provider for observational comparison, while `ShadowMode` always returns the stable primary response. `PromotionPolicy` requires completed held-out gates, human approval, accepted response quality, non-worsening readability and keyword coverage, and no increase in repeated-token rate.
+
+The Phase 15.4 candidate is rejected because its Phase 15.5 repeated-token rate worsened from `0.3278` for stable Fodci to `0.6970`, readability did not improve, and no human approval was provided. No stable checkpoint replacement or online training occurs. The stable `fodci-testing-qa-v1.pt` checkpoint therefore remains the default runtime.

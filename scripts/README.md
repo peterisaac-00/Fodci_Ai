@@ -533,3 +533,13 @@ PYTHONPATH=src python scripts/run_phase155_heldout_evaluation.py --max-new-token
 ```
 
 The Phase 15.4 candidate completed, but its held-out quality did not improve and its repetition rate became worse. It was not promoted; stable Fodci remains unchanged.
+
+## Phase 15.6 — Shadow Mode and Controlled Promotion
+
+`run_phase156_shadow_promotion.py` loads the Phase 15.5 evidence, runs the stable and distilled local Fodci providers side by side on CPU, returns the stable response, and applies the conservative promotion policy.
+
+```text
+PYTHONPATH=src:. python scripts/run_phase156_shadow_promotion.py
+```
+
+The runner writes `artifacts/evaluation/phase156_shadow_promotion.json`. It fails closed if the candidate is eligible unexpectedly or if any gate does not preserve the stable runtime. The Phase 15.4 candidate is expected to be rejected because its held-out repetition rate worsened and response quality was not accepted.
