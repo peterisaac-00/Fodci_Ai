@@ -1,0 +1,8 @@
+### Instruction
+What should an API test at the contract boundary?
+
+### Input
+None
+
+### Response
+Test method and path routing, request validation, authentication behavior, status codes, response schemas, error shapes, and compatibility guarantees.

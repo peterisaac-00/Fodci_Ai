@@ -238,3 +238,34 @@ PYTHONPATH=src python scripts/benchmark_stage1.py \
 ```
 
 The benchmark is a deterministic keyword-coverage and non-empty-output diagnostic. It must not be interpreted as a semantic SQL judge; objective loss, held-out tasks, and later execution-aware evaluation remain separate evidence.
+
+
+## Phase 13.6 — RESTful API Design & Implementation
+
+`generate_phase136_data.py` creates the RESTful API specialist corpus under `training_data/rest_api`, with separate train, validation, and held-out evaluation data. The curriculum covers resource modeling, HTTP semantics, pagination, filtering, versioning, OpenAPI, errors, service boundaries, idempotency, and contract testing.
+
+```text
+python scripts/generate_phase136_data.py
+```
+
+`train_phase136_rest_api.py` continues from `artifacts/checkpoints/fodci-sql-database-v1.pt` and writes `artifacts/checkpoints/fodci-rest-api-v1.pt`. The default bounded run uses CPU, one epoch, twelve maximum steps, batch size two, learning rate `2e-4`, and the same short-record-safe training window used by the preceding specialist stages.
+
+```text
+PYTHONPATH=src python scripts/train_phase136_rest_api.py
+```
+
+The workflow writes `artifacts/evaluation/phase136_rest_api_training.json` and `docs/experiments/phase136_rest_api_training.md`. It validates checkpoint lineage, dataset coverage, finite objective loss, parameter changes, checkpoint existence, and reload consistency.
+
+The held-out REST benchmark is run with:
+
+```text
+PYTHONPATH=src python scripts/benchmark_stage1.py \
+  --dataset training_data/rest_api/evaluation/phase_136.jsonl \
+  --checkpoint artifacts/checkpoints/fodci-rest-api-v1.pt \
+  --model-version fodci-rest-api-v1 \
+  --run-prefix phase136-rest-api \
+  --report artifacts/evaluation/phase136_rest_api_benchmark.json \
+  --markdown docs/experiments/phase136_rest_api_benchmark.md
+```
+
+The benchmark is a deterministic keyword-coverage and non-empty-output diagnostic. It is not a substitute for schema validation, contract tests, or execution-aware API evaluation.

@@ -1,0 +1,8 @@
+### Instruction
+Why should an API version its public contract deliberately?
+
+### Input
+None
+
+### Response
+Versioning provides a controlled compatibility boundary so breaking representation or behavior changes can be introduced without silently breaking existing clients.

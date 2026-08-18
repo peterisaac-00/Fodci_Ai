@@ -1,0 +1,8 @@
+### Instruction
+What is the role of a service layer behind a REST endpoint?
+
+### Input
+None
+
+### Response
+The service layer coordinates domain rules and dependencies so the HTTP adapter remains focused on parsing, authorization, response mapping, and transport concerns.

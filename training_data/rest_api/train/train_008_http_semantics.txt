@@ -1,0 +1,8 @@
+### Instruction
+When is 409 Conflict appropriate?
+
+### Input
+None
+
+### Response
+Use 409 when the request conflicts with the current resource state, such as a duplicate business identifier or a detected version conflict.

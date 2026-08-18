@@ -1,0 +1,8 @@
+### Instruction
+How should a list endpoint prevent an unbounded query?
+
+### Input
+None
+
+### Response
+Validate page_size or cursor limits, use a stable indexed ordering, and reject or cap values beyond the documented maximum.

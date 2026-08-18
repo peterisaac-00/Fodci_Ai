@@ -1,0 +1,8 @@
+### Instruction
+Why should mutating endpoints support an idempotency key when clients may retry?
+
+### Input
+None
+
+### Response
+An idempotency key lets the server recognize a repeated logical request and return the original result instead of creating duplicate side effects.

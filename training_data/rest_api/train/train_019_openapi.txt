@@ -1,0 +1,8 @@
+### Instruction
+How should an API document authentication requirements?
+
+### Input
+None
+
+### Response
+Declare the security scheme and the operations or scopes that require it, while documenting safe error responses without publishing secrets.

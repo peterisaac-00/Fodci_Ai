@@ -1,0 +1,8 @@
+### Instruction
+What should an API enforce on page size?
+
+### Input
+None
+
+### Response
+Enforce a positive default and a maximum page size to bound database work, response size, and memory consumption.

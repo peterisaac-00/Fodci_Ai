@@ -1,0 +1,8 @@
+### Instruction
+Why should every documented response include an explicit schema?
+
+### Input
+None
+
+### Response
+An explicit schema makes client expectations testable and prevents documentation from promising an ambiguous or unstable response shape.

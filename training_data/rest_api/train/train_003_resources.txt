@@ -1,0 +1,8 @@
+### Instruction
+When should an API use POST instead of PUT?
+
+### Input
+None
+
+### Response
+Use POST to create under a collection or trigger a non-idempotent action; use PUT when the client addresses the complete target resource and repetition has the same intended result.

@@ -1,0 +1,8 @@
+### Instruction
+What should a consistent API error body contain?
+
+### Input
+None
+
+### Response
+Use a stable machine-readable code, a safe human message, optional field details, and a correlation or request ID without exposing stack traces or secrets.

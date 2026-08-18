@@ -1,0 +1,8 @@
+### Instruction
+What response should a successful asynchronous creation request use?
+
+### Input
+None
+
+### Response
+Return 202 Accepted with an operation or status resource when work is not complete, and document how the client observes completion.

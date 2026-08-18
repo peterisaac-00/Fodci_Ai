@@ -1,0 +1,8 @@
+### Instruction
+What is a safe way to deprecate an API field?
+
+### Input
+None
+
+### Response
+Announce the field as deprecated, document a replacement, measure usage, provide a migration window, and remove it only according to the published compatibility policy.

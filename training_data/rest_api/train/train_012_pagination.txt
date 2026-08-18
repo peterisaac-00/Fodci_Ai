@@ -1,0 +1,8 @@
+### Instruction
+How should API filtering values be validated?
+
+### Input
+None
+
+### Response
+Parse and validate each filter against an allowlist of fields and operators, then pass values as parameters rather than constructing arbitrary query text.

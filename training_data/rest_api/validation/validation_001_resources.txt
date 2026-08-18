@@ -1,0 +1,8 @@
+### Instruction
+How should an API update a complete user representation when the client sends a stable identifier?
+
+### Input
+None
+
+### Response
+Use PUT at `/users/{id}` for a complete replacement contract, validate the representation, and document whether missing fields are reset or rejected.

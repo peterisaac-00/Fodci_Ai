@@ -1,0 +1,8 @@
+### Instruction
+Why should API handlers avoid embedding complex SQL and business rules?
+
+### Input
+None
+
+### Response
+Keeping transport, persistence, and domain rules separate improves testability, reuse, error mapping, and the ability to evolve each layer independently.

@@ -1,0 +1,8 @@
+### Instruction
+What is the purpose of an OpenAPI document?
+
+### Input
+None
+
+### Response
+OpenAPI describes endpoints, parameters, request bodies, responses, authentication, and schemas in a machine-readable contract that supports documentation and tooling.

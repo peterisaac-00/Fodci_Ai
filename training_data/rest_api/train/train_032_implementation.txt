@@ -1,0 +1,8 @@
+### Instruction
+Why should a REST API define a correlation ID policy?
+
+### Input
+None
+
+### Response
+A correlation ID connects client-visible failures with structured server logs and traces without placing sensitive diagnostic data in the response.

@@ -1,0 +1,8 @@
+### Instruction
+How should REST resources be named in a backend API?
+
+### Input
+None
+
+### Response
+Use stable plural nouns such as `/users` and `/orders`, and represent a single resource with its identifier such as `/users/{id}`.

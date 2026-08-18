@@ -1,0 +1,8 @@
+### Instruction
+How can an API avoid duplicate orders when a client retries after a timeout?
+
+### Input
+None
+
+### Response
+Accept and persist an idempotency key for the logical operation, then return the stored original result for a repeated key.

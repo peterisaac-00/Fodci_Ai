@@ -1,0 +1,8 @@
+### Instruction
+What status code should a successful resource creation return?
+
+### Input
+None
+
+### Response
+Return 201 Created and preferably include a Location header for the new resource; return a representation when the API contract defines one.

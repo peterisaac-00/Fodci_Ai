@@ -1,0 +1,8 @@
+### Instruction
+Why should an API avoid exposing database table names as its public contract?
+
+### Input
+None
+
+### Response
+Database names couple clients to storage details; resource names should express domain behavior so persistence can evolve independently.

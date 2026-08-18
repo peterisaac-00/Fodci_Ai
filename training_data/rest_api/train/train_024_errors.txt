@@ -1,0 +1,8 @@
+### Instruction
+How should a REST API map a missing resource?
+
+### Input
+None
+
+### Response
+Return 404 with the documented safe error shape, and avoid revealing whether a protected resource exists when authorization policy requires concealment.

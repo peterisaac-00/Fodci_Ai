@@ -1,0 +1,8 @@
+### Instruction
+Why should an API not return raw exception text to clients?
+
+### Input
+None
+
+### Response
+Raw exception text can leak SQL, file paths, credentials, or internal architecture; map failures to safe public error contracts and log details privately.

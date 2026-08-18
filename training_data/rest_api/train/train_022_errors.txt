@@ -1,0 +1,8 @@
+### Instruction
+How should validation failures be represented?
+
+### Input
+None
+
+### Response
+Return a client-error status with structured field-level details that identify invalid input while keeping internal implementation information private.

@@ -1,0 +1,8 @@
+### Instruction
+Why can cursor pagination be better for a changing large collection?
+
+### Input
+None
+
+### Response
+A cursor based on an indexed stable ordering avoids scanning large offsets and reduces duplicates or omissions while earlier rows change.

@@ -1,0 +1,8 @@
+### Instruction
+Why should an API validate request data before calling the service layer?
+
+### Input
+None
+
+### Response
+Early validation rejects malformed input consistently and ensures the service receives a typed, trusted boundary object rather than an arbitrary dictionary.

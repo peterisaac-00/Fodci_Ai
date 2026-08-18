@@ -1,0 +1,8 @@
+### Instruction
+How should an API handle a slow downstream dependency?
+
+### Input
+None
+
+### Response
+Set an explicit timeout, classify the failure, return a safe bounded error, and avoid holding unnecessary resources while waiting indefinitely.

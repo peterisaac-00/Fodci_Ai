@@ -1,0 +1,8 @@
+### Instruction
+How should an API design a stable offset pagination response?
+
+### Input
+None
+
+### Response
+Accept bounded page and page_size values, apply a deterministic ORDER BY, and return items plus explicit metadata such as page, page_size, and total when total is available.

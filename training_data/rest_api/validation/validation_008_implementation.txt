@@ -1,0 +1,8 @@
+### Instruction
+Why should an API handler pass a validated DTO to the service layer?
+
+### Input
+None
+
+### Response
+A validated DTO separates transport parsing from domain logic and gives the service a predictable typed contract.

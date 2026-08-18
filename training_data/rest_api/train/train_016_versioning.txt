@@ -1,0 +1,8 @@
+### Instruction
+What should an API documentation version identify?
+
+### Input
+None
+
+### Response
+It should identify the public contract version, supported endpoints, request and response schemas, authentication requirements, and compatibility notes.

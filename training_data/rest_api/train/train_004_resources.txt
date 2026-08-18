@@ -1,0 +1,8 @@
+### Instruction
+Why should nested REST paths be kept shallow?
+
+### Input
+None
+
+### Response
+Shallow paths reduce coupling and ambiguity; use nesting only when the child relationship is essential to the resource identity or authorization boundary.

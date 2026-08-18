@@ -1,0 +1,8 @@
+### Instruction
+How should an endpoint report invalid JSON and field validation errors?
+
+### Input
+None
+
+### Response
+Return the documented client-error status with a stable error code and structured field details, without returning a traceback.

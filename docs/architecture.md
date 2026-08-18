@@ -2425,3 +2425,12 @@ Phase 13.5 specializes the Phase 13.4 Python backend checkpoint on SQL querying 
 `scripts/train_phase135_sql_database.py` validates that the input checkpoint is exactly `fodci-python-backend-v1`, evaluates it on the SQL validation partition, continues bounded CPU training, saves `fodci-sql-database-v1.pt`, reloads it into a fresh model, and verifies finite loss, parameter changes, and reload consistency. The SQL instruction records use a 64-token training window because their serialized prompts are shorter than the model context; this ensures every source document produces at least one supervised window instead of being silently discarded by the fixed-window pipeline. The model architecture and maximum context remain unchanged.
 
 The shared benchmark runner evaluates eight SQL held-out questions with fixed greedy decoding and records model, dataset, and protocol identity. Objective validation loss and generation benchmark metrics are reported separately: lower loss validates the training path, while keyword coverage and non-empty generation are conservative diagnostics rather than proof of semantic SQL competence.
+
+
+## Phase 13.6 — RESTful API Design & Implementation
+
+Phase 13.6 specializes the Phase 13.5 SQL checkpoint on professional RESTful API design and implementation without changing the Transformer architecture. The dataset contains 32 training records and 8 held-out validation records covering resource naming, HTTP method and status semantics, pagination and filtering, versioning and deprecation, OpenAPI documentation, error contracts, service boundaries, idempotency, and contract testing. The held-out benchmark is stored separately at `training_data/rest_api/evaluation/phase_136.jsonl`.
+
+`scripts/train_phase136_rest_api.py` validates that the input checkpoint is exactly `fodci-sql-database-v1`, evaluates it on the REST validation partition, continues bounded CPU training, saves `fodci-rest-api-v1.pt`, reloads it into a fresh model, and verifies finite loss, parameter changes, and reload consistency. The shared benchmark runner evaluates eight REST questions with fixed greedy decoding and records model, dataset, and protocol identity.
+
+Objective validation loss and generation benchmark metrics are intentionally reported separately. Lower loss validates that the specialization path and response-only training objective are functioning; non-empty output and keyword coverage are conservative diagnostics and do not establish semantic API design competence or executable contract correctness.

@@ -1,0 +1,8 @@
+### Instruction
+When should an API return 204 No Content?
+
+### Input
+None
+
+### Response
+Use 204 when the operation succeeds and there is intentionally no response representation, such as a successful deletion without a response body.

@@ -1,0 +1,8 @@
+### Instruction
+How should a breaking response change be introduced safely?
+
+### Input
+None
+
+### Response
+Publish a new contract version, document the differences and migration path, keep the old version during the compatibility window, and measure usage.

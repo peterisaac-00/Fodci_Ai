@@ -1,0 +1,8 @@
+### Instruction
+What should an OpenAPI operation document for a protected endpoint?
+
+### Input
+None
+
+### Response
+Document the security requirement, parameters, request and response schemas, successful statuses, and safe authentication or authorization errors.

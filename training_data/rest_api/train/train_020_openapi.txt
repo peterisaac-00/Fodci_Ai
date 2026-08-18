@@ -1,0 +1,8 @@
+### Instruction
+Why should examples in API documentation be valid against the schema?
+
+### Input
+None
+
+### Response
+Valid examples reduce integration ambiguity and can be used as contract-test fixtures rather than teaching clients an impossible payload.

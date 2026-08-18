@@ -1,0 +1,8 @@
+### Instruction
+How should an API distinguish 401 from 403?
+
+### Input
+None
+
+### Response
+Use 401 when authentication is missing or invalid, and 403 when the caller is authenticated but is not allowed to perform the action.

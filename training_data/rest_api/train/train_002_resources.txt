@@ -1,0 +1,8 @@
+### Instruction
+What does idempotence mean for an HTTP method?
+
+### Input
+None
+
+### Response
+An idempotent method has the same intended server state after one or repeated identical requests; PUT and DELETE are designed to be idempotent when implemented correctly.

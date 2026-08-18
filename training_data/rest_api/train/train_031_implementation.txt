@@ -1,0 +1,8 @@
+### Instruction
+How should an API expose a long-running operation?
+
+### Input
+None
+
+### Response
+Return an accepted operation representation with a status URL or job identifier, then let clients poll or receive a documented completion notification.
