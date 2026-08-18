@@ -1,6 +1,6 @@
 # Backend Engineering Agent
 
-> **Current status: Phase 11.1 complete — reproducible Baseline Model Evaluation delivered; Phase 11.2+ not started.**
+> **Current status: Phase 15.6 complete — shadow mode and controlled promotion delivered; the stable runtime remains unchanged.**
 
 Backend Engineering Agent is the foundation for a future **local, terminal-based AI agent** focused on backend engineering work. The intended product will use an interchangeable local or open-weight language-model provider rather than depend on hosted OpenAI, Anthropic, or Gemini APIs.
 
@@ -78,6 +78,25 @@ The package exposes minimal typed contracts for `Agent`, `LLMProvider`, `Message
 ├── pyproject.toml
 └── README.md
 ```
+
+## Quick Start — Windows
+
+للتثبيت مرة واحدة ثم تشغيل `fodci` من أي Terminal، استخدم Python 3.12 وPowerShell من جذر المستودع:
+
+```powershell
+git clone https://github.com/peterisaac-00/Fodci_Ai.git
+cd Fodci_Ai
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\install_fodci_global.ps1
+```
+
+يفتح بعدها Terminal جديدة ثم شغّل:
+
+```powershell
+fodci
+```
+
+ينشئ السكربت بيئة ثابتة في `$env:USERPROFILE\.fodci\venv`، يثبت `.[model]`، ينزّل `fodci-testing-qa-v1.pt` ويتحقق منه، ويضيف الأمر إلى User PATH. لا تحتاج إلى تفعيل `.venv` داخل كل مشروع. التفاصيل وخطوات Linux/macOS موجودة في [INSTALL.md](INSTALL.md).
 
 ## Development
 
