@@ -150,3 +150,16 @@ Phase 13 introduces dedicated scripts for curriculum-based model specialization 
 - `generate_stage1_data.py`: Generates high-quality instruction dataset records for Stage 1 (Backend Fundamentals).
 - `benchmark_stage1.py`: Runs baseline evaluation and benchmarks model generation against stage-specific test questions.
 - `train_stage1.py`: Executes end-to-end training using `FodciTrainer` and `InstructionDatasetPipeline`, producing validated checkpoints.
+
+
+## Phase 13.2 — Benchmark Suite & Baseline Evaluation
+
+`benchmark_stage1.py` runs the held-out Stage 1 benchmark against the current local checkpoint without training or changing model weights. The default protocol uses the approximately 11.4M-parameter `fodci-tiny-v1` checkpoint, CPU-only greedy decoding, seed `2026`, the fixed instruction/input/response prompt template, and 32 generated tokens per question.
+
+```text
+PYTHONPATH=src python scripts/benchmark_stage1.py
+```
+
+The benchmark dataset is `training_data/fundamentals/evaluation/stage_01.jsonl`. It is deliberately separate from the training split and contains 24 unique, versioned records across backend concepts, HTTP, REST, security, and architecture. The runner validates the JSONL schema and rejects duplicate IDs or questions before loading the model.
+
+The command writes `artifacts/evaluation/stage1_baseline.json` and `artifacts/evaluation/stage1_baseline.md`. Reports include the run ID, model parameter count, checkpoint and dataset SHA-256 fingerprints, protocol identity, per-question outputs, aggregate metrics, and category-level metrics. The deterministic keyword-coverage score is a conservative proxy for concept coverage; it is not a semantic judge. A baseline with empty outputs or zero keyword coverage is a valid diagnostic result and should be preserved rather than hidden. Future checkpoints must be evaluated with the same dataset, prompt, seed, decoding rule, and thresholds.

@@ -2389,3 +2389,12 @@ Phase 13 establishes the structured, curriculum-based model specialization pipel
 ```
 
 The curriculum is structured into progressive stages (starting with **Stage 1: Backend Fundamentals**, covering HTTP, REST, status codes, and client-server concepts), evaluated via rigorous benchmark suites, and optimized iteratively using `FodciTrainer` while maintaining full backward compatibility and zero external runtime dependencies.
+
+
+## Phase 13.2 — Benchmark Suite & Baseline Evaluation
+
+Phase 13.2 introduces a reproducible, held-out evaluation protocol for the approximately 11.4M-parameter default Fodci model. The benchmark dataset is stored separately from training data at `training_data/fundamentals/evaluation/stage_01.jsonl`. Every JSONL record carries a stable benchmark ID, version, category, expected answer, required keywords, and a minimum coverage threshold. The file is explicitly marked with the `benchmark` split and the loader rejects malformed records, duplicate IDs, and duplicate questions.
+
+The runner is `scripts/benchmark_stage1.py`. It fixes the random seed to `2026` by default, uses the same instruction/input/response prompt template for every item, performs CPU-only greedy argmax decoding, records the checkpoint and dataset SHA-256 fingerprints, and writes both a machine-readable report (`artifacts/evaluation/stage1_baseline.json`) and a human-readable report (`artifacts/evaluation/stage1_baseline.md`). The run ID is derived from the model identity, dataset fingerprint, and protocol, so the same inputs produce the same identity.
+
+The primary deterministic proxy is required-keyword coverage. Aggregate and category-level metrics include task pass rate, non-empty response rate, average keyword coverage, and average generated token count. This proxy is intentionally conservative: it is useful for detecting empty outputs and basic concept coverage, but it is not a semantic judge and must be supplemented by later human review and task-based evaluation. The baseline must be preserved before Phase 13.3 training, and future checkpoints must use the same held-out file, prompt, seed, decoding rule, and thresholds for valid comparisons.
