@@ -423,3 +423,13 @@ PYTHONPATH=src python scripts/train_phase1313_dolly_instruction_tuning.py \
 ```
 
 The resulting reports separate structural gates and held-out loss from human-readable response quality. The Phase 13.13 probes remain repetitive or nonsensical, so neither English checkpoint is activated as the stable runtime. The default remains the 11,424,400-parameter `fodci-testing-qa-v1` checkpoint.
+
+## Phase 14.1 — Backend Response Benchmark
+
+`run_phase141_backend_benchmark.py` validates the held-out, benchmark-only response dataset at `src/backend_ai/evaluation/datasets/phase141_backend_response_benchmark.json`. It covers 24 deterministic questions across Python backend, FastAPI, REST/HTTP, SQL/PostgreSQL, authentication/security, testing, debugging, and architecture.
+
+```text
+PYTHONPATH=src python scripts/run_phase141_backend_benchmark.py
+```
+
+The dataset is separate from training data and the runner does not load a model or perform training. Its transparent scorer records non-empty output, expected-concept coverage, forbidden-concept hits, repetition, and code presence. Every score remains subject to manual review; keyword coverage is not a semantic correctness judge.

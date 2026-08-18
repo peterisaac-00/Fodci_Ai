@@ -2491,3 +2491,11 @@ The CPU-only experiment trains both the stable-sized 11,424,400-parameter config
 A second experiment applies response-only instruction tuning to the experimental 25M foundation checkpoint using 1,200 English Databricks Dolly records under CC-BY-SA-3.0. Held-out loss improved from 5.395007 to 4.673299 and all structural gates passed, but probe outputs such as `The s.` and `The Scarkeale is s.` are not understandable answers. The Dolly-tuned checkpoint remains experimental.
 
 The stable runtime is deliberately unchanged: `fodci-testing-qa-v1` remains the default at 11,424,400 parameters. The application may discover English tokenizer artifacts for experimental English checkpoints and reads model architecture metadata from checkpoint files, but no English experiment is activated automatically. Longer pretraining, broader language data, and improved instruction-format coverage are required before a runtime replacement can be considered.
+
+## Phase 14.1 — Backend Response Benchmark
+
+Phase 14.1 defines a held-out response-quality benchmark separate from the existing agent/tool benchmark and all training corpora. The 24 immutable cases cover eight backend categories: Python backend, FastAPI, REST/HTTP, SQL/PostgreSQL, authentication/security, testing, debugging, and architecture. Each case contains a stable `B14-*` identity, difficulty, expected concepts, forbidden concepts, bounded response length, and optional code requirement. The dataset is fingerprinted and marked `benchmark_only` with no training source paths.
+
+The benchmark module records non-empty output, response length, expected-concept coverage, forbidden-concept hits, repeated-token rate, code presence, and a conservative understandability heuristic. These measurements are diagnostic evidence only: every score remains marked for manual review and no keyword score is treated as semantic correctness. The Phase 14.1 runner validates the dataset and writes a machine-readable manifest without loading a model, changing weights, executing tools, or modifying the stable runtime.
+
+Phase 14.2 uses the exact Phase 14.1 dataset to measure the stable `fodci-testing-qa-v1` baseline before any pretrained provider is introduced.

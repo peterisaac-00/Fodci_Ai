@@ -70,6 +70,14 @@ from backend_ai.evaluation.benchmark import (
     FodciBenchmarkRuntimeFactory, MetricDelta, MetricDirection, build_comparison,
     compute_benchmark_dataset_fingerprint, load_benchmark_dataset, render_comparison_report,
 )
+from backend_ai.evaluation.backend_response_benchmark import (
+    BENCHMARK_FORMAT as BACKEND_RESPONSE_BENCHMARK_FORMAT,
+    BENCHMARK_VERSION as BACKEND_RESPONSE_BENCHMARK_VERSION,
+    BackendBenchmarkCase, BackendResponseBenchmark, BackendResponseBenchmarkError,
+    BackendResponseScore, DEFAULT_DATASET_PATH as BACKEND_RESPONSE_DATASET_PATH,
+    compute_fingerprint as compute_backend_response_fingerprint,
+    load_backend_response_benchmark, score_response,
+)
 from backend_ai.evaluation.acceptance import (
     ACCEPTANCE_FORMAT, ACCEPTANCE_POLICY_VERSION, ACCEPTANCE_SCHEMA_VERSION,
     AcceptanceConflictError, AcceptanceDecision, AcceptanceError, AcceptancePolicy,
@@ -117,6 +125,10 @@ __all__ = [
     "BenchmarkHealth", "BenchmarkValidationResult", "BenchmarkValidator",
     "BenchmarkValidationIssue", "IssueLevel", "ValidationStatus", "validate_benchmark",
     "BENCHMARK_DATASET_FORMAT", "BENCHMARK_DATASET_VERSION", "BENCHMARK_FORMAT", "BENCHMARK_PROTOCOL_VERSION", "BENCHMARK_VERSION", "BenchmarkAggregate", "BenchmarkComparison", "BenchmarkComparisonRunner", "BenchmarkComparisonStore", "BenchmarkContaminationError", "BenchmarkDataset", "BenchmarkError", "BenchmarkGroupComparison", "BenchmarkModelSpec", "BenchmarkProtocolConfig", "BenchmarkRun", "BenchmarkRunStore", "BenchmarkRuntimeFactory", "BenchmarkStatus", "BenchmarkTaskResult", "FodciBenchmarkRuntimeFactory", "MetricDelta", "MetricDirection", "Phase115BenchmarkStatus", "build_comparison", "compute_benchmark_dataset_fingerprint", "load_benchmark_dataset", "render_comparison_report",
+    "BACKEND_RESPONSE_BENCHMARK_FORMAT", "BACKEND_RESPONSE_BENCHMARK_VERSION",
+    "BackendBenchmarkCase", "BackendResponseBenchmark", "BackendResponseBenchmarkError",
+    "BackendResponseScore", "BACKEND_RESPONSE_DATASET_PATH", "compute_backend_response_fingerprint",
+    "load_backend_response_benchmark", "score_response",
     "ACCEPTANCE_FORMAT", "ACCEPTANCE_POLICY_VERSION", "ACCEPTANCE_SCHEMA_VERSION", "AcceptanceConflictError", "AcceptanceDecision", "AcceptanceError", "AcceptancePolicy", "AcceptanceReport", "AcceptanceRequest", "AcceptanceStore", "ModelAcceptanceEvaluator", "ModelRegressionFinding", "RegressionAnalysis", "RegressionCategory", "ReproducibilityReport", "compute_benchmark_fingerprint", "render_acceptance_report",
     "BASELINE_DATASET_FORMAT", "BASELINE_DATASET_VERSION", "BASELINE_EVALUATION_FORMAT",
     "BASELINE_EVALUATION_PROTOCOL_VERSION", "AutonomousToolLoopBenchmarkRuntime",

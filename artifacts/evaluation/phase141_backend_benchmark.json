@@ -1,0 +1,36 @@
+{
+  "all_case_ids_unique": true,
+  "all_cases_have_rubrics": true,
+  "all_required_categories_present": true,
+  "benchmark_format": "fodci.phase141_backend_response_benchmark",
+  "benchmark_only": true,
+  "benchmark_version": "backend-response-v1",
+  "case_count": 24,
+  "category_counts": {
+    "architecture": 3,
+    "auth-security": 3,
+    "debugging": 3,
+    "fastapi": 3,
+    "python-backend": 3,
+    "rest-http": 3,
+    "sql-postgresql": 3,
+    "testing": 3
+  },
+  "data_contamination_checked": true,
+  "dataset_fingerprint": "sha256:ca6ac06e3c665051689326637c4cb96ae6f2733f1485a2524082901de3b01095",
+  "dataset_version": "phase141-v1",
+  "difficulty_counts": {
+    "easy": 8,
+    "hard": 7,
+    "medium": 9
+  },
+  "format": "fodci.phase141_backend_benchmark_report",
+  "human_review_required": true,
+  "model_executed": false,
+  "phase": "14.1",
+  "phase_gates_passed": true,
+  "requires_code_count": 3,
+  "schema_version": "1.0",
+  "training_performed": false,
+  "training_source_paths": []
+}
