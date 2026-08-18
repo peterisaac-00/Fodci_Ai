@@ -1439,3 +1439,17 @@ The new `ContextItem` abstraction records source, context type, relevance, prior
 | Safety boundary | Local only; no external APIs, vector database, parallel calls, multi-agent system, or advanced memory |
 
 Phase 12.3 does not implement Phase 12.4 parallel tool execution, Phase 12.5 new error recovery, Phase 12.6 advanced memory, Phase 12.7 multi-agent architecture, or Phase 12.8 advanced autonomy. The existing `ContextBudget` remains available for the legacy `AgentLoop`; the autonomous execution path is the actual integrated consumer of the new context pipeline.
+
+## Phase 12.4 Parallel Tool Execution
+
+`backend_ai.agent.scheduler` implements **Phase 12.4 — Parallel Tool Execution**, providing dependency-aware, thread-safe, bounded parallel execution of read-only and independent tool calls within the autonomous agent loop.
+
+The immutable `ToolExecutionProfile` classifies every registered tool by `AccessMode` (`read`, `write`, `execute`, `mixed`), `SideEffectType` (`none`, `filesystem`, `process`, `database`, `git`, `external`, `unknown`), `ConcurrencyPolicy` (`parallel_safe`, `sequential_only`, `conditionally_safe`, `unknown`), and `resource_scope`. Read-only inspection tools (`read_file`, `list_files`, `search_code`, `project_structure`, `project_context`, `git_diff`, `git_status`, `test_result_parser`) are classified as `PARALLEL_SAFE`, while mutating, command-executing, application-launching, or test-running tools default to `SEQUENTIAL_ONLY`.
+
+`ToolScheduler` schedules tool calls into ordered `ExecutionBatch` sequences (each running in either `sequential` or `parallel` execution mode). It analyzes data and resource dependencies (such as file path conflicts or mutation ordering), strictly enforces `max_parallel_tools` (default 4, bounded between 1 and 8), and forces sequential execution for any mutating tools, overlapping file targets, or when `parallel_execution_enabled=False`.
+
+`AutonomousToolLoop` integrates `ToolScheduler` into its execution boundary. When model output requests multiple tool calls (via explicit multi-call parsing), the scheduler groups independent read-only calls into parallel worker pools (`ThreadPoolExecutor`), executing them concurrently while preserving deterministic observation ordering, thread-safe memory updates, code understanding merges, budget ledger accounting, and lifecycle state transitions (`EXECUTING_TOOL` → `OBSERVING_RESULT`).
+
+Execution metrics are tracked via `ParallelMetrics`, recording total tool calls, parallel tool calls, sequential tool calls, parallel batches, maximum concurrency, average batch size, and execution duration in milliseconds. These metrics are exposed on `AutonomousLoopState` and `AutonomousLoopResult`.
+
+The concurrency layer maintains all previous project invariants: no process execution during scheduling, no shell execution, no network access, strict read-only tool registry preservation, immutable result records, and clean backward compatibility when parallel execution is disabled or unused.

@@ -21,6 +21,8 @@ from typing import Any
 
 from backend_ai.agent.budget import ContextBudget, ContextBudgetError
 from backend_ai.agent.context_manager import ContextAssembly, ContextManager, ContextManagerConfig
+from backend_ai.agent.scheduler import ExecutionBatch, ExecutionMode, ParallelMetrics, ToolScheduler
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from backend_ai.agent.codebase_understanding import CodebaseUnderstanding, CodebaseUnderstandingBuilder
 from backend_ai.agent.execution_budget import (
     BudgetDimension,
@@ -166,6 +168,7 @@ class LoopAction:
     tool_name: str | None = None
     arguments: Mapping[str, Any] = field(default_factory=dict)
     message: str | None = None
+    calls: tuple[tuple[str, Mapping[str, Any]], ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.action_type, LoopActionType):
@@ -209,6 +212,8 @@ class AutonomousLoopConfig:
     context_summary_threshold_characters: int = 1_600
     context_max_summary_characters: int = 1_200
     context_relevance_threshold: float = 0.0
+    max_parallel_tools: int = 3
+    parallel_execution_enabled: bool = True
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -222,6 +227,7 @@ class AutonomousLoopConfig:
             "context_max_item_characters",
             "context_summary_threshold_characters",
             "context_max_summary_characters",
+            "max_parallel_tools",
         ):
             value = getattr(self, field_name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -236,6 +242,8 @@ class AutonomousLoopConfig:
             raise ValueError("execution_budget must be ExecutionBudget")
         if not isinstance(self.context_relevance_threshold, (int, float)) or isinstance(self.context_relevance_threshold, bool) or not 0.0 <= float(self.context_relevance_threshold) <= 1.0:
             raise ValueError("context_relevance_threshold must be between 0 and 1")
+        if not isinstance(self.parallel_execution_enabled, bool):
+            raise ValueError("parallel_execution_enabled must be a boolean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,9 +367,10 @@ class AutonomousLoopState:
     plan_execution: PlanExecutionState | None = None
     codebase_understanding: CodebaseUnderstanding | None = None
     context_assembly: ContextAssembly | None = None
+    parallel_metrics: ParallelMetrics | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "lifecycle": self.lifecycle.value,
             "task": _bounded_text(self.task, _MAX_TEXT_CHARS),
             "plan_step_id": self.plan_step_id,
@@ -388,6 +397,9 @@ class AutonomousLoopState:
             "codebase_understanding": self.codebase_understanding.to_dict() if self.codebase_understanding else None,
             "context_assembly": self.context_assembly.to_dict() if self.context_assembly else None,
         }
+        if self.parallel_metrics is not None and self.parallel_metrics.parallel_tool_calls > 0:
+            d["parallel_metrics"] = self.parallel_metrics.to_dict()
+        return d
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,9 +431,10 @@ class AutonomousLoopResult:
     plan_execution: PlanExecutionState | None = None
     codebase_understanding: CodebaseUnderstanding | None = None
     context_assembly: ContextAssembly | None = None
+    parallel_metrics: ParallelMetrics | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "task": self.task,
             "status": self.status.value,
             "final_answer": _sanitize_text(_bounded_text(self.final_answer, _MAX_TEXT_CHARS)),
@@ -448,6 +461,9 @@ class AutonomousLoopResult:
             "codebase_understanding": self.codebase_understanding.to_dict() if self.codebase_understanding else None,
             "context_assembly": self.context_assembly.to_dict() if self.context_assembly else None,
         }
+        if self.parallel_metrics is not None and self.parallel_metrics.parallel_tool_calls > 0:
+            d["parallel_metrics"] = self.parallel_metrics.to_dict()
+        return d
 
 
 _ALLOWED_TRANSITIONS: dict[LoopLifecycleState, frozenset[LoopLifecycleState]] = {
@@ -516,6 +532,22 @@ def parse_loop_action(text: str) -> LoopAction:
             raise LoopActionParseError(LoopFailureCode.INVALID_ACTION, "FINAL ARGS requires a string message.")
         return LoopAction(LoopActionType.FINAL, message=message)
     if action_name.upper() == "TOOL":
+        if "calls" in payload and isinstance(payload["calls"], list):
+            parsed_calls = []
+            for item in payload["calls"]:
+                if not isinstance(item, dict):
+                    raise LoopActionParseError(LoopFailureCode.INVALID_TOOL_CALL, "Each call in calls must be a JSON object.")
+                tname = item.get("tool")
+                targs = item.get("arguments")
+                if not isinstance(tname, str) or not _valid_name(tname):
+                    raise LoopActionParseError(LoopFailureCode.INVALID_TOOL_CALL, "TOOL calls requires a valid tool name.")
+                if not isinstance(targs, dict):
+                    raise LoopActionParseError(LoopFailureCode.INVALID_TOOL_CALL, "TOOL calls requires an arguments JSON object.")
+                parsed_calls.append((tname, targs))
+            if not parsed_calls:
+                raise LoopActionParseError(LoopFailureCode.INVALID_TOOL_CALL, "TOOL calls list cannot be empty.")
+            return LoopAction(LoopActionType.TOOL, tool_name=parsed_calls[0][0], arguments=parsed_calls[0][1], calls=tuple(parsed_calls))
+
         tool_name = payload.get("tool")
         arguments = payload.get("arguments")
         if not isinstance(tool_name, str) or not _valid_name(tool_name):
@@ -550,6 +582,7 @@ class AutonomousToolLoop:
         self.selector = selector or ToolSelector()
         self.replanner = replanner or PlanReplanner(self.planner)
         self.config = config or AutonomousLoopConfig()
+        self.scheduler = ToolScheduler(max_parallel_tools=self.config.max_parallel_tools, enabled=self.config.parallel_execution_enabled)
         budget_config = AgentConfig(
             max_steps=_EMERGENCY_TOOL_EXECUTION_BOUND + 2,
             max_tool_calls=_EMERGENCY_TOOL_EXECUTION_BOUND + 1,
@@ -657,8 +690,10 @@ class AutonomousToolLoop:
         final_verification: FinalVerificationResult | None = None
         failed_action_signatures: list[str] = []
 
+        parallel_metrics: ParallelMetrics | None = None
+
         def snapshot() -> AutonomousLoopState:
-            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result, plan_execution_state, codebase_understanding, context_assembly)
+            return AutonomousLoopState(machine.state, request.task, current_step_id, current_selection, last_call, last_result, model_response, tuple(history[-self.config.max_history_items:]), context_truncated, truncation_reason, preserved_sections, tuple(_unique(warnings)), tuple(_unique(errors)), usage, recovery_result, completion_result, final_verification, memory.snapshot(), project_memory.snapshot(), long_term_memories, None, retrieval_result, plan_execution_state, codebase_understanding, context_assembly, parallel_metrics)
 
         def update_plan_step(step_id: str | None, status: PlanStepStatus, *, reason: str, evidence: Sequence[str] = ()) -> None:
             nonlocal plan, plan_execution_state
@@ -1014,56 +1049,152 @@ class AutonomousToolLoop:
                     machine.fail()
                     return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
 
-                call_id = f"call-{len(calls) + 1:04d}"
-                try:
-                    call = self._bind_project_root(ToolCall(call_id, action.tool_name, action.arguments), request.project_root)
-                except (ToolError, ValueError, TypeError) as exc:
-                    message = getattr(exc, "message", str(exc))
-                    errors.append(message)
-                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, action.tool_name, action.arguments, None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, errors=(message,)))
-                    machine.fail()
-                    return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                tool_items = [(action.tool_name, action.arguments)] if not action.calls else list(action.calls)
+                batches = self.scheduler.schedule(tool_items)
+                total_tc = 0
+                parallel_tc = 0
+                seq_tc = 0
+                parallel_bats = 0
+                max_conc = 1
+                loop_start_mono = datetime.now(timezone.utc)
 
-                tool_budget = budget_ledger.check_tool_operation(call.name)
-                if not tool_budget.allowed:
-                    budget_decision = tool_budget
-                    errors.append(tool_budget.message)
-                    machine.block()
-                    return finish(request, LoopStatus.BLOCKED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
-                budget_ledger.consume("tool call", dimension=BudgetDimension.TOOL_CALLS)
-                normalized_tool = call.name.casefold()
-                specific_dimension = {"write_file": BudgetDimension.MUTATIONS, "edit_file": BudgetDimension.MUTATIONS, "delete_file": BudgetDimension.MUTATIONS, "run_command": BudgetDimension.COMMAND_EXECUTIONS, "run_command_with_policy": BudgetDimension.COMMAND_EXECUTIONS, "run_tests": BudgetDimension.TEST_EXECUTIONS, "run_application": BudgetDimension.APPLICATION_LAUNCHES}.get(normalized_tool)
-                if specific_dimension is not None:
-                    budget_ledger.consume(call.name, dimension=specific_dimension)
                 machine.transition(LoopLifecycleState.EXECUTING_TOOL)
-                tool_result = self._dispatch(call)
-                calls.append(call)
-                results.append(tool_result)
-                if experience_session is not None:
-                    try:
-                        experience_session.record_action(call.name, "tool action dispatched", status="success" if tool_result.success else "failed", attempt_id=None)
-                        experience_session.record_observation(tool_result.message or ("tool returned structured success" if tool_result.success else "tool returned failure"), source=call.name)
-                        if not tool_result.success:
-                            experience_session.record_error(tool_result.error_code or "TOOL_EXECUTION_FAILED", tool_result.message or "tool execution failed", source=call.name)
-                    except ExperienceRecordError as exc:
-                        warnings.append(f"experience action recording unavailable: {exc}")
-                try:
-                    memory.record_tool_result(tool_result, tool_name=call.name, related_step=current_step_id, importance=MemoryImportance.IMPORTANT if not tool_result.success else MemoryImportance.NORMAL)
-                except ShortTermMemoryError as exc:
-                    errors.append(f"short-term memory tool update failed: {exc}")
-                last_call, last_result = call, tool_result
-                if tool_result.success:
-                    invalidated_paths.update(_tool_result_paths(call, tool_result))
-                if codebase_understanding is not None:
-                    try:
-                        codebase_understanding = codebase_builder.update_from_tool_result(codebase_understanding, call.name, tool_result.data)
-                    except (TypeError, ValueError) as exc:
-                        warnings.append(f"codebase understanding update unavailable: {exc}")
-                budget_ledger.complete_tool()
+                for batch in batches:
+                    if batch.mode is ExecutionMode.PARALLEL and self.scheduler.enabled:
+                        parallel_bats += 1
+                        max_conc = max(max_conc, len(batch.calls))
+                        parallel_tc += len(batch.calls)
+                        total_tc += len(batch.calls)
+
+                        def run_worker(item):
+                            orig_idx, tname, targs = item
+                            cid = f"call-{len(calls) + orig_idx + 1:04d}"
+                            try:
+                                bc = self._bind_project_root(ToolCall(cid, tname, targs), request.project_root)
+                                tr = self._dispatch(bc)
+                                return orig_idx, bc, tr, None
+                            except Exception as exc:
+                                return orig_idx, None, None, exc
+
+                        futures = []
+                        with ThreadPoolExecutor(max_workers=self.scheduler.max_parallel_tools) as executor:
+                            for item in batch.calls:
+                                futures.append(executor.submit(run_worker, item))
+                        batch_results = [f.result() for f in as_completed(futures)]
+                        batch_results.sort(key=lambda x: x[0])
+
+                        for orig_idx, bound_call, tool_result, exc in batch_results:
+                            if exc is not None:
+                                msg = getattr(exc, "message", str(exc))
+                                errors.append(msg)
+                                steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, batch.calls[orig_idx][0], batch.calls[orig_idx][1], None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, errors=(msg,)))
+                                machine.fail()
+                                return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+                            tool_budget = budget_ledger.check_tool_operation(bound_call.name)
+                            if not tool_budget.allowed:
+                                errors.append(tool_budget.message)
+                                machine.block()
+                                return finish(request, LoopStatus.BLOCKED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+                            budget_ledger.consume("tool call", dimension=BudgetDimension.TOOL_CALLS)
+                            norm_tool = bound_call.name.casefold()
+                            spec_dim = {"write_file": BudgetDimension.MUTATIONS, "edit_file": BudgetDimension.MUTATIONS, "delete_file": BudgetDimension.MUTATIONS, "run_command": BudgetDimension.COMMAND_EXECUTIONS, "run_command_with_policy": BudgetDimension.COMMAND_EXECUTIONS, "run_tests": BudgetDimension.TEST_EXECUTIONS, "run_application": BudgetDimension.APPLICATION_LAUNCHES}.get(norm_tool)
+                            if spec_dim is not None:
+                                budget_ledger.consume(bound_call.name, dimension=spec_dim)
+
+                            calls.append(bound_call)
+                            results.append(tool_result)
+                            if experience_session is not None:
+                                try:
+                                    experience_session.record_action(bound_call.name, "tool action dispatched", status="success" if tool_result.success else "failed", attempt_id=None)
+                                    experience_session.record_observation(tool_result.message or ("tool returned structured success" if tool_result.success else "tool returned failure"), source=bound_call.name)
+                                    if not tool_result.success:
+                                        experience_session.record_error(tool_result.error_code or "TOOL_EXECUTION_FAILED", tool_result.message or "tool execution failed", source=bound_call.name)
+                                except ExperienceRecordError as exc_exp:
+                                    warnings.append(f"experience action recording unavailable: {exc_exp}")
+                            try:
+                                memory.record_tool_result(tool_result, tool_name=bound_call.name, related_step=current_step_id, importance=MemoryImportance.IMPORTANT if not tool_result.success else MemoryImportance.NORMAL)
+                            except ShortTermMemoryError as exc_mem:
+                                errors.append(f"short-term memory tool update failed: {exc_mem}")
+                            last_call, last_result = bound_call, tool_result
+                            if tool_result.success:
+                                invalidated_paths.update(_tool_result_paths(bound_call, tool_result))
+                            if codebase_understanding is not None:
+                                try:
+                                    codebase_understanding = codebase_builder.update_from_tool_result(codebase_understanding, bound_call.name, tool_result.data)
+                                except (TypeError, ValueError) as exc_cb:
+                                    warnings.append(f"codebase understanding update unavailable: {exc_cb}")
+                            budget_ledger.complete_tool()
+                            bounded_observation = self._safe_result_text(tool_result)
+                            budget_ledger.account_tool_result(tool_name=bound_call.name, tool_output_bytes=len(bounded_observation), context_tokens=prompt_tokens, success=tool_result.success)
+                            usage = AgentUsage(usage.steps, usage.tool_calls + 1, usage.prompt_tokens, usage.tool_result_chars + len(bounded_observation), usage.context_truncations)
+                    else:
+                        seq_tc += len(batch.calls)
+                        total_tc += len(batch.calls)
+                        for orig_idx, tname, targs in batch.calls:
+                            call_id = f"call-{len(calls) + 1:04d}"
+                            try:
+                                call = self._bind_project_root(ToolCall(call_id, tname, targs), request.project_root)
+                            except (ToolError, ValueError, TypeError) as exc:
+                                message = getattr(exc, "message", str(exc))
+                                errors.append(message)
+                                steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.VALIDATING_ACTION, LoopLifecycleState.FAILED, current_step_id, tname, targs, None, LoopFailureCode.INVALID_TOOL_CALL.value, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}, errors=(message,)))
+                                machine.fail()
+                                return finish(request, LoopStatus.INVALID_ACTION, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+
+                            tool_budget = budget_ledger.check_tool_operation(call.name)
+                            if not tool_budget.allowed:
+                                errors.append(tool_budget.message)
+                                machine.block()
+                                return finish(request, LoopStatus.BLOCKED, final_answer, plan, context, snapshot(), steps, calls, results, usage, warnings, errors)
+                            budget_ledger.consume("tool call", dimension=BudgetDimension.TOOL_CALLS)
+                            normalized_tool = call.name.casefold()
+                            specific_dimension = {"write_file": BudgetDimension.MUTATIONS, "edit_file": BudgetDimension.MUTATIONS, "delete_file": BudgetDimension.MUTATIONS, "run_command": BudgetDimension.COMMAND_EXECUTIONS, "run_command_with_policy": BudgetDimension.COMMAND_EXECUTIONS, "run_tests": BudgetDimension.TEST_EXECUTIONS, "run_application": BudgetDimension.APPLICATION_LAUNCHES}.get(normalized_tool)
+                            if specific_dimension is not None:
+                                budget_ledger.consume(call.name, dimension=specific_dimension)
+                            tool_result = self._dispatch(call)
+                            calls.append(call)
+                            results.append(tool_result)
+                            if experience_session is not None:
+                                try:
+                                    experience_session.record_action(call.name, "tool action dispatched", status="success" if tool_result.success else "failed", attempt_id=None)
+                                    experience_session.record_observation(tool_result.message or ("tool returned structured success" if tool_result.success else "tool returned failure"), source=call.name)
+                                    if not tool_result.success:
+                                        experience_session.record_error(tool_result.error_code or "TOOL_EXECUTION_FAILED", tool_result.message or "tool execution failed", source=call.name)
+                                except ExperienceRecordError as exc:
+                                    warnings.append(f"experience action recording unavailable: {exc}")
+                            try:
+                                memory.record_tool_result(tool_result, tool_name=call.name, related_step=current_step_id, importance=MemoryImportance.IMPORTANT if not tool_result.success else MemoryImportance.NORMAL)
+                            except ShortTermMemoryError as exc:
+                                errors.append(f"short-term memory tool update failed: {exc}")
+                            last_call, last_result = call, tool_result
+                            if tool_result.success:
+                                invalidated_paths.update(_tool_result_paths(call, tool_result))
+                            if codebase_understanding is not None:
+                                try:
+                                    codebase_understanding = codebase_builder.update_from_tool_result(codebase_understanding, call.name, tool_result.data)
+                                except (TypeError, ValueError) as exc:
+                                    warnings.append(f"codebase understanding update unavailable: {exc}")
+                            budget_ledger.complete_tool()
+                            bounded_observation = self._safe_result_text(tool_result)
+                            budget_ledger.account_tool_result(tool_name=call.name, tool_output_bytes=len(bounded_observation), context_tokens=prompt_tokens, success=tool_result.success)
+                            usage = AgentUsage(usage.steps, usage.tool_calls + 1, usage.prompt_tokens, usage.tool_result_chars + len(bounded_observation), usage.context_truncations)
+
                 machine.transition(LoopLifecycleState.OBSERVING_RESULT)
-                bounded_observation = self._safe_result_text(tool_result)
-                budget_ledger.account_tool_result(tool_name=call.name, tool_output_bytes=len(bounded_observation), context_tokens=prompt_tokens, success=tool_result.success)
-                usage = AgentUsage(usage.steps, usage.tool_calls + 1, usage.prompt_tokens, usage.tool_result_chars + len(bounded_observation), usage.context_truncations)
+                duration_ms = (datetime.now(timezone.utc) - loop_start_mono).total_seconds() * 1000.0
+                avg_batch_size = (total_tc / max(1, parallel_bats + len([b for b in batches if b.mode is ExecutionMode.SEQUENTIAL]))) if total_tc > 0 else 1.0
+                parallel_metrics = ParallelMetrics(
+                    total_tool_calls=total_tc,
+                    parallel_tool_calls=parallel_tc,
+                    sequential_tool_calls=seq_tc,
+                    parallel_batches=parallel_bats,
+                    maximum_concurrency=max_conc,
+                    average_batch_size=avg_batch_size,
+                    execution_duration_ms=duration_ms,
+                )
+                call = last_call
+                tool_result = last_result
                 if not tool_result.success:
                     message = tool_result.message or "Tool execution failed."
                     try:
@@ -1152,10 +1283,12 @@ class AutonomousToolLoop:
                     update_plan_step(current_step_id, PlanStepStatus.COMPLETED, reason="structured successful observation", evidence=(f"{call.name} returned a structured successful observation",))
                     completion_evidence.append(f"{call.name} returned a structured successful observation")
                 machine.transition(LoopLifecycleState.UPDATING_CONTEXT)
-                history.append(AgentMessage(AgentMessageRole.ASSISTANT, _sanitize_text(_bounded_text(model_response, _MAX_TEXT_CHARS)), call_id=call.call_id))
-                history.append(AgentMessage(AgentMessageRole.TOOL, bounded_observation, name=call.name, call_id=call.call_id))
+                for dispatched_call, dispatched_result in zip(calls[-total_tc:], results[-total_tc:]):
+                    obs = self._safe_result_text(dispatched_result)
+                    history.append(AgentMessage(AgentMessageRole.ASSISTANT, _sanitize_text(_bounded_text(model_response, _MAX_TEXT_CHARS)), call_id=dispatched_call.call_id))
+                    history.append(AgentMessage(AgentMessageRole.TOOL, obs, name=dispatched_call.name, call_id=dispatched_call.call_id))
+                    steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, current_step_id, dispatched_call.name, dispatched_call.arguments, "SUCCESS", None, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}))
                 history = history[-self.config.max_history_items:]
-                steps.append(AutonomousLoopStep(cycle_index + 1, LoopLifecycleState.EXECUTING_TOOL, LoopLifecycleState.UPDATING_CONTEXT, current_step_id, call.name, call.arguments, "SUCCESS", None, model_response, context_truncated, current_selection.risk_level.value in {"MUTATING", "DESTRUCTIVE"}))
                 plan_index += 1
                 cycle_index += 1
                 machine.transition(LoopLifecycleState.REQUESTING_NEXT_ACTION)
@@ -1277,7 +1410,7 @@ class AutonomousToolLoop:
         return _bounded_tool_result_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")), self.config.max_tool_result_chars)
 
     def _finalize(self, request: AutonomousLoopRequest, status: LoopStatus, final_answer: str, plan: ExecutionPlan | None, context: ProjectContext | None, state: AutonomousLoopState, steps: Sequence[AutonomousLoopStep], calls: Sequence[ToolCall], results: Sequence[ToolResult], usage: AgentUsage, warnings: Sequence[str], errors: Sequence[str], *, stop_evaluation: StopEvaluation | None = None, execution_budget: ExecutionBudgetSnapshot | None = None, recovery: RecoveryResult | None = None, completion: TaskCompletionResult | None = None) -> AutonomousLoopResult:
-        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval, state.plan_execution, state.codebase_understanding, state.context_assembly)
+        return AutonomousLoopResult(request.task, status, final_answer, plan, context, state, tuple(steps), tuple(calls), tuple(results), usage, _unique(warnings), _unique(errors), stop_evaluation, execution_budget, recovery, completion, state.final_verification, state.short_term_memory, state.project_memory, state.long_term_memories, state.experience_record, state.memory_retrieval, state.plan_execution, state.codebase_understanding, state.context_assembly, parallel_metrics=state.parallel_metrics)
 
     def _failure_result(self, message: str, status: LoopStatus, code: str, *, task: str, short_term_memory: ShortTermMemory | None = None) -> AutonomousLoopResult:
         snapshot = short_term_memory.snapshot() if short_term_memory is not None else None

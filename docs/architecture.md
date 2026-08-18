@@ -2205,3 +2205,30 @@ The manager is initialized from existing `AutonomousLoopConfig` limits and the i
 The autonomous loop calls the manager for the normal action prompt, unavailable-selection prompt, and completion prompt. It passes Phase 12.2 understanding and existing memory retrieval into the same assembly. Successful tool results contribute path invalidations for file-dependent context, while structured result history is normalized into tool, test, error, observation, and verification items. Existing project mutation, command, test, recovery, budget, and registry boundaries remain authoritative; Phase 12.3 adds no new execution authority.
 
 The legacy `ContextBudget` remains compatible with the older `AgentLoop`. This is intentional: Phase 12.3 integrates the richer pipeline at the actual `AutonomousToolLoop` model-input boundary without breaking the earlier public contract.
+
+## Phase 12.4 Parallel Tool Execution
+
+Phase 12.4 introduces dependency-aware, thread-safe, bounded parallel execution of read-only and independent tool calls within the autonomous agent loop without changing the tool registry interface or mutating source files.
+
+```text
+ToolCall requests / Model tool items
+        ↓
+ToolScheduler
+  ├── ToolExecutionProfile lookup (AccessMode, SideEffectType, ConcurrencyPolicy, resource_scope)
+  ├── Dependency analysis (data, resource, ordering, mutation dependencies)
+  ├── max_parallel_tools bounded chunking (default 4, max 8)
+  └── ExecutionBatch sequence (SEQUENTIAL or PARALLEL)
+        ↓
+AutonomousToolLoop.run()
+  ├── EXECUTING_TOOL state transition
+  ├── ThreadPoolExecutor worker execution (for PARALLEL batches)
+  ├── Thread-safe memory, codebase understanding, and budget ledger accounting
+  ├── OBSERVING_RESULT state transition
+  └── ParallelMetrics tracking (total calls, parallel/sequential count, max concurrency, duration)
+```
+
+`ToolScheduler` classifies every tool into immutable `ToolExecutionProfile` definitions. Read-only inspection tools are classified as `PARALLEL_SAFE`, while mutating or command execution tools are `SEQUENTIAL_ONLY`. The scheduler inspects tool arguments to detect resource conflicts (such as overlapping file paths) and enforces sequential execution when dependencies or resource conflicts exist, or when `parallel_execution_enabled=False`.
+
+`AutonomousToolLoop` groups independent tool calls into execution batches and dispatches parallel read-only tools concurrently using `ThreadPoolExecutor`. State transitions (`EXECUTING_TOOL` → `OBSERVING_RESULT`) are validated by the lifecycle state machine, and all memory records, codebase understanding updates, and budget ledger accounts remain thread-safe. `ParallelMetrics` are recorded and exposed on both `AutonomousLoopState` and `AutonomousLoopResult`.
+
+The layer maintains all previous project invariants: no process execution during scheduling, no shell execution, no network access, strict read-only tool registry preservation, immutable result records, and clean backward compatibility when parallel execution is disabled or unused.

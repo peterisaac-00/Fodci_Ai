@@ -49,6 +49,18 @@ from backend_ai.agent.codebase_understanding import (
     UnderstandingEvidence,
     understand_codebase,
 )
+from backend_ai.agent.scheduler import (
+    AccessMode,
+    ConcurrencyPolicy,
+    DependencyType,
+    ExecutionBatch,
+    ExecutionMode,
+    ParallelMetrics,
+    SideEffectType,
+    ToolCallDependency,
+    ToolExecutionProfile,
+    ToolScheduler,
+)
 from backend_ai.agent.planner import (
     ExecutionPlan,
     PlanCompleteness,
@@ -935,4 +947,14 @@ __all__ = [
     "ToolResult",
     "UnknownToolError",
     "parse_agent_output",
+    "AccessMode",
+    "ConcurrencyPolicy",
+    "DependencyType",
+    "ExecutionBatch",
+    "ExecutionMode",
+    "ParallelMetrics",
+    "SideEffectType",
+    "ToolCallDependency",
+    "ToolExecutionProfile",
+    "ToolScheduler",
 ]

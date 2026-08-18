@@ -103,3 +103,14 @@ Phase 12.3 does not add a new production script or change the normal `fodci` com
 The manager keeps the current task, active execution state, failed-test/error evidence, and required verification information ahead of lower-priority context. It compresses large file/tool observations deterministically, preserves diagnostic tails, deduplicates repeated context, and marks file-dependent items invalidated after successful repository changes. It never runs commands, calls external APIs, stores hidden reasoning, creates parallel tool calls, or replaces the existing memory system.
 
 The focused coverage is in `tests/unit/test_phase123_context_manager.py` and `tests/integration/test_phase123_long_context_integration.py`. Phase 12.4 and later phases remain outside this workflow.
+
+
+## Phase 12.4 Parallel Tool Execution Workflows
+
+Phase 12.4 does not introduce a standalone production CLI script; parallel tool execution and scheduling are integrated directly into `AutonomousToolLoop` and `ToolScheduler`.
+
+The execution engine uses `ToolExecutionProfile` definitions and `ToolScheduler` to group independent read-only tool calls into parallel batches. When `parallel_execution_enabled=True` (the default) and multiple read-only tool calls are requested, the autonomous loop executes them concurrently via `ThreadPoolExecutor` (bounded by `max_parallel_tools`), tracking concurrency metrics in `ParallelMetrics`.
+
+Developers can configure concurrency limits via `AutonomousLoopConfig(parallel_execution_enabled=True, max_parallel_tools=4)` and inspect `AutonomousLoopResult.parallel_metrics` after execution. When disabled or when mutating tools are invoked, the scheduler automatically forces safe sequential execution.
+
+All safety boundaries are fully preserved: no shell execution, no network access, strict read-only tool registry preservation, immutable result records, and thread-safe memory and budget updates.
