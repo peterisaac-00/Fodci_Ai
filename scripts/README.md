@@ -135,3 +135,10 @@ Developers can initialize the memory system with a persistent JSON store path (`
 Phase 12.7 integrates multi-agent orchestration into the backend engineering agent. `AgentOrchestrator` consumes a set of dependency-aware `SubTask` items, resolves specialized agents via `AgentRegistry`, maintains shared `TaskState`, and persists successful solution records into `AdvancedMemorySystem`.
 
 Developers can instantiate `AgentOrchestrator(registry, memory_system)` and execute multi-agent workflows programmatically or integrate them with custom task definitions, ensuring robust local execution without external API dependencies.
+
+
+## Phase 12.8 Advanced Autonomy & Control Workflows
+
+Phase 12.8 finalizes the Fodci AI Backend Engineering Agent with the `AutonomyController`. It provides robust execution budgets, loop detection, explicit task lifecycles, checkpoints, and human control hooks (`pause`, `resume`, `cancel`).
+
+Developers can instantiate `AutonomyController(orchestrator, memory_system, budget)` to execute end-to-end backend engineering tasks with guaranteed bounded termination, complete observability, and full regression test coverage (1025 tests).

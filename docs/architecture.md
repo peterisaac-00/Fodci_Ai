@@ -2317,3 +2317,51 @@ Phase 12.7 introduces a production-quality, model-agnostic **Multi-Agent Archite
 ```
 
 `AgentRegistry` manages specialized agent roles (`PLANNER`, `CODER`, `TESTER`, `DEBUGGER`, `REVIEWER`, `VERIFIER`). `TaskState` and `SubTask` model dependency-aware execution graphs (DAGs) while ensuring safe parallel and sequential delegation. Successful completions automatically record structured knowledge into the Phase 12.6 `AdvancedMemorySystem`, preserving project isolation and backward compatibility with 1022 passing tests.
+
+## Phase 12.8 Advanced Autonomy & Control
+
+Phase 12.8 introduces the final **Advanced Autonomy & Control** layer (`AutonomyController`), unifying multi-agent orchestration, memory, context management, error recovery, execution budgets, loop detection, and human control into a production-ready, feature-complete Backend Engineering Agent.
+
+```text
+                    USER
+                     │
+                     ▼
+              AUTONOMY CONTROLLER
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+      PLAN        MEMORY       CONTEXT
+        │            │            │
+        └────────────┼────────────┘
+                     ▼
+              AGENT ORCHESTRATOR
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+      CODER        TESTER      DEBUGGER
+        │            │            │
+        └────────────┼────────────┘
+                     ▼
+                   TOOLS
+                     │
+                     ▼
+                 EXECUTION
+                     │
+                     ▼
+                 TESTING
+                     │
+                     ▼
+                 EVALUATION
+                     │
+          ┌──────────┴──────────┐
+          ▼                     ▼
+       SUCCESS                FAILURE
+          │                     │
+          ▼                     ▼
+     VERIFICATION           RECOVERY
+          │                     │
+          ▼                     ▼
+      COMPLETED              REPLAN
+```
+
+`AutonomyController` manages explicit task lifecycles (`CREATED` → `ANALYZING` → `PLANNING` → `EXECUTING` → `TESTING` → `EVALUATING` → `RECOVERING` → `REPLANNING` → `VERIFYING` → `COMPLETED`), enforces configurable `AutonomyBudget` bounds, detects pathological loops (`LoopDetector`), maintains execution checkpoints, supports human control (`pause`, `resume`, `cancel`), and passes through an explicit verification gate before terminal success. All 1025 tests pass successfully, and the project is fully feature-complete.
