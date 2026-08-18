@@ -1,6 +1,7 @@
 """Offline Teacher–Student distillation contracts and workflows."""
 
 from backend_ai.distillation.buffer import BufferError, BufferStats, InteractionBuffer
+from backend_ai.distillation.quality import QualityAssessment, QualityFilter, VerificationGate
 from backend_ai.distillation.contract import (
     EXAMPLE_FORMAT,
     SCHEMA_VERSION,
@@ -17,6 +18,9 @@ __all__ = [
     "BufferError",
     "BufferStats",
     "InteractionBuffer",
+    "QualityAssessment",
+    "QualityFilter",
+    "VerificationGate",
     "EXAMPLE_FORMAT",
     "SCHEMA_VERSION",
     "ContractError",

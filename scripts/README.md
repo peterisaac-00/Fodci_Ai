@@ -502,3 +502,13 @@ PYTHONPATH=src python scripts/run_phase152_buffer.py
 ```
 
 The live interaction buffer is local and ignored by Git. Commit only contract code, tests, and aggregate reports; never commit private prompts, credentials, or project source captured during normal use.
+
+## Phase 15.3 — Quality Filter and Verification Gate
+
+`run_phase153_quality_gate.py` validates secret detection, repetition rejection, pending state without evidence, and acceptance only after execution or human evidence.
+
+```text
+PYTHONPATH=src python scripts/run_phase153_quality_gate.py
+```
+
+Quality gates are contamination controls, not semantic correctness proof. Rejected or unverified records never enter Fodci training splits.

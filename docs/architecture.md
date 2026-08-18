@@ -2543,3 +2543,9 @@ Raw records remain buffer-only and are not training-eligible. Acceptance require
 Phase 15.2 adds `InteractionBuffer`, a bounded append-only local JSONL store for Teacher–Student records. It rejects symlinks, malformed records, duplicate IDs, and capacity overflow, and exposes pending versus training-eligible views without invoking training or external services.
 
 Live interaction data remains local and ignored by Git. Only the contract implementation, tests, and aggregate report are committed; private prompts, credentials, and captured project source must never be committed.
+
+## Phase 15.3 — Quality Filter and Verification Gate
+
+Phase 15.3 adds `QualityFilter` and `VerificationGate` to prevent obvious Teacher–Student contamination. The filter detects secret-like content, excessive repetition, length violations, and missing backend signal. Clean but unevidenced records remain pending; only execution-verified or human-approved records can enter train, validation, or test splits.
+
+The phase explicitly separates heuristic eligibility from semantic correctness. Rejected and unverified records never trigger Fodci training, and no automatic training was performed.

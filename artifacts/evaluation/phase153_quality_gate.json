@@ -1,0 +1,40 @@
+{
+  "automatic_training_performed": false,
+  "clean_accepted": {
+    "assessment_accepted": true,
+    "quality": "accepted",
+    "training_eligible": true,
+    "verification": "execution_pass"
+  },
+  "clean_pending": {
+    "assessment_accepted": true,
+    "quality": "pending",
+    "training_eligible": false,
+    "verification": "unverified"
+  },
+  "format": "fodci.phase153_quality_gate",
+  "phase": "15.3",
+  "phase_gates": {
+    "clean_without_evidence_stays_pending": true,
+    "execution_verified_clean_record_accepted": true,
+    "no_automatic_training": true,
+    "repetitive_record_rejected": true,
+    "secret_record_rejected": true
+  },
+  "phase_gates_passed": true,
+  "repetitive_rejected": {
+    "quality": "rejected",
+    "reasons": [
+      "response excessively repetitive",
+      "no backend signal"
+    ],
+    "training_eligible": false
+  },
+  "schema_version": "1.0",
+  "secret_rejected": {
+    "quality": "rejected",
+    "redaction": "blocked",
+    "secret_detected": true,
+    "training_eligible": false
+  }
+}
