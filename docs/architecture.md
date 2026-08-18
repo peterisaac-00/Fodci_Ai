@@ -2499,3 +2499,9 @@ Phase 14.1 defines a held-out response-quality benchmark separate from the exist
 The benchmark module records non-empty output, response length, expected-concept coverage, forbidden-concept hits, repeated-token rate, code presence, and a conservative understandability heuristic. These measurements are diagnostic evidence only: every score remains marked for manual review and no keyword score is treated as semantic correctness. The Phase 14.1 runner validates the dataset and writes a machine-readable manifest without loading a model, changing weights, executing tools, or modifying the stable runtime.
 
 Phase 14.2 uses the exact Phase 14.1 dataset to measure the stable `fodci-testing-qa-v1` baseline before any pretrained provider is introduced.
+
+## Phase 14.2 — Fodci 11M Backend Baseline
+
+Phase 14.2 applies the fixed Phase 14.1 response benchmark to the stable `fodci-testing-qa-v1` checkpoint with CPU-only deterministic inference, seed `2026`, provider-default greedy decoding, and a 32-token bound. All 24 cases completed without provider failures and the stable runtime was not changed.
+
+The measured non-empty rate was `1.0000`, but the understandable heuristic rate and average keyword coverage were both `0.0000`; the average repeated-token rate was `0.3278`. Outputs remained gibberish or repetitive, so this phase confirms the reproducible baseline and the language-capability limitation rather than semantic backend competence. Phase 14.3 can introduce an experimental provider, but stable-runtime replacement remains prohibited until the same benchmark demonstrates clear improvement.

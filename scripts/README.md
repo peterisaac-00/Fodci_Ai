@@ -433,3 +433,13 @@ PYTHONPATH=src python scripts/run_phase141_backend_benchmark.py
 ```
 
 The dataset is separate from training data and the runner does not load a model or perform training. Its transparent scorer records non-empty output, expected-concept coverage, forbidden-concept hits, repetition, and code presence. Every score remains subject to manual review; keyword coverage is not a semantic correctness judge.
+
+## Phase 14.2 — Fodci 11M Backend Baseline
+
+`run_phase142_fodci_baseline.py` evaluates the stable `fodci-testing-qa-v1` checkpoint on the fixed Phase 14.1 response benchmark using CPU-only deterministic settings.
+
+```text
+PYTHONPATH=src python scripts/run_phase142_fodci_baseline.py --max-new-tokens 32
+```
+
+The report preserves the honest baseline result: all 24 calls completed and produced non-empty text, but the understandability heuristic and keyword coverage were both zero. This is diagnostic evidence, not a semantic judge, and every response remains subject to manual review. The stable runtime is not changed by this phase.

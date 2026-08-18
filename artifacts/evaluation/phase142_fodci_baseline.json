@@ -1,0 +1,542 @@
+{
+  "aggregate": {
+    "average_keyword_coverage": 0.0,
+    "average_repeated_token_rate": 0.327777625,
+    "case_count": 24,
+    "forbidden_hit_rate": 0.0,
+    "manual_review_required": true,
+    "non_empty_rate": 1.0,
+    "understandable_heuristic_rate": 0.0
+  },
+  "all_cases_completed": true,
+  "by_category": {
+    "architecture": {
+      "average_keyword_coverage": 0.0,
+      "average_repeated_token_rate": 0.25,
+      "case_count": 3,
+      "forbidden_hit_rate": 0.0,
+      "manual_review_required": true,
+      "non_empty_rate": 1.0,
+      "understandable_heuristic_rate": 0.0
+    },
+    "auth-security": {
+      "average_keyword_coverage": 0.0,
+      "average_repeated_token_rate": 0.411111,
+      "case_count": 3,
+      "forbidden_hit_rate": 0.0,
+      "manual_review_required": true,
+      "non_empty_rate": 1.0,
+      "understandable_heuristic_rate": 0.0
+    },
+    "debugging": {
+      "average_keyword_coverage": 0.0,
+      "average_repeated_token_rate": 0.2814813333333333,
+      "case_count": 3,
+      "forbidden_hit_rate": 0.0,
+      "manual_review_required": true,
+      "non_empty_rate": 1.0,
+      "understandable_heuristic_rate": 0.0
+    },
+    "fastapi": {
+      "average_keyword_coverage": 0.0,
+      "average_repeated_token_rate": 0.42129600000000006,
+      "case_count": 3,
+      "forbidden_hit_rate": 0.0,
+      "manual_review_required": true,
+      "non_empty_rate": 1.0,
+      "understandable_heuristic_rate": 0.0
+    },
+    "python-backend": {
+      "average_keyword_coverage": 0.0,
+      "average_repeated_token_rate": 0.24537033333333333,
+      "case_count": 3,
+      "forbidden_hit_rate": 0.0,
+      "manual_review_required": true,
+      "non_empty_rate": 1.0,
+      "understandable_heuristic_rate": 0.0
+    },
+    "rest-http": {
+      "average_keyword_coverage": 0.0,
+      "average_repeated_token_rate": 0.3833333333333333,
+      "case_count": 3,
+      "forbidden_hit_rate": 0.0,
+      "manual_review_required": true,
+      "non_empty_rate": 1.0,
+      "understandable_heuristic_rate": 0.0
+    },
+    "sql-postgresql": {
+      "average_keyword_coverage": 0.0,
+      "average_repeated_token_rate": 0.37037000000000003,
+      "case_count": 3,
+      "forbidden_hit_rate": 0.0,
+      "manual_review_required": true,
+      "non_empty_rate": 1.0,
+      "understandable_heuristic_rate": 0.0
+    },
+    "testing": {
+      "average_keyword_coverage": 0.0,
+      "average_repeated_token_rate": 0.25925899999999996,
+      "case_count": 3,
+      "forbidden_hit_rate": 0.0,
+      "manual_review_required": true,
+      "non_empty_rate": 1.0,
+      "understandable_heuristic_rate": 0.0
+    }
+  },
+  "case_count": 24,
+  "checkpoint_path": "/home/ubuntu/backend-ai/artifacts/checkpoints/fodci-testing-qa-v1.pt",
+  "completed_case_count": 24,
+  "dataset_fingerprint": "sha256:ca6ac06e3c665051689326637c4cb96ae6f2733f1485a2524082901de3b01095",
+  "dataset_version": "phase141-v1",
+  "elapsed_seconds": 13.994485359988175,
+  "failures": [],
+  "format": "fodci.phase142_fodci_baseline",
+  "human_review_required": true,
+  "model_version": "fodci-testing-qa-v1",
+  "parameter_count": 11424400,
+  "phase": "14.2",
+  "phase_gates_passed": true,
+  "protocol": {
+    "benchmark_only": true,
+    "decoding": "provider-default-greedy",
+    "device": "cpu",
+    "max_new_tokens": 32,
+    "seed": 2026
+  },
+  "results": [
+    {
+      "case_id": "B14-001",
+      "category": "python-backend",
+      "difficulty": "easy",
+      "prompt": "What is the difference between a list and a tuple in Python backend code?",
+      "response": "e an the te the te an then then ",
+      "score": {
+        "case_id": "B14-001",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.444444,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-002",
+      "category": "python-backend",
+      "difficulty": "medium",
+      "prompt": "How should a Python backend handle an exception without hiding the root cause?",
+      "response": "e ante the t ant then the a",
+      "score": {
+        "case_id": "B14-002",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.125,
+        "understandable_heuristic": false,
+        "word_count": 8
+      }
+    },
+    {
+      "case_id": "B14-003",
+      "category": "python-backend",
+      "difficulty": "medium",
+      "prompt": "Show a small Python function that validates a positive integer input using a type hint.",
+      "response": "e an an then the a",
+      "score": {
+        "case_id": "B14-003",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.166667,
+        "understandable_heuristic": false,
+        "word_count": 6
+      }
+    },
+    {
+      "case_id": "B14-004",
+      "category": "fastapi",
+      "difficulty": "easy",
+      "prompt": "How do you define a GET endpoint in FastAPI and return JSON?",
+      "response": "e an then the the the te the the",
+      "score": {
+        "case_id": "B14-004",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.444444,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-005",
+      "category": "fastapi",
+      "difficulty": "medium",
+      "prompt": "Why should a FastAPI application validate request data with Pydantic models?",
+      "response": "e the te an an and the an an ",
+      "score": {
+        "case_id": "B14-005",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.444444,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-006",
+      "category": "fastapi",
+      "difficulty": "hard",
+      "prompt": "How should a FastAPI service handle an asynchronous database call and a timeout?",
+      "response": "e te the the t the an an ",
+      "score": {
+        "case_id": "B14-006",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.375,
+        "understandable_heuristic": false,
+        "word_count": 8
+      }
+    },
+    {
+      "case_id": "B14-007",
+      "category": "rest-http",
+      "difficulty": "easy",
+      "prompt": "What does HTTP status code 201 mean in a REST API?",
+      "response": "en the the an anthe the the the ",
+      "score": {
+        "case_id": "B14-007",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.5,
+        "understandable_heuristic": false,
+        "word_count": 8
+      }
+    },
+    {
+      "case_id": "B14-008",
+      "category": "rest-http",
+      "difficulty": "medium",
+      "prompt": "What is the difference between PUT and PATCH in a REST API?",
+      "response": "e an t the the the the te the th",
+      "score": {
+        "case_id": "B14-008",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.4,
+        "understandable_heuristic": false,
+        "word_count": 10
+      }
+    },
+    {
+      "case_id": "B14-009",
+      "category": "rest-http",
+      "difficulty": "hard",
+      "prompt": "How should an API implement pagination and communicate the next page to clients?",
+      "response": "e te the the t then the a",
+      "score": {
+        "case_id": "B14-009",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.25,
+        "understandable_heuristic": false,
+        "word_count": 8
+      }
+    },
+    {
+      "case_id": "B14-010",
+      "category": "sql-postgresql",
+      "difficulty": "easy",
+      "prompt": "What is a SQL transaction and why is COMMIT important?",
+      "response": "e anthe an the ant the the the t",
+      "score": {
+        "case_id": "B14-010",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.333333,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-011",
+      "category": "sql-postgresql",
+      "difficulty": "medium",
+      "prompt": "How should a PostgreSQL backend query rows safely using parameters?",
+      "response": "e ant then the te the the t then",
+      "score": {
+        "case_id": "B14-011",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.333333,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-012",
+      "category": "sql-postgresql",
+      "difficulty": "hard",
+      "prompt": "What is an index in PostgreSQL, and when can an index hurt performance?",
+      "response": "n then the te the te an then the",
+      "score": {
+        "case_id": "B14-012",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.444444,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-013",
+      "category": "auth-security",
+      "difficulty": "easy",
+      "prompt": "How should passwords be stored in a backend service?",
+      "response": "e t anthe an te an te the the te",
+      "score": {
+        "case_id": "B14-013",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.4,
+        "understandable_heuristic": false,
+        "word_count": 10
+      }
+    },
+    {
+      "case_id": "B14-014",
+      "category": "auth-security",
+      "difficulty": "medium",
+      "prompt": "What checks are needed to validate a JWT safely?",
+      "response": "en the t the an anthe the the th",
+      "score": {
+        "case_id": "B14-014",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.333333,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-015",
+      "category": "auth-security",
+      "difficulty": "hard",
+      "prompt": "What is the difference between authentication and authorization in an API?",
+      "response": "e t the te the the t the an an ",
+      "score": {
+        "case_id": "B14-015",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.5,
+        "understandable_heuristic": false,
+        "word_count": 10
+      }
+    },
+    {
+      "case_id": "B14-016",
+      "category": "testing",
+      "difficulty": "easy",
+      "prompt": "What is a unit test in Python and what should it isolate?",
+      "response": "en an an the the the the te anth",
+      "score": {
+        "case_id": "B14-016",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.444444,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-017",
+      "category": "testing",
+      "difficulty": "medium",
+      "prompt": "How should pytest test a FastAPI endpoint without depending on a production database?",
+      "response": "e the and the an an ",
+      "score": {
+        "case_id": "B14-017",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.333333,
+        "understandable_heuristic": false,
+        "word_count": 6
+      }
+    },
+    {
+      "case_id": "B14-018",
+      "category": "testing",
+      "difficulty": "hard",
+      "prompt": "What is the difference between an integration test and a unit test for a backend service?",
+      "response": "e ant then the a",
+      "score": {
+        "case_id": "B14-018",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.0,
+        "understandable_heuristic": false,
+        "word_count": 5
+      }
+    },
+    {
+      "case_id": "B14-019",
+      "category": "debugging",
+      "difficulty": "easy",
+      "prompt": "What is the first useful step when a Python backend raises a traceback?",
+      "response": "n the an ante the the t the an a",
+      "score": {
+        "case_id": "B14-019",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.4,
+        "understandable_heuristic": false,
+        "word_count": 10
+      }
+    },
+    {
+      "case_id": "B14-020",
+      "category": "debugging",
+      "difficulty": "medium",
+      "prompt": "How would you investigate a slow API endpoint?",
+      "response": "e an the then an t then the the ",
+      "score": {
+        "case_id": "B14-020",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.444444,
+        "understandable_heuristic": false,
+        "word_count": 9
+      }
+    },
+    {
+      "case_id": "B14-021",
+      "category": "debugging",
+      "difficulty": "hard",
+      "prompt": "How should a backend engineer distinguish a code bug from a configuration or environment problem?",
+      "response": "en the a",
+      "score": {
+        "case_id": "B14-021",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.0,
+        "understandable_heuristic": false,
+        "word_count": 3
+      }
+    },
+    {
+      "case_id": "B14-022",
+      "category": "architecture",
+      "difficulty": "easy",
+      "prompt": "What is the purpose of separating a backend service into routes, services, and repositories?",
+      "response": "e the the an ",
+      "score": {
+        "case_id": "B14-022",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.25,
+        "understandable_heuristic": false,
+        "word_count": 4
+      }
+    },
+    {
+      "case_id": "B14-023",
+      "category": "architecture",
+      "difficulty": "medium",
+      "prompt": "How should a backend API handle configuration secrets across development and production?",
+      "response": "e an t then the a",
+      "score": {
+        "case_id": "B14-023",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.0,
+        "understandable_heuristic": false,
+        "word_count": 6
+      }
+    },
+    {
+      "case_id": "B14-024",
+      "category": "architecture",
+      "difficulty": "hard",
+      "prompt": "What should an idempotent backend operation guarantee when a client retries a request?",
+      "response": "e the an the an the",
+      "score": {
+        "case_id": "B14-024",
+        "code_present": false,
+        "forbidden_hit": false,
+        "keyword_coverage": 0.0,
+        "manual_review_required": true,
+        "non_empty": true,
+        "repeated_token_rate": 0.5,
+        "understandable_heuristic": false,
+        "word_count": 6
+      }
+    }
+  ],
+  "schema_version": "1.0",
+  "stable_runtime_replaced": false
+}
