@@ -9,6 +9,11 @@ import unicodedata
 from typing import Any
 
 from backend_ai.tokenizer import FodciTokenizer
+from backend_ai.english_only import (
+    ENGLISH_ONLY_POLICY_VERSION,
+    EnglishOnlyViolation,
+    validate_english_text,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +80,10 @@ def main() -> None:
     for filename, metadata in SOURCES.items():
         raw_path = args.raw / filename
         cleaned_text = clean_gutenberg(raw_path.read_text(encoding="utf-8"))
+        try:
+            validate_english_text(cleaned_text, field=f"source:{filename}")
+        except EnglishOnlyViolation as exc:
+            raise ValueError(str(exc)) from exc
         clean_path = clean_dir / filename
         clean_path.write_text(cleaned_text, encoding="utf-8")
         cleaned[filename] = cleaned_text
@@ -89,13 +98,19 @@ def main() -> None:
     if args.dolly.is_file():
         for line in args.dolly.read_text(encoding="utf-8").splitlines()[:512]:
             row = json.loads(line)
-            tokenizer_material.append(" ".join(str(row.get(field, "")) for field in ("instruction", "context", "response"))[:2_000])
+            material = " ".join(str(row.get(field, "")) for field in ("instruction", "context", "response"))[:2_000]
+            try:
+                validate_english_text(material, field=f"dolly:{args.dolly.name}")
+            except EnglishOnlyViolation as exc:
+                raise ValueError(str(exc)) from exc
+            tokenizer_material.append(material)
     tokenizer = FodciTokenizer(vocab_size=10_000).train(tuple(tokenizer_material), max_merges=args.max_merges)
     tokenizer.save(args.tokenizer)
     manifest = {
         "format": "fodci.english_foundation_manifest",
         "schema_version": "1.0",
         "language": "en",
+        "language_policy": ENGLISH_ONLY_POLICY_VERSION,
         "tokenizer_version": TOKENIZER_VERSION,
         "tokenizer_path": str(args.tokenizer.relative_to(ROOT)),
         "tokenizer_vocab_size": tokenizer.vocab_size,

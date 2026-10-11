@@ -125,6 +125,7 @@ def train_one(
     train_examples: list[TrainingExample],
     validation_examples: list[TrainingExample],
     max_steps: int,
+    device: str,
 ) -> dict[str, Any]:
     model = FodciModel(config)
     initial_validation_model = FodciModel(config)
@@ -140,7 +141,7 @@ def train_one(
             learning_rate=3e-4,
             weight_decay=0.01,
             max_grad_norm=1.0,
-            device="cpu",
+            device=device,
             seed=SEED,
             validation_interval=1,
             checkpoint_interval=0,
@@ -156,12 +157,13 @@ def train_one(
     saved = trainer.save_checkpoint(checkpoint_path, run_metadata={"phase": "13.13", "dataset_version": DATASET_VERSION, "language": "en"})
 
     reloaded_model = FodciModel(config)
-    loaded = CheckpointManager(checkpoint_path.parent, model_version=model_version).load_model(saved, reloaded_model, device=torch.device("cpu"))
+    resolved_device = trainer.device
+    loaded = CheckpointManager(checkpoint_path.parent, model_version=model_version).load_model(saved, reloaded_model, device=resolved_device)
     reloaded_trainer = FodciTrainer(
         reloaded_model,
         train_examples,
         validation_examples,
-        TrainingConfig(epochs=1, max_steps=1, batch_size=2, device="cpu", seed=SEED, checkpoint_interval=0, output_dir=CHECKPOINT_DIR),
+        TrainingConfig(epochs=1, max_steps=1, batch_size=2, device=device, seed=SEED, checkpoint_interval=0, output_dir=CHECKPOINT_DIR),
         model_version=model_version,
     )
     reloaded_loss, _, _ = reloaded_trainer.evaluate(validation_examples)
@@ -184,6 +186,8 @@ def train_one(
         "max_steps": max_steps,
         "global_step": result.global_step,
         "training_seconds": time.perf_counter() - started,
+        "requested_device": device,
+        "resolved_device": str(resolved_device),
         "baseline_validation_loss": baseline_loss,
         "trained_validation_loss": trained_loss,
         "reloaded_validation_loss": reloaded_loss,
@@ -201,11 +205,11 @@ def train_one(
     return report
 
 
-def response_probe(checkpoint: Path, model_version: str, config: ModelConfig, tokenizer: FodciTokenizer) -> dict[str, Any]:
+def response_probe(checkpoint: Path, model_version: str, config: ModelConfig, tokenizer: FodciTokenizer, *, device: str) -> dict[str, Any]:
     engine = InferenceEngine(
         FodciModel(config),
         tokenizer,
-        InferenceConfig(max_new_tokens=32, device="cpu", seed=SEED, model_version=model_version, checkpoint_path=checkpoint),
+        InferenceConfig(max_new_tokens=32, device=device, seed=SEED, model_version=model_version, checkpoint_path=checkpoint),
     )
     prompts = (
         "What is a unit test in Python?",
@@ -250,7 +254,7 @@ The corpus uses five verified English Project Gutenberg UTF-8 sources with prove
 |---|---:|---:|---:|---:|---:|
 {chr(10).join(rows)}
 
-Both candidates use the same English tokenizer, corpus split, CPU optimizer settings, seed, and bounded step budget. The 25M candidate is a real trained checkpoint, not only a parameter-count probe.
+Both candidates use the same English tokenizer, corpus split, optimizer settings, seed, selected device, and bounded step budget. The 25M candidate is a real trained checkpoint, not only a parameter-count probe.
 
 ## Natural-response probes
 
@@ -270,6 +274,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train matched English-only 11M and 25M Fodci foundation candidates.")
     parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS)
     parser.add_argument("--train-examples", type=int, default=4096)
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     args = parser.parse_args()
     if args.max_steps <= 0 or args.train_examples < 256:
         raise ValueError("max-steps must be positive and train-examples must be at least 256")
@@ -277,18 +282,20 @@ def main() -> None:
     train_examples, validation_examples, data_stats = load_data(tokenizer, limit_examples=args.train_examples)
     started = time.perf_counter()
     model_reports = {
-        "english_11m": train_one(config=CONFIG_11M, model_version=MODEL_11M_VERSION, checkpoint_path=MODEL_11M_CHECKPOINT, train_examples=train_examples, validation_examples=validation_examples, max_steps=args.max_steps),
-        "english_25m": train_one(config=CONFIG_25M, model_version=MODEL_25M_VERSION, checkpoint_path=MODEL_25M_CHECKPOINT, train_examples=train_examples, validation_examples=validation_examples, max_steps=args.max_steps),
+        "english_11m": train_one(config=CONFIG_11M, model_version=MODEL_11M_VERSION, checkpoint_path=MODEL_11M_CHECKPOINT, train_examples=train_examples, validation_examples=validation_examples, max_steps=args.max_steps, device=args.device),
+        "english_25m": train_one(config=CONFIG_25M, model_version=MODEL_25M_VERSION, checkpoint_path=MODEL_25M_CHECKPOINT, train_examples=train_examples, validation_examples=validation_examples, max_steps=args.max_steps, device=args.device),
     }
     probes = {
-        "english_11m": response_probe(MODEL_11M_CHECKPOINT, MODEL_11M_VERSION, CONFIG_11M, tokenizer),
-        "english_25m": response_probe(MODEL_25M_CHECKPOINT, MODEL_25M_VERSION, CONFIG_25M, tokenizer),
+        "english_11m": response_probe(MODEL_11M_CHECKPOINT, MODEL_11M_VERSION, CONFIG_11M, tokenizer, device=args.device),
+        "english_25m": response_probe(MODEL_25M_CHECKPOINT, MODEL_25M_VERSION, CONFIG_25M, tokenizer, device=args.device),
     }
     report = {
         "format": "fodci.phase1313_english_foundation",
         "schema_version": "1.0",
         "phase": "13.13",
         "language": "en",
+        "language_policy": "fodci-english-only-v1",
+        "requested_device": args.device,
         "dataset_version": DATASET_VERSION,
         "tokenizer_path": str(TOKENIZER_PATH),
         "tokenizer_sha256": sha256(TOKENIZER_PATH),

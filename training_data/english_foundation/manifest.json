@@ -1,6 +1,7 @@
 {
   "format": "fodci.english_foundation_manifest",
   "language": "en",
+  "language_policy": "fodci-english-only-v1",
   "license_url": "https://www.gutenberg.org/policy/license.html",
   "quality": {
     "all_sources_english": true,

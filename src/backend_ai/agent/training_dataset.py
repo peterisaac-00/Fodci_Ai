@@ -62,6 +62,11 @@ from backend_ai.agent.experience_dataset import (
     ExperienceDatasetExtractor,
 )
 from backend_ai.agent.experience_records import ExperienceRecord, ExperienceRecords
+from backend_ai.english_only import (
+    ENGLISH_ONLY_POLICY_VERSION,
+    EnglishOnlyViolation,
+    validate_english_payload,
+)
 
 
 TRAINING_DATASET_FORMAT = "fodci.training_dataset"
@@ -103,6 +108,7 @@ class TrainingDatasetRejectionReason(str, Enum):
     DUPLICATE_RECORD = "duplicate_record"
     DUPLICATE_EXAMPLE = "duplicate_example"
     RESOURCE_LIMIT = "resource_limit"
+    ENGLISH_ONLY_REJECTED = "english_only_rejected"
 
 
 class TrainingSplit(str, Enum):
@@ -216,6 +222,20 @@ class TrainingExample:
             raise TrainingDatasetError("context and metadata must be mappings")
         _validate_json_value(self.context, "context", 0, 8)
         _validate_json_value(self.metadata, "metadata", 0, 8)
+        try:
+            validate_english_payload(
+                {
+                    "task": self.task,
+                    "context": self.context,
+                    "input": self.input,
+                    "expected_behavior": self.expected_behavior,
+                    "target": self.target,
+                    "metadata": self.metadata,
+                },
+                field="training_example",
+            )
+        except EnglishOnlyViolation as exc:
+            raise TrainingDatasetError(str(exc)) from exc
         if _contains_secret(_canonical_json(self.to_dict())):
             raise TrainingDatasetError("training example contains prohibited secret material")
         object.__setattr__(self, "context", _freeze(self.context))
@@ -740,6 +760,23 @@ class TrainingDatasetBuilder:
             messages = tuple(item.message for item in validation_before_quality.diagnostics if item.record_id == record_id and item.severity is DiagnosticSeverity.ERROR)
             rejections.append(TrainingDatasetRejection(record_id, TrainingDatasetRejectionReason.VALIDATION_INVALID, "validation", "; ".join(messages)[:512] or "record failed validation"))
 
+        english_records: list[DatasetRecord] = []
+        for record in valid_records:
+            try:
+                validate_english_payload(record.to_dict(), field=f"record[{record.record_id}]")
+            except EnglishOnlyViolation as exc:
+                rejections.append(
+                    TrainingDatasetRejection(
+                        record.experience_id,
+                        TrainingDatasetRejectionReason.ENGLISH_ONLY_REJECTED,
+                        "english_only",
+                        _safe_message(exc),
+                    )
+                )
+                continue
+            english_records.append(record)
+        valid_records = tuple(english_records)
+
         filtered = self.quality.filter_many(valid_records)
         assessments = {item.record_id: item for item in filtered.assessments}
         for assessment in filtered.assessments:
@@ -818,6 +855,7 @@ class TrainingDatasetBuilder:
             "split_policy": self.config.split_policy.to_dict(),
             "validation_limits": self.config.to_dict()["validation_limits"],
             "max_training_examples": self.config.max_training_examples,
+            "language_policy": ENGLISH_ONLY_POLICY_VERSION,
         }
         source_record_ids_by_split = {name: tuple(sorted(example.source_experience_id for example in values)) for name, values in partitions.items()}
         example_ids = {name: tuple(item.example_id for item in values) for name, values in partitions.items()}
