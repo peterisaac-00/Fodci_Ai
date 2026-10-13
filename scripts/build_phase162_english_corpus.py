@@ -39,9 +39,9 @@ def sha256_bytes(value: bytes) -> str:
 def clean_gutenberg(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
     start = re.search(r"\*\*\* START OF THE PROJECT GUTENBERG EBOOK.*?\*\*\*", text, flags=re.IGNORECASE | re.DOTALL)
-    end = re.search(r"\*\*\* END OF THE PROJECT GUTENBERG EBOOK.*?\*\*\*", text, flags=re.IGNORECASE | re.DOTALL)
     if start:
         text = text[start.end():]
+    end = re.search(r"\*\*\* END OF THE PROJECT GUTENBERG EBOOK.*?\*\*\*", text, flags=re.IGNORECASE | re.DOTALL)
     if end:
         text = text[: end.start()]
     lines: list[str] = []
