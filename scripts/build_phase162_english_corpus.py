@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import time
 import unicodedata
+from http.client import IncompleteRead
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -54,10 +55,20 @@ def clean_gutenberg(text: str) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-def fetch(url: str, *, timeout: int = 120) -> bytes:
-    request = Request(url, headers={"User-Agent": USER_AGENT})
-    with urlopen(request, timeout=timeout) as response:
-        return response.read()
+def fetch(url: str, *, timeout: int = 120, attempts: int = 4) -> bytes:
+    """Fetch a source with bounded retry for transient/incomplete responses."""
+
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            request = Request(url, headers={"User-Agent": USER_AGENT})
+            with urlopen(request, timeout=timeout) as response:
+                return response.read()
+        except (HTTPError, URLError, TimeoutError, IncompleteRead, OSError) as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(2 ** attempt)
+    raise RuntimeError(f"failed to fetch {url} after {attempts} attempts: {last_error}") from last_error
 
 
 def load_english_catalog(path: Path) -> list[dict[str, str]]:
@@ -119,7 +130,10 @@ def main() -> None:
         clean_path = clean_dir / f"pg{book_id}.txt"
         try:
             if args.refresh or not raw_path.exists():
-                raw_path.write_bytes(fetch(item["url"]))
+                payload = fetch(item["url"])
+                temporary_path = raw_path.with_suffix(".download")
+                temporary_path.write_bytes(payload)
+                temporary_path.replace(raw_path)
             cleaned = clean_gutenberg(raw_path.read_text(encoding="utf-8", errors="strict"))
             validate_english_text(cleaned, field=f"gutenberg:{book_id}")
             clean_path.write_text(cleaned, encoding="utf-8")
@@ -138,7 +152,7 @@ def main() -> None:
                 "tokens": token_count,
             })
             print(json.dumps({"book_id": book_id, "tokens": token_count, "total_tokens": total_tokens}, ensure_ascii=False), flush=True)
-        except (HTTPError, URLError, TimeoutError, OSError, UnicodeError, UnicodeDecodeError, EnglishOnlyViolation) as exc:
+        except (HTTPError, URLError, TimeoutError, IncompleteRead, OSError, UnicodeError, UnicodeDecodeError, EnglishOnlyViolation, RuntimeError) as exc:
             failures.append({"book_id": book_id, "title": item["title"], "error": str(exc)[:256]})
             continue
 
