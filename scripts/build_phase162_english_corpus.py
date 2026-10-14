@@ -109,6 +109,8 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
     raw_dir.mkdir(parents=True, exist_ok=True)
     clean_dir.mkdir(parents=True, exist_ok=True)
+    for stale_path in clean_dir.glob("*.txt"):
+        stale_path.unlink()
     catalog_path = args.output / "pg_catalog.csv"
     if args.refresh or not catalog_path.exists():
         catalog_path.write_bytes(fetch(args.catalog_url))
