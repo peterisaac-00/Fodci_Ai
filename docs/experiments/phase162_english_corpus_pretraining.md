@@ -40,6 +40,12 @@ The corpus must not be copied into Git. Only code, documentation, and small mani
 
 ## Run pretraining
 
+The base package intentionally has zero runtime dependencies. Install the model extra in the active virtual environment first:
+
+```bash
+python -m pip install -e ".[model]"
+```
+
 After the manifest reaches at least 20M tokens:
 
 ```bash
@@ -53,6 +59,8 @@ PYTHONPATH=src python scripts/train_phase162_english_pretraining.py \
 `--device auto` uses CUDA only when supported by the installed PyTorch build; otherwise it uses CPU. Explicit `--device cuda` fails if CUDA is unavailable.
 
 The runner streams shards and materializes only bounded batches. It holds out the final 10% of shards for validation, records the corpus manifest hash, saves an experimental checkpoint, and writes an evaluation report. It never replaces `fodci-testing-qa-v1.pt`.
+
+The sandbox used to build and validate the corpus does not include PyTorch, so this run validates the corpus and runner statically but does not claim that model weights were trained here. Run the command in the user's Fodci virtual environment after installing `.[model]`.
 
 ## Promotion gate
 
